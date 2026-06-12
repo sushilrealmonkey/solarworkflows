@@ -1,0 +1,809 @@
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../app/AuthProvider";
+import { PageHeader } from "../../components/PageHeader";
+import { useToast } from "../../components/ui/ToastProvider";
+import {
+  convertLeadToCustomer,
+  createCustomer,
+  deleteCustomer,
+  fetchCustomers,
+  fetchLeads,
+  fetchStaffOptions,
+  updateCustomer,
+} from "./crmApi";
+import {
+  customerStatusOptions,
+  customerToForm,
+  customerTypeOptions,
+  emptyCustomerForm,
+  formatDate,
+  hasPermission,
+  labelize,
+  requiredError,
+  staffName,
+} from "./crmUtils";
+import type { Customer, CustomerFormValues, Lead, StaffOption } from "./types";
+import {
+  AccessDenied,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  LoadingSkeleton,
+  Modal,
+  SearchInput,
+  SelectInput,
+  StaffSelect,
+  StatusBadge,
+  TextArea,
+  TextInput,
+  Toolbar,
+  ViewLink,
+} from "./CrmComponents";
+
+type CustomerFilters = {
+  search: string;
+  status: string;
+  customerType: string;
+};
+
+export function CustomersPage() {
+  const { profile, permissions } = useAuth();
+  const { showToast } = useToast();
+  const navigate = useNavigate();
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<CustomerFilters>({
+    search: "",
+    status: "",
+    customerType: "",
+  });
+  const [formState, setFormState] = useState<{
+    mode: "create" | "edit";
+    source: "direct" | "lead";
+    customer: Customer | null;
+    leadId: string;
+    values: CustomerFormValues;
+  } | null>(null);
+  const [choosingCreateFlow, setChoosingCreateFlow] = useState(false);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [openActionCustomerId, setOpenActionCustomerId] = useState<string | null>(
+    null,
+  );
+
+  const canView = hasPermission(profile, permissions, "customers", "view");
+  const canCreate = hasPermission(profile, permissions, "customers", "create");
+  const canUpdate = hasPermission(profile, permissions, "customers", "update");
+  const canDelete = hasPermission(profile, permissions, "customers", "delete");
+
+  async function loadData() {
+    if (!canView) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      const [nextCustomers, nextLeads, nextStaff] = await Promise.all([
+        fetchCustomers(profile),
+        fetchLeads(profile).catch(() => []),
+        fetchStaffOptions(profile),
+      ]);
+      setCustomers(nextCustomers);
+      setLeads(nextLeads);
+      setStaff(nextStaff);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load customers.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+    // loadData closes over the current permission/profile state for this module.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canView, profile?.id]);
+
+  const filteredCustomers = useMemo(() => {
+    const search = filters.search.trim().toLowerCase();
+
+    return customers.filter((customer) => {
+      const matchesSearch =
+        !search ||
+        [customer.full_name, customer.phone, customer.customer_code]
+          .filter(Boolean)
+          .some((value) => value?.toLowerCase().includes(search));
+      const matchesStatus =
+        !filters.status || customer.status === filters.status;
+      const matchesType =
+        !filters.customerType ||
+        customer.customer_type === filters.customerType;
+
+      return matchesSearch && matchesStatus && matchesType;
+    });
+  }, [customers, filters]);
+
+  if (!canView) {
+    return (
+      <AccessDenied
+        title="Customers are not available"
+        description="Your role needs customers:view access to open this module."
+      />
+    );
+  }
+
+  function openCreateForm() {
+    setChoosingCreateFlow(true);
+  }
+
+  function openCreateFormForSource(source: "direct" | "lead") {
+    setFormErrors({});
+    setChoosingCreateFlow(false);
+    setFormState({
+      mode: "create",
+      source,
+      customer: null,
+      leadId: "",
+      values: emptyCustomerForm(),
+    });
+  }
+
+  function openEditForm(customer: Customer) {
+    setFormErrors({});
+    setFormState({
+      mode: "edit",
+      source: "direct",
+      customer,
+      leadId: "",
+      values: customerToForm(customer),
+    });
+  }
+
+  function openCustomerDetail(customerId: string) {
+    navigate(`/customers/${customerId}`);
+  }
+
+  function handleCustomerRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    customerId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openCustomerDetail(customerId);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!formState) {
+      return;
+    }
+
+    const nextErrors = {
+      lead_id:
+        formState.mode === "create" && formState.source === "lead"
+          ? requiredError(formState.leadId, "Lead")
+          : "",
+      full_name: requiredError(formState.values.full_name, "Full name"),
+      phone: requiredError(formState.values.phone, "Phone"),
+    };
+    setFormErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      if (formState.mode === "create") {
+        const createdCustomer =
+          formState.source === "lead"
+            ? await updateCustomer(
+                (await convertLeadToCustomer(formState.leadId)).id,
+                formState.values,
+              )
+            : await createCustomer(profile, formState.values);
+        setCustomers((current) => [createdCustomer, ...current]);
+        if (formState.source === "lead") {
+          setLeads((current) =>
+            current.filter((lead) => lead.id !== formState.leadId),
+          );
+        }
+        showToast("Customer created.", "success");
+      } else if (formState.customer) {
+        const updatedCustomer = await updateCustomer(
+          formState.customer.id,
+          formState.values,
+        );
+        setCustomers((current) =>
+          current.map((customer) =>
+            customer.id === updatedCustomer.id ? updatedCustomer : customer,
+          ),
+        );
+        showToast("Customer updated.", "success");
+      }
+      setFormState(null);
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Customer save failed.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await deleteCustomer(deleteTarget.id);
+      setCustomers((current) =>
+        current.filter((customer) => customer.id !== deleteTarget.id),
+      );
+      showToast("Customer deleted.", "success");
+      setDeleteTarget(null);
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Customer delete failed.",
+        "error",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeader
+          title="Customers"
+          description="Manage solar customer records, ownership, contact details, and future workflow entry points."
+        />
+        {canCreate ? <Button onClick={openCreateForm}>Add Customer</Button> : null}
+      </div>
+
+      <Toolbar>
+        <SearchInput
+          placeholder="Search name, phone, or customer code"
+          value={filters.search}
+          onChange={(search) => setFilters((current) => ({ ...current, search }))}
+        />
+        <SelectInput
+          label="Status"
+          value={filters.status}
+          onChange={(status) => setFilters((current) => ({ ...current, status }))}
+          options={[
+            { value: "", label: "All statuses" },
+            ...customerStatusOptions.map((value) => ({
+              value,
+              label: labelize(value),
+            })),
+          ]}
+        />
+        <SelectInput
+          label="Customer Type"
+          value={filters.customerType}
+          onChange={(customerType) =>
+            setFilters((current) => ({ ...current, customerType }))
+          }
+          options={[
+            { value: "", label: "All types" },
+            ...customerTypeOptions.map((value) => ({
+              value,
+              label: labelize(value),
+            })),
+          ]}
+        />
+      </Toolbar>
+
+      {loading ? <LoadingSkeleton /> : null}
+      {error ? (
+        <EmptyState title="Could not load customers" description={error} />
+      ) : null}
+      {!loading && !error && filteredCustomers.length === 0 ? (
+        <EmptyState
+          title="No customers found"
+          description="Create a customer directly or convert a qualified lead when the workflow is ready."
+          action={canCreate ? <Button onClick={openCreateForm}>Add Customer</Button> : null}
+        />
+      ) : null}
+
+      {!loading && !error && filteredCustomers.length > 0 ? (
+        <>
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm lg:block">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Code</th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">City</th>
+                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Assigned</th>
+                  <th className="px-4 py-3">Created</th>
+                  <th className="w-12 px-4 py-3 text-right"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filteredCustomers.map((customer) => (
+                  <tr
+                    key={customer.id}
+                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                    onClick={() => openCustomerDetail(customer.id)}
+                    onKeyDown={(event) =>
+                      handleCustomerRowKeyDown(event, customer.id)
+                    }
+                    role="link"
+                    tabIndex={0}
+                  >
+                    <td className="px-4 py-3 font-semibold text-slate-950">
+                      {customer.customer_code ?? "-"}
+                    </td>
+                    <td className="px-4 py-3">{customer.full_name}</td>
+                    <td className="px-4 py-3">{customer.phone}</td>
+                    <td className="px-4 py-3">{customer.city ?? "-"}</td>
+                    <td className="px-4 py-3">{labelize(customer.customer_type)}</td>
+                    <td className="px-4 py-3">
+                      <StatusBadge value={customer.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      {staffName(staff, customer.assigned_to)}
+                    </td>
+                    <td className="px-4 py-3">{formatDate(customer.created_at)}</td>
+                    <td
+                      className="relative px-4 py-3 text-right"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <button
+                        aria-label={`Actions for ${customer.full_name}`}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-lg font-semibold leading-none text-slate-600 shadow-sm hover:bg-stone-50"
+                        onClick={() =>
+                          setOpenActionCustomerId((current) =>
+                            current === customer.id ? null : customer.id,
+                          )
+                        }
+                        type="button"
+                      >
+                        &#8942;
+                      </button>
+                      {openActionCustomerId === customer.id ? (
+                        <div className="absolute right-4 z-30 mt-2 w-36 rounded-lg border border-stone-200 bg-white p-1 text-left shadow-lg">
+                          <Link
+                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
+                            onClick={() => setOpenActionCustomerId(null)}
+                            to={`/customers/${customer.id}`}
+                          >
+                            View
+                          </Link>
+                          {canUpdate ? (
+                            <button
+                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
+                              onClick={() => {
+                                setOpenActionCustomerId(null);
+                                openEditForm(customer);
+                              }}
+                              type="button"
+                            >
+                              Edit
+                            </button>
+                          ) : null}
+                          {canDelete ? (
+                            <button
+                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                              onClick={() => {
+                                setOpenActionCustomerId(null);
+                                setDeleteTarget(customer);
+                              }}
+                              type="button"
+                            >
+                              Delete
+                            </button>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid gap-3 lg:hidden">
+            {filteredCustomers.map((customer) => (
+              <article
+                key={customer.id}
+                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                onClick={() => openCustomerDetail(customer.id)}
+                onKeyDown={(event) =>
+                  handleCustomerRowKeyDown(event, customer.id)
+                }
+                role="link"
+                tabIndex={0}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {customer.customer_code ?? "Customer"}
+                    </p>
+                    <h2 className="mt-1 text-base font-semibold text-slate-950">
+                      {customer.full_name}
+                    </h2>
+                  </div>
+                  <StatusBadge value={customer.status} />
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-slate-500">Phone</dt>
+                    <dd className="font-medium text-slate-900">{customer.phone}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">City</dt>
+                    <dd className="font-medium text-slate-900">
+                      {customer.city ?? "-"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Type</dt>
+                    <dd className="font-medium text-slate-900">
+                      {labelize(customer.customer_type)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Assigned</dt>
+                    <dd className="font-medium text-slate-900">
+                      {staffName(staff, customer.assigned_to)}
+                    </dd>
+                  </div>
+                </dl>
+                <div
+                  className="mt-4 flex flex-wrap gap-2"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <ViewLink to={`/customers/${customer.id}`}>View</ViewLink>
+                  {canUpdate ? (
+                    <Button onClick={() => openEditForm(customer)} variant="secondary">
+                      Edit
+                    </Button>
+                  ) : null}
+                  {canDelete ? (
+                    <Button onClick={() => setDeleteTarget(customer)} variant="danger">
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {formState ? (
+        <CustomerFormModal
+          title={formState.mode === "create" ? "Add Customer" : "Edit Customer"}
+          source={formState.source}
+          leadId={formState.leadId}
+          leads={leads}
+          values={formState.values}
+          setLeadId={(leadId) =>
+            setFormState((current) =>
+              current
+                ? {
+                    ...current,
+                    leadId,
+                    values: leadToCustomerForm(
+                      leads.find((lead) => lead.id === leadId),
+                      current.values,
+                    ),
+                  }
+                : current,
+            )
+          }
+          setValues={(values) =>
+            setFormState((current) => (current ? { ...current, values } : current))
+          }
+          errors={formErrors}
+          staff={staff}
+          onClose={() => setFormState(null)}
+          onSubmit={handleSubmit}
+          saving={saving}
+        />
+      ) : null}
+
+      {choosingCreateFlow ? (
+        <CustomerCreateChoiceModal
+          onClose={() => setChoosingCreateFlow(false)}
+          onSelect={openCreateFormForSource}
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="Delete customer?"
+          description={`This will remove ${deleteTarget.full_name}. Related future workflows should be checked before deleting customer records.`}
+          confirming={deleting}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function CustomerFormModal({
+  title,
+  source,
+  leadId,
+  leads,
+  values,
+  setLeadId,
+  setValues,
+  errors,
+  staff,
+  onClose,
+  onSubmit,
+  saving,
+}: {
+  title: string;
+  source: "direct" | "lead";
+  leadId: string;
+  leads: Lead[];
+  values: CustomerFormValues;
+  setLeadId: (leadId: string) => void;
+  setValues: (values: CustomerFormValues) => void;
+  errors: Record<string, string>;
+  staff: StaffOption[];
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  saving: boolean;
+}) {
+  const update = (key: keyof CustomerFormValues, value: string) =>
+    setValues({ ...values, [key]: value });
+
+  return (
+    <Modal
+      title={title}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      submitLabel="Save Customer"
+      submitting={saving}
+    >
+      {source === "lead" ? (
+        <div className="md:col-span-2">
+          <SelectInput
+            label="Lead"
+            value={leadId}
+            onChange={setLeadId}
+            options={[
+              { value: "", label: "Select lead" },
+              ...leads.map((lead) => ({
+                value: lead.id,
+                label: leadOptionLabel(lead),
+              })),
+            ]}
+          />
+          {errors.lead_id ? (
+            <p className="-mt-3 text-xs text-rose-700">{errors.lead_id}</p>
+          ) : null}
+        </div>
+      ) : null}
+      <TextInput
+        label="Full Name"
+        value={values.full_name}
+        onChange={(value) => update("full_name", value)}
+        error={errors.full_name}
+        required
+      />
+      <TextInput
+        label="Phone"
+        value={values.phone}
+        onChange={(value) => update("phone", value)}
+        error={errors.phone}
+        required
+      />
+      <TextInput
+        label="Alternate Phone"
+        value={values.alternate_phone}
+        onChange={(value) => update("alternate_phone", value)}
+      />
+      <TextInput
+        label="Email"
+        value={values.email}
+        onChange={(value) => update("email", value)}
+        type="email"
+      />
+      <TextInput
+        label="Address Line 1"
+        value={values.address_line_1}
+        onChange={(value) => update("address_line_1", value)}
+      />
+      <TextInput
+        label="Address Line 2"
+        value={values.address_line_2}
+        onChange={(value) => update("address_line_2", value)}
+      />
+      <TextInput label="City" value={values.city} onChange={(value) => update("city", value)} />
+      <TextInput
+        label="District"
+        value={values.district}
+        onChange={(value) => update("district", value)}
+      />
+      <TextInput label="State" value={values.state} onChange={(value) => update("state", value)} />
+      <TextInput
+        label="Pincode"
+        value={values.pincode}
+        onChange={(value) => update("pincode", value)}
+      />
+      <SelectInput
+        label="Customer Type"
+        value={values.customer_type}
+        onChange={(value) => update("customer_type", value)}
+        options={customerTypeOptions.map((value) => ({ value, label: labelize(value) }))}
+      />
+      <TextInput
+        label="Lead Source"
+        value={values.lead_source}
+        onChange={(value) => update("lead_source", value)}
+      />
+      <SelectInput
+        label="Status"
+        value={values.status}
+        onChange={(value) => update("status", value)}
+        options={customerStatusOptions.map((value) => ({ value, label: labelize(value) }))}
+      />
+      <StaffSelect
+        staff={staff}
+        value={values.assigned_to}
+        onChange={(value) => update("assigned_to", value)}
+      />
+      <TextArea label="Notes" value={values.notes} onChange={(value) => update("notes", value)} />
+    </Modal>
+  );
+}
+
+function CustomerCreateChoiceModal({
+  onClose,
+  onSelect,
+}: {
+  onClose: () => void;
+  onSelect: (source: "lead" | "direct") => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+      <section className="w-full max-w-xl rounded-xl border border-stone-200 bg-white p-5 shadow-xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950">
+              Add Customer
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">
+              Choose how this customer should be created.
+            </p>
+          </div>
+          <Button onClick={onClose} variant="ghost">
+            Close
+          </Button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <button
+            className="rounded-xl border border-stone-200 bg-white p-4 text-left shadow-sm transition hover:bg-stone-50"
+            onClick={() => onSelect("lead")}
+            type="button"
+          >
+            <p className="text-base font-semibold text-slate-950">
+              Create customer from lead
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Select a lead and prefill the customer form from lead data.
+            </p>
+          </button>
+          <button
+            className="rounded-xl border border-stone-200 bg-white p-4 text-left shadow-sm transition hover:bg-stone-50"
+            onClick={() => onSelect("direct")}
+            type="button"
+          >
+            <p className="text-base font-semibold text-slate-950">
+              Create customer directly
+            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Open a blank customer form with all input fields.
+            </p>
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function leadToCustomerForm(
+  lead: Lead | undefined,
+  currentValues: CustomerFormValues,
+): CustomerFormValues {
+  if (!lead) {
+    return emptyCustomerForm();
+  }
+
+  return {
+    ...currentValues,
+    full_name: lead.full_name ?? "",
+    phone: lead.phone ?? "",
+    alternate_phone: lead.alternate_phone ?? "",
+    email: lead.email ?? "",
+    address_line_1: lead.address ?? "",
+    address_line_2: currentValues.address_line_2,
+    city: lead.city ?? "",
+    district: lead.district ?? "",
+    state: lead.state ?? "",
+    pincode: lead.pincode ?? "",
+    customer_type:
+      customerTypeFromLead(lead) || currentValues.customer_type || "residential",
+    lead_source: lead.lead_source ?? "",
+    status: "active",
+    assigned_to: lead.assigned_to ?? "",
+    notes: lead.notes ?? "",
+  };
+}
+
+function customerTypeFromLead(lead: Lead) {
+  const text = `${lead.requirement_type ?? ""} ${lead.property_type ?? ""}`.toLowerCase();
+
+  if (text.includes("industrial") || text.includes("factory")) {
+    return "industrial";
+  }
+
+  if (text.includes("government")) {
+    return "government";
+  }
+
+  if (
+    text.includes("commercial") ||
+    text.includes("shop") ||
+    text.includes("office") ||
+    text.includes("school") ||
+    text.includes("hospital") ||
+    text.includes("warehouse")
+  ) {
+    return "commercial";
+  }
+
+  if (
+    text.includes("residential") ||
+    text.includes("house") ||
+    text.includes("home") ||
+    text.includes("apartment")
+  ) {
+    return "residential";
+  }
+
+  return "";
+}
+
+function leadOptionLabel(lead: Lead) {
+  return `${lead.lead_code ?? "Lead"} - ${lead.full_name} (${lead.phone})`;
+}

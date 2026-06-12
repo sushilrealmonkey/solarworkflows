@@ -1,0 +1,60 @@
+# Architecture
+
+SolarWorkflows is a modular React and Supabase SaaS application. The frontend is
+organized around feature modules, and Supabase provides the backend security and
+data boundary.
+
+## Frontend Layers
+
+- `src/app`: Application wiring, route definitions, navigation derivation,
+  authentication context, and route protection.
+- `src/layouts`: Dashboard and navigation shells.
+- `src/components`: Shared UI components used across modules.
+- `src/modules`: Feature-owned pages, APIs, types, components, and utilities.
+- `src/services`: Shared external service clients, including Supabase.
+- `src/config`: Runtime configuration.
+
+## Module Pattern
+
+Feature folders should remain self-contained. A typical module may include:
+
+- page components
+- detail pages
+- API helpers
+- type definitions
+- local utilities
+- module-specific presentational components
+
+Shared code should move to `src/components`, `src/services`, or another shared
+location only when multiple modules need it.
+
+## Route Pattern
+
+Routes live in `src/app/routes.ts`. Navigation is derived in
+`src/app/navigation.ts` so labels, module keys, and super-admin visibility stay
+consistent.
+
+When adding a module route:
+
+- Add the route definition.
+- Use the correct `moduleKey` for permissions.
+- Keep descriptions factual.
+- Mark platform-only routes with `superAdminOnly`.
+
+## Backend Boundary
+
+Supabase is the backend. Frontend modules should call module API helpers, and
+those helpers should use the shared Supabase client. Security must remain in
+Supabase RLS, not in the React component tree.
+
+## Data Boundary
+
+Business tables must be tenant-owned. Existing schema uses a mix of
+`company_id`, `organization_id`, and `tenant_id` depending on migration history.
+Future changes must not introduce ambiguous ownership. See
+[Data Model Guide](data-model-guide.md).
+
+## UI Boundary
+
+The UI is mobile-first. Desktop layouts may add density and side navigation, but
+mobile usability must remain the default design constraint.

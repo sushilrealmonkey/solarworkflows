@@ -1,0 +1,1138 @@
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "../../app/AuthProvider";
+import { PageHeader } from "../../components/PageHeader";
+import { useToast } from "../../components/ui/ToastProvider";
+import {
+  AccessDenied,
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  LoadingSkeleton,
+  Modal,
+  SearchInput,
+  SelectInput,
+  TextArea,
+  TextInput,
+  Toolbar,
+} from "../crm/CrmComponents";
+import { formatDateTime, hasPermission, labelize } from "../crm/crmUtils";
+import {
+  createRole,
+  createStaff,
+  deleteRole,
+  fetchOrganizationSettings,
+  fetchPermissionOptions,
+  fetchSettingsRoles,
+  fetchSettingsStaff,
+  permissionActions,
+  permissionModules,
+  updateOrganizationSettings,
+  updateRole,
+  updateStaff,
+} from "./settingsApi";
+import type {
+  OrganizationSettingsFormValues,
+  PermissionOption,
+  RoleFormValues,
+  SettingsRole,
+  SettingsStaff,
+  StaffFormValues,
+  StaffStatus,
+} from "./types";
+import {
+  emptyOrganizationSettingsForm,
+  emptyRoleForm,
+  emptyStaffForm,
+  organizationSettingsToForm,
+  roleToForm,
+  staffStatusOptions,
+  staffToForm,
+  validateRoleForm,
+  validateStaffForm,
+} from "./settingsUtils";
+
+const settingsLinks = [
+  { to: "/settings", label: "Overview", end: true },
+  { to: "/settings/organization", label: "Organization", end: false },
+  { to: "/settings/staff", label: "Staff", end: false },
+  { to: "/settings/roles", label: "Roles", end: false },
+];
+
+type StaffFormState = {
+  mode: "create" | "edit";
+  staff: SettingsStaff | null;
+  values: StaffFormValues;
+};
+
+type RoleFormState = {
+  mode: "create" | "edit";
+  role: SettingsRole | null;
+  values: RoleFormValues;
+};
+
+export function SettingsPage() {
+  const { profile, permissions } = useAuth();
+  const canManageSettings = hasPermission(profile, permissions, "settings", "update");
+
+  if (!canManageSettings) {
+    return (
+      <AccessDenied
+        title="Settings are not available"
+        description="Your role needs settings:update access to manage organization, staff, and roles."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Settings"
+        description="Manage organization branding, staff access, and role permissions."
+      />
+
+      <div className="grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <nav
+          className="flex gap-2 overflow-x-auto rounded-xl border border-stone-200 bg-white p-2 shadow-sm lg:block lg:space-y-1 lg:overflow-visible"
+          aria-label="Settings navigation"
+        >
+          {settingsLinks.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.end}
+              className={({ isActive }) =>
+                `block whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                  isActive
+                    ? "bg-brand-50 text-brand-900"
+                    : "text-slate-600 hover:bg-stone-100 hover:text-slate-950"
+                }`
+              }
+            >
+              {link.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        <div className="min-w-0">
+          <Outlet />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function SettingsOverviewPage() {
+  return (
+    <div className="grid gap-4 md:grid-cols-3">
+      <SettingsCard
+        title="Organization"
+        description="Branding, document prefixes, tax details, and regional defaults."
+      />
+      <SettingsCard
+        title="Staff"
+        description="Pre-created profiles, status changes, and role assignment."
+      />
+      <SettingsCard
+        title="Roles"
+        description="Role records and CRUD permission matrix by module."
+      />
+    </div>
+  );
+}
+
+export function OrganizationSettingsPage() {
+  const { refresh } = useAuth();
+  const { showToast } = useToast();
+  const [values, setValues] = useState<OrganizationSettingsFormValues>(
+    emptyOrganizationSettingsForm(),
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        setLoading(true);
+        setError(null);
+        const settings = await fetchOrganizationSettings();
+        setValues(organizationSettingsToForm(settings));
+      } catch (nextError) {
+        setError(
+          nextError instanceof Error
+            ? nextError.message
+            : "Unable to load organization settings.",
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadSettings();
+  }, []);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    try {
+      setSaving(true);
+      const updatedSettings = await updateOrganizationSettings(values);
+      setValues(organizationSettingsToForm(updatedSettings));
+      await refresh();
+      showToast("Organization settings updated.", "success");
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Organization settings update failed.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const update = (key: keyof OrganizationSettingsFormValues, value: string) =>
+    setValues((current) => ({ ...current, [key]: value }));
+
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (error) {
+    return <EmptyState title="Could not load settings" description={error} />;
+  }
+
+  return (
+    <form
+      className="space-y-5 rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5"
+      onSubmit={handleSubmit}
+    >
+      <SectionTitle
+        title="Company Profile"
+        description="One-time details used on generated documents for this tenant."
+      />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput
+          label="Company Name"
+          value={values.company_name}
+          onChange={(value) => update("company_name", value)}
+        />
+        <TextArea
+          label="Company Details"
+          value={values.company_details}
+          onChange={(value) => update("company_details", value)}
+        />
+        <TextArea
+          label="Address"
+          value={values.address}
+          onChange={(value) => update("address", value)}
+        />
+      </div>
+
+      <SectionTitle title="Branding" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput
+          label="Company Logo URL"
+          value={values.company_logo_url}
+          onChange={(value) => update("company_logo_url", value)}
+        />
+        <TextInput
+          label="Favicon URL"
+          value={values.favicon_url}
+          onChange={(value) => update("favicon_url", value)}
+        />
+        <ColorInput
+          label="Primary Color"
+          value={values.primary_color}
+          onChange={(value) => update("primary_color", value)}
+        />
+        <ColorInput
+          label="Secondary Color"
+          value={values.secondary_color}
+          onChange={(value) => update("secondary_color", value)}
+        />
+        <ColorInput
+          label="Accent Color"
+          value={values.accent_color}
+          onChange={(value) => update("accent_color", value)}
+        />
+        <TextInput
+          label="Font Family"
+          value={values.font_family}
+          onChange={(value) => update("font_family", value)}
+        />
+      </div>
+
+      <SectionTitle title="Contact And Compliance" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput
+          label="Contact Person"
+          value={values.contact_person}
+          onChange={(value) => update("contact_person", value)}
+        />
+        <TextInput
+          label="Contact Email"
+          type="email"
+          value={values.contact_email}
+          onChange={(value) => update("contact_email", value)}
+        />
+        <TextInput
+          label="Contact Phone"
+          value={values.contact_phone}
+          onChange={(value) => update("contact_phone", value)}
+        />
+        <TextInput
+          label="GST Number"
+          value={values.gst_number}
+          onChange={(value) => update("gst_number", value)}
+        />
+        <TextInput
+          label="Timezone"
+          value={values.timezone}
+          onChange={(value) => update("timezone", value)}
+        />
+        <TextInput
+          label="Currency"
+          value={values.currency}
+          onChange={(value) => update("currency", value)}
+        />
+        <TextInput
+          label="Date Format"
+          value={values.date_format}
+          onChange={(value) => update("date_format", value)}
+        />
+      </div>
+
+      <SectionTitle title="Bank Details" />
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextInput
+          label="Account Holder Name"
+          value={values.bank_account_holder_name}
+          onChange={(value) => update("bank_account_holder_name", value)}
+        />
+        <TextInput
+          label="Bank Name"
+          value={values.bank_name}
+          onChange={(value) => update("bank_name", value)}
+        />
+        <TextInput
+          label="IFSC Code"
+          value={values.bank_ifsc_code}
+          onChange={(value) => update("bank_ifsc_code", value)}
+        />
+        <TextInput
+          label="Account Number"
+          value={values.bank_account_number}
+          onChange={(value) => update("bank_account_number", value)}
+        />
+        <TextInput
+          label="Account Type"
+          value={values.bank_account_type}
+          onChange={(value) => update("bank_account_type", value)}
+        />
+      </div>
+
+      <SectionTitle title="Document Prefixes" />
+      <div className="grid gap-4 md:grid-cols-3">
+        <TextInput
+          label="Invoice Prefix"
+          value={values.invoice_prefix}
+          onChange={(value) => update("invoice_prefix", value)}
+        />
+        <TextInput
+          label="Quotation Prefix"
+          value={values.quotation_prefix}
+          onChange={(value) => update("quotation_prefix", value)}
+        />
+        <TextInput
+          label="Customer Prefix"
+          value={values.customer_prefix}
+          onChange={(value) => update("customer_prefix", value)}
+        />
+        <TextInput
+          label="Project Prefix"
+          value={values.project_prefix}
+          onChange={(value) => update("project_prefix", value)}
+        />
+        <TextInput
+          label="Lead Prefix"
+          value={values.lead_prefix}
+          onChange={(value) => update("lead_prefix", value)}
+        />
+      </div>
+
+      <div className="flex justify-end">
+        <Button type="submit" disabled={saving}>
+          {saving ? "Saving..." : "Save Settings"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function StaffManagementPage() {
+  const { showToast } = useToast();
+  const [staff, setStaff] = useState<SettingsStaff[]>([]);
+  const [roles, setRoles] = useState<SettingsRole[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [formState, setFormState] = useState<StaffFormState | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<SettingsStaff | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      setError(null);
+      const [nextStaff, nextRoles] = await Promise.all([
+        fetchSettingsStaff(),
+        fetchSettingsRoles(),
+      ]);
+      setStaff(nextStaff);
+      setRoles(nextRoles);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : "Unable to load staff.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const filteredStaff = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return staff;
+    }
+
+    return staff.filter((member) =>
+      [member.full_name, member.phone, member.email, member.role_name]
+        .filter(Boolean)
+        .some((value) => value?.toLowerCase().includes(normalizedSearch)),
+    );
+  }, [search, staff]);
+
+  function openCreateForm() {
+    setFormErrors({});
+    setFormState({
+      mode: "create",
+      staff: null,
+      values: emptyStaffForm(roles[0]?.id ?? ""),
+    });
+  }
+
+  function openEditForm(member: SettingsStaff) {
+    setFormErrors({});
+    setFormState({
+      mode: "edit",
+      staff: member,
+      values: staffToForm(member),
+    });
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!formState) {
+      return;
+    }
+
+    const nextErrors = validateStaffForm(formState.values);
+    setFormErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      if (formState.mode === "create") {
+        await createStaff(formState.values);
+        showToast("Staff profile created.", "success");
+      } else if (formState.staff) {
+        await updateStaff(formState.staff.id, formState.values);
+        showToast("Staff profile updated.", "success");
+      }
+      setFormState(null);
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Staff save failed.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function setMemberStatus(member: SettingsStaff, status: StaffStatus) {
+    try {
+      setStatusSaving(true);
+      await updateStaff(member.id, { ...staffToForm(member), status });
+      showToast(
+        status === "active" ? "Staff activated." : "Staff deactivated.",
+        "success",
+      );
+      setStatusTarget(null);
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Status update failed.",
+        "error",
+      );
+    } finally {
+      setStatusSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SectionTitle title="Staff Management" />
+        <Button onClick={openCreateForm}>Add Staff</Button>
+      </div>
+
+      <Toolbar>
+        <SearchInput
+          placeholder="Search staff, email, phone, or role"
+          value={search}
+          onChange={setSearch}
+        />
+      </Toolbar>
+
+      {loading ? <LoadingSkeleton /> : null}
+      {error ? <EmptyState title="Could not load staff" description={error} /> : null}
+      {!loading && !error && filteredStaff.length === 0 ? (
+        <EmptyState
+          title="No staff found"
+          description="Create staff profiles before team members sign in."
+          action={<Button onClick={openCreateForm}>Add Staff</Button>}
+        />
+      ) : null}
+
+      {!loading && !error && filteredStaff.length > 0 ? (
+        <>
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Phone</th>
+                  <th className="px-4 py-3">Email</th>
+                  <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Last Login</th>
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filteredStaff.map((member) => (
+                  <tr key={member.id}>
+                    <td className="px-4 py-3 font-semibold text-slate-950">
+                      {member.full_name ?? "-"}
+                    </td>
+                    <td className="px-4 py-3">{member.phone ?? "-"}</td>
+                    <td className="px-4 py-3">{member.email ?? "-"}</td>
+                    <td className="px-4 py-3">{member.role_name ?? "No role"}</td>
+                    <td className="px-4 py-3">
+                      <StaffStatusBadge value={member.status} />
+                    </td>
+                    <td className="px-4 py-3">{formatDateTime(member.last_login_at)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-2">
+                        <Button onClick={() => openEditForm(member)} variant="secondary">
+                          Edit
+                        </Button>
+                        {member.status === "active" ? (
+                          <Button
+                            onClick={() => setStatusTarget(member)}
+                            variant="danger"
+                          >
+                            Deactivate
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => void setMemberStatus(member, "active")}
+                            variant="secondary"
+                          >
+                            Activate
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid gap-3 xl:hidden">
+            {filteredStaff.map((member) => (
+              <article
+                key={member.id}
+                className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-semibold text-slate-950">
+                      {member.full_name ?? "Staff user"}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {member.email ?? member.phone ?? "-"}
+                    </p>
+                  </div>
+                  <StaffStatusBadge value={member.status} />
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <Detail label="Role" value={member.role_name ?? "No role"} />
+                  <Detail label="Last Login" value={formatDateTime(member.last_login_at)} />
+                  <Detail label="Phone" value={member.phone ?? "-"} />
+                  <Detail label="Email" value={member.email ?? "-"} />
+                </dl>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button onClick={() => openEditForm(member)} variant="secondary">
+                    Edit
+                  </Button>
+                  {member.status === "active" ? (
+                    <Button onClick={() => setStatusTarget(member)} variant="danger">
+                      Deactivate
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => void setMemberStatus(member, "active")}
+                      variant="secondary"
+                    >
+                      Activate
+                    </Button>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {formState ? (
+        <StaffFormModal
+          title={formState.mode === "create" ? "Add Staff" : "Edit Staff"}
+          values={formState.values}
+          setValues={(values) =>
+            setFormState((current) => (current ? { ...current, values } : current))
+          }
+          roles={roles}
+          errors={formErrors}
+          onClose={() => setFormState(null)}
+          onSubmit={handleSubmit}
+          saving={saving}
+        />
+      ) : null}
+
+      {statusTarget ? (
+        <ConfirmDialog
+          title="Deactivate staff?"
+          description={`This will block ${statusTarget.full_name ?? "this staff member"} from accessing the workspace.`}
+          confirmLabel="Deactivate"
+          confirmingLabel="Deactivating..."
+          confirming={statusSaving}
+          onCancel={() => setStatusTarget(null)}
+          onConfirm={() => void setMemberStatus(statusTarget, "inactive")}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+export function RolesPage() {
+  const { profile } = useAuth();
+  const { showToast } = useToast();
+  const [roles, setRoles] = useState<SettingsRole[]>([]);
+  const [permissions, setPermissions] = useState<PermissionOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [formState, setFormState] = useState<RoleFormState | null>(null);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<SettingsRole | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      setError(null);
+      const [nextRoles, nextPermissions] = await Promise.all([
+        fetchSettingsRoles(),
+        fetchPermissionOptions(),
+      ]);
+      setRoles(nextRoles);
+      setPermissions(nextPermissions);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error ? nextError.message : "Unable to load roles.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  function openCreateForm() {
+    setFormErrors({});
+    setFormState({
+      mode: "create",
+      role: null,
+      values: emptyRoleForm(),
+    });
+  }
+
+  function openEditForm(role: SettingsRole) {
+    setFormErrors({});
+    setFormState({
+      mode: "edit",
+      role,
+      values: roleToForm(role),
+    });
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!formState) {
+      return;
+    }
+
+    const nextErrors = validateRoleForm(formState.values);
+    setFormErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      if (formState.mode === "create") {
+        await createRole(profile, formState.values);
+        showToast("Role created.", "success");
+      } else if (formState.role) {
+        await updateRole(formState.role.id, formState.values);
+        showToast("Role updated.", "success");
+      }
+      setFormState(null);
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Role save failed.",
+        "error",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await deleteRole(deleteTarget.id);
+      showToast("Role deleted.", "success");
+      setDeleteTarget(null);
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Role delete failed.",
+        "error",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <SectionTitle title="Roles And Permissions" />
+        <Button onClick={openCreateForm}>Create Role</Button>
+      </div>
+
+      {loading ? <LoadingSkeleton /> : null}
+      {error ? <EmptyState title="Could not load roles" description={error} /> : null}
+      {!loading && !error && roles.length === 0 ? (
+        <EmptyState
+          title="No roles found"
+          description="Create roles to assign access to staff profiles."
+          action={<Button onClick={openCreateForm}>Create Role</Button>}
+        />
+      ) : null}
+
+      {!loading && !error && roles.length > 0 ? (
+        <div className="grid gap-3">
+          {roles.map((role) => (
+            <article
+              key={role.id}
+              className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-semibold text-slate-950">
+                      {role.role_name}
+                    </h2>
+                    {role.is_system_role ? <Badge tone="blue">System</Badge> : null}
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    {role.description ?? "No description"}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>{role.permission_count} permissions</Badge>
+                  <Button onClick={() => openEditForm(role)} variant="secondary">
+                    Edit
+                  </Button>
+                  {!role.is_system_role ? (
+                    <Button onClick={() => setDeleteTarget(role)} variant="danger">
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {formState ? (
+        <RoleFormModal
+          title={formState.mode === "create" ? "Create Role" : "Edit Role"}
+          values={formState.values}
+          setValues={(values) =>
+            setFormState((current) => (current ? { ...current, values } : current))
+          }
+          permissions={permissions}
+          errors={formErrors}
+          onClose={() => setFormState(null)}
+          onSubmit={handleSubmit}
+          saving={saving}
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="Delete role?"
+          description={`This will delete ${deleteTarget.role_name}. Staff assigned to this role will lose that role assignment.`}
+          confirming={deleting}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function StaffFormModal({
+  title,
+  values,
+  setValues,
+  roles,
+  errors,
+  onClose,
+  onSubmit,
+  saving,
+}: {
+  title: string;
+  values: StaffFormValues;
+  setValues: (values: StaffFormValues) => void;
+  roles: SettingsRole[];
+  errors: Record<string, string>;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  saving: boolean;
+}) {
+  const update = (key: keyof StaffFormValues, value: string) =>
+    setValues({ ...values, [key]: value });
+
+  return (
+    <Modal
+      title={title}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      submitLabel="Save Staff"
+      submitting={saving}
+    >
+      <TextInput
+        label="Full Name"
+        value={values.full_name}
+        onChange={(value) => update("full_name", value)}
+        error={errors.full_name}
+        required
+      />
+      <TextInput
+        label="Phone"
+        value={values.phone}
+        onChange={(value) => update("phone", value)}
+        error={errors.phone}
+      />
+      <TextInput
+        label="Email"
+        type="email"
+        value={values.email}
+        onChange={(value) => update("email", value)}
+        error={errors.email}
+      />
+      <SelectInput
+        label="Role"
+        value={values.role_id}
+        onChange={(value) => update("role_id", value)}
+        options={[
+          { value: "", label: "No role" },
+          ...roles.map((role) => ({
+            value: role.id,
+            label: role.role_name,
+          })),
+        ]}
+      />
+      <SelectInput
+        label="Status"
+        value={values.status}
+        onChange={(value) => update("status", value)}
+        options={staffStatusOptions.map((status) => ({
+          value: status,
+          label: labelize(status),
+        }))}
+      />
+    </Modal>
+  );
+}
+
+function RoleFormModal({
+  title,
+  values,
+  setValues,
+  permissions,
+  errors,
+  onClose,
+  onSubmit,
+  saving,
+}: {
+  title: string;
+  values: RoleFormValues;
+  setValues: (values: RoleFormValues) => void;
+  permissions: PermissionOption[];
+  errors: Record<string, string>;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  saving: boolean;
+}) {
+  const update = (key: keyof RoleFormValues, value: string | string[]) =>
+    setValues({ ...values, [key]: value });
+
+  return (
+    <Modal
+      title={title}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      submitLabel="Save Role"
+      submitting={saving}
+    >
+      <TextInput
+        label="Role Name"
+        value={values.role_name}
+        onChange={(value) => update("role_name", value)}
+        error={errors.role_name}
+        required
+      />
+      <TextInput
+        label="Description"
+        value={values.description}
+        onChange={(value) => update("description", value)}
+      />
+      <div className="md:col-span-2">
+        <PermissionMatrix
+          permissions={permissions}
+          selectedPermissionIds={values.permission_ids}
+          onChange={(permissionIds) => update("permission_ids", permissionIds)}
+        />
+      </div>
+    </Modal>
+  );
+}
+
+function PermissionMatrix({
+  permissions,
+  selectedPermissionIds,
+  onChange,
+}: {
+  permissions: PermissionOption[];
+  selectedPermissionIds: string[];
+  onChange: (permissionIds: string[]) => void;
+}) {
+  const selected = useMemo(
+    () => new Set(selectedPermissionIds),
+    [selectedPermissionIds],
+  );
+  const permissionByKey = useMemo(() => {
+    const map = new Map<string, PermissionOption>();
+
+    permissions.forEach((permission) => {
+      map.set(`${permission.module_key}:${permission.action_key}`, permission);
+    });
+
+    return map;
+  }, [permissions]);
+
+  function toggle(permissionId: string) {
+    const nextSelected = new Set(selected);
+
+    if (nextSelected.has(permissionId)) {
+      nextSelected.delete(permissionId);
+    } else {
+      nextSelected.add(permissionId);
+    }
+
+    onChange(Array.from(nextSelected));
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-stone-200">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[34rem] border-collapse text-left text-sm">
+          <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-3 py-3">Module</th>
+              {permissionActions.map((action) => (
+                <th key={action} className="px-3 py-3 text-center">
+                  {labelize(action)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100 bg-white">
+            {permissionModules.map((moduleKey) => (
+              <tr key={moduleKey}>
+                <td className="px-3 py-3 font-semibold text-slate-900">
+                  {labelize(moduleKey)}
+                </td>
+                {permissionActions.map((action) => {
+                  const permission = permissionByKey.get(`${moduleKey}:${action}`);
+
+                  return (
+                    <td key={action} className="px-3 py-3 text-center">
+                      {permission ? (
+                        <input
+                          aria-label={`${labelize(moduleKey)} ${action}`}
+                          checked={selected.has(permission.id)}
+                          className="h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-600"
+                          onChange={() => toggle(permission.id)}
+                          type="checkbox"
+                        />
+                      ) : (
+                        <span className="text-slate-300">-</span>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function ColorInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="text-sm font-medium text-slate-700">{label}</span>
+      <div className="mt-1 flex rounded-lg border border-stone-200 bg-white px-3 py-2.5 focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
+        <input
+          className="h-8 w-10 shrink-0 cursor-pointer border-0 bg-transparent p-0"
+          type="color"
+          value={value || "#166534"}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <input
+          className="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-slate-950 outline-none"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </div>
+    </label>
+  );
+}
+
+function StaffStatusBadge({ value }: { value: string | null | undefined }) {
+  const tone =
+    value === "active" ? "green" : value === "inactive" ? "red" : "amber";
+
+  return <Badge tone={tone}>{labelize(value)}</Badge>;
+}
+
+function SettingsCard({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-950">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+    </section>
+  );
+}
+
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+        {title}
+      </h2>
+      {description ? (
+        <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
+      <dd className="mt-1 font-medium text-slate-900">{value}</dd>
+    </div>
+  );
+}

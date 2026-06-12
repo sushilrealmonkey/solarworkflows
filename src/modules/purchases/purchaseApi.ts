@@ -1,0 +1,307 @@
+import type { UserProfile } from "../../app/AuthProvider";
+import { supabase } from "../../services/supabaseClient";
+import type {
+  PurchaseOrder,
+  PurchaseOrderFormValues,
+  PurchaseReceiveFormValues,
+  PurchaseOrderWithRelations,
+  PurchaseStatus,
+} from "./types";
+import { numberValue } from "./purchaseUtils";
+import type { Vendor } from "../vendors/types";
+import type { InventoryItem } from "../inventory/types";
+
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  return supabase;
+}
+
+function requireOrganization(profile: UserProfile | null) {
+  if (!profile?.organization_id) {
+    throw new Error("No organization is assigned to this user.");
+  }
+
+  return profile.organization_id;
+}
+
+function nullable(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+const purchaseOrderSelect = `
+  *,
+  vendor:vendors(id, vendor_code, vendor_name, contact_person, phone),
+  creator:users_profile!purchase_orders_created_by_fkey(id, full_name, email, phone),
+  items:purchase_order_items(
+    *,
+    item:inventory_items(id, item_code, item_name, unit, brand, model)
+  )
+`;
+
+export async function fetchPurchaseOrders(
+  profile: UserProfile | null,
+  filters?: { vendorId?: string; itemId?: string },
+  options: { includePricing?: boolean } = {},
+) {
+  const client = requireSupabase();
+  const includePricing = options.includePricing !== false;
+
+  if (!includePricing) {
+    const { data, error } = await client.rpc("purchase_order_public_rows", {
+      target_item_id: filters?.itemId ?? null,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
+      (row) => row.order_data as PurchaseOrderWithRelations,
+    );
+
+    return filters?.vendorId
+      ? orders.filter((order) => order.vendor_id === filters.vendorId)
+      : orders;
+  }
+
+  const vendorOptions = await fetchPurchaseVendorOptions();
+  let query = client
+    .from("purchase_orders")
+    .select(purchaseOrderSelect)
+    .order("created_at", { ascending: false });
+
+  if (filters?.vendorId) {
+    query = query.eq("vendor_id", filters.vendorId);
+  }
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const orders = ((data ?? []) as unknown as PurchaseOrderWithRelations[]).map(
+    (order) => ({
+      ...order,
+      vendor:
+        order.vendor ??
+        vendorOptions.find((vendor) => vendor.id === order.vendor_id) ??
+        null,
+    }),
+  );
+
+  if (filters?.itemId) {
+    return orders.filter((order) =>
+      (order.items ?? []).some((item) => item.item_id === filters.itemId),
+    );
+  }
+
+  return orders;
+}
+
+export async function fetchPurchaseOrder(profile: UserProfile | null, id: string) {
+  const client = requireSupabase();
+  const vendorOptions = await fetchPurchaseVendorOptions();
+  let query = client
+    .from("purchase_orders")
+    .select(purchaseOrderSelect)
+    .eq("id", id);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query.single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const order = data as unknown as PurchaseOrderWithRelations;
+
+  return {
+    ...order,
+    vendor:
+      order.vendor ??
+      vendorOptions.find((vendor) => vendor.id === order.vendor_id) ??
+      null,
+  };
+}
+
+export async function fetchPurchaseOrderSafe(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("purchase_order_public_rows", {
+    target_item_id: null,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
+    (row) => row.order_data as PurchaseOrderWithRelations,
+  );
+
+  return orders.find((order) => order.id === id) ?? null;
+}
+
+export async function fetchPurchaseVendorOptions() {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("purchase_vendor_options");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as Pick<
+    Vendor,
+    "id" | "vendor_code" | "vendor_name" | "contact_person" | "phone"
+  >[];
+}
+
+export async function createPurchaseOrder(
+  profile: UserProfile | null,
+  values: PurchaseOrderFormValues,
+) {
+  const client = requireSupabase();
+  const organizationId = requireOrganization(profile);
+  const { data: orderData, error: orderError } = await client
+    .from("purchase_orders")
+    .insert({
+      organization_id: organizationId,
+      vendor_id: values.vendor_id,
+      order_date: values.order_date || new Date().toISOString().slice(0, 10),
+      expected_delivery_date: nullable(values.expected_delivery_date),
+      notes: nullable(values.notes),
+      created_by: profile?.id ?? null,
+    })
+    .select("*")
+    .single();
+
+  if (orderError) {
+    throw new Error(orderError.message);
+  }
+
+  const order = orderData as PurchaseOrder;
+  const { error: itemsError } = await client.from("purchase_order_items").insert(
+    values.items.map((item) => ({
+      organization_id: organizationId,
+      purchase_order_id: order.id,
+      item_id: item.item_id,
+      quantity: numberValue(item.quantity),
+      unit_price: numberValue(item.unit_price),
+      gst_percent: numberValue(item.gst_percent),
+    })),
+  );
+
+  if (itemsError) {
+    throw new Error(itemsError.message);
+  }
+
+  return order;
+}
+
+export async function fetchPurchasePriceDefaults(items: InventoryItem[]) {
+  const client = requireSupabase();
+  const productIds = Array.from(
+    new Set(
+      items
+        .map((item) => item.catalog_product_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
+  if (productIds.length === 0) {
+    return new Map<string, { current_purchase_price: number | null; gst_percent: number | null }>();
+  }
+
+  const { data, error } = await client
+    .from("product_prices")
+    .select("product_id, current_purchase_price, gst_percent")
+    .in("product_id", productIds);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return new Map(
+    (data ?? []).map((price) => [
+      price.product_id as string,
+      {
+        current_purchase_price: price.current_purchase_price as number | null,
+        gst_percent: price.gst_percent as number | null,
+      },
+    ]),
+  );
+}
+
+export async function updatePurchaseOrderStatus(
+  id: string,
+  status: PurchaseStatus,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("purchase_orders")
+    .update({ status })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as PurchaseOrder;
+}
+
+export async function receivePurchaseOrder(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("receive_purchase_order", {
+    target_purchase_order_id: id,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as PurchaseOrder;
+}
+
+export async function receivePurchaseOrderItems(
+  id: string,
+  values: PurchaseReceiveFormValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("receive_purchase_order_items", {
+    target_purchase_order_id: id,
+    received_items: values.items.map((item) => ({
+      purchase_order_item_id: item.purchase_order_item_id,
+      received_quantity: numberValue(item.received_quantity),
+      actual_unit_purchase_price: numberValue(item.actual_unit_purchase_price),
+      gst_percent: numberValue(item.gst_percent),
+      update_current_purchase_price: item.update_current_purchase_price,
+    })),
+    receipt_bill_no: values.bill_no.trim() || null,
+    receipt_date:
+      values.received_date || new Date().toISOString().slice(0, 10),
+    receipt_notes: values.notes.trim() || null,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as PurchaseOrder;
+}

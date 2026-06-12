@@ -1,0 +1,398 @@
+import type { UserProfile } from "../../app/AuthProvider";
+import { supabase } from "../../services/supabaseClient";
+import type { Lead } from "../crm/types";
+import type {
+  SiteSurvey,
+  SiteSurveyFile,
+  SiteSurveyFormValues,
+  SiteSurveyStatus,
+  SiteSurveyWithRelations,
+  SurveyCustomerSummary,
+  SurveyLeadSummary,
+} from "./types";
+
+const siteSurveyUploadBucket = "organization-documents";
+
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  return supabase;
+}
+
+function requireOrganization(profile: UserProfile | null) {
+  if (!profile?.organization_id) {
+    throw new Error("No organization is assigned to this user.");
+  }
+
+  return profile.organization_id;
+}
+
+function nullable(value: string) {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function nullableNumber(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const nextValue = Number(value);
+  return Number.isFinite(nextValue) ? nextValue : null;
+}
+
+function surveyPayload(values: SiteSurveyFormValues) {
+  return {
+    lead_id: nullable(values.lead_id),
+    customer_id: nullable(values.customer_id),
+    scheduled_date: nullable(values.scheduled_date),
+    scheduled_time: nullable(values.scheduled_time),
+    assigned_to: nullable(values.assigned_to),
+    roof_type: nullable(values.roof_type),
+    roof_area_sqft: nullableNumber(values.roof_area_sqft),
+    shadow_free_area_sqft: nullableNumber(values.shadow_free_area_sqft),
+    structure_type: nullable(values.structure_type),
+    latitude: nullableNumber(values.latitude),
+    longitude: nullableNumber(values.longitude),
+    address_notes: nullable(values.address_notes),
+    recommended_capacity_kw: nullableNumber(values.recommended_capacity_kw),
+    existing_meter_type: nullable(values.existing_meter_type),
+    sanctioned_load_kw: nullableNumber(values.sanctioned_load_kw),
+    phase_type: nullable(values.phase_type),
+    remarks: nullable(values.remarks),
+  };
+}
+
+const surveySelect = `
+  *,
+  lead:leads(
+    id,
+    lead_code,
+    customer_id,
+    converted_customer_id,
+    full_name,
+    phone,
+    alternate_phone,
+    email,
+    address,
+    city,
+    district,
+    state,
+    pincode,
+    lead_source,
+    requirement_type,
+    electricity_bill_amount,
+    property_type,
+    roof_type,
+    estimated_load_kw,
+    priority,
+    assigned_to,
+    notes
+  ),
+  customer:customers(
+    id,
+    customer_code,
+    full_name,
+    phone,
+    alternate_phone,
+    email,
+    address_line_1,
+    address_line_2,
+    city,
+    district,
+    state,
+    pincode,
+    assigned_to
+  )
+`;
+
+export async function fetchSiteSurveys(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("site_surveys")
+    .select(surveySelect)
+    .order("created_at", { ascending: false });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as SiteSurveyWithRelations[];
+}
+
+export async function fetchSiteSurvey(profile: UserProfile | null, id: string) {
+  const client = requireSupabase();
+  let query = client.from("site_surveys").select(surveySelect).eq("id", id);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as SiteSurveyWithRelations | null;
+}
+
+export async function createSiteSurvey(
+  profile: UserProfile | null,
+  values: SiteSurveyFormValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("site_surveys")
+    .insert({
+      organization_id: requireOrganization(profile),
+      created_by: profile?.id ?? null,
+      survey_status: "scheduled",
+      ...surveyPayload(values),
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as SiteSurvey;
+}
+
+export async function updateSiteSurvey(
+  id: string,
+  values: SiteSurveyFormValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("site_surveys")
+    .update(surveyPayload(values))
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as SiteSurvey;
+}
+
+export async function updateSiteSurveyStatus(
+  id: string,
+  status: SiteSurveyStatus,
+) {
+  const client = requireSupabase();
+
+  if (status === "completed") {
+    const { data, error } = await client.rpc("complete_site_survey", {
+      survey_id: id,
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data as SiteSurvey;
+  }
+
+  const { data, error } = await client
+    .from("site_surveys")
+    .update({ survey_status: status })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as SiteSurvey;
+}
+
+export async function uploadSiteSurveyPhoto(
+  profile: UserProfile | null,
+  survey: SiteSurveyWithRelations,
+  file: File,
+) {
+  const uploadedFile = await uploadSiteSurveyFile(
+    profile,
+    survey,
+    file,
+    "photos",
+  );
+  const photos = Array.isArray(survey.site_photos) ? survey.site_photos : [];
+  const { data, error } = await requireSupabase()
+    .from("site_surveys")
+    .update({ site_photos: [...photos, uploadedFile] })
+    .eq("id", survey.id)
+    .select(surveySelect)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as SiteSurveyWithRelations;
+}
+
+export async function uploadSiteSurveyDocument(
+  profile: UserProfile | null,
+  survey: SiteSurveyWithRelations,
+  file: File,
+) {
+  const uploadedFile = await uploadSiteSurveyFile(
+    profile,
+    survey,
+    file,
+    "documents",
+  );
+  const { data, error } = await requireSupabase()
+    .from("site_surveys")
+    .update({ electricity_bill_url: uploadedFile.url })
+    .eq("id", survey.id)
+    .select(surveySelect)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as SiteSurveyWithRelations;
+}
+
+export async function deleteSiteSurvey(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("site_surveys").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+async function uploadSiteSurveyFile(
+  profile: UserProfile | null,
+  survey: SiteSurveyWithRelations,
+  file: File,
+  folder: "photos" | "documents",
+) {
+  const client = requireSupabase();
+  const organizationId = survey.organization_id || requireOrganization(profile);
+  const filePath = [
+    organizationId,
+    "site-surveys",
+    survey.id,
+    folder,
+    `${Date.now()}-${sanitizeFileName(file.name)}`,
+  ].join("/");
+  const uploadResult = await client.storage
+    .from(siteSurveyUploadBucket)
+    .upload(filePath, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+
+  if (uploadResult.error) {
+    throw new Error(
+      `${uploadResult.error.message}. Make sure the Supabase Storage bucket "${siteSurveyUploadBucket}" exists.`,
+    );
+  }
+
+  const publicUrl = client.storage.from(siteSurveyUploadBucket).getPublicUrl(filePath)
+    .data.publicUrl;
+
+  return {
+    name: file.name,
+    url: publicUrl || filePath,
+    file_path: filePath,
+    size: file.size,
+    mime_type: file.type || undefined,
+    uploaded_at: new Date().toISOString(),
+  } satisfies SiteSurveyFile;
+}
+
+function sanitizeFileName(value: string) {
+  const sanitized = value.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return sanitized || "site-survey-file";
+}
+
+export async function fetchSurveyLeadOptions(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("leads")
+    .select(
+      "id, lead_code, customer_id, converted_customer_id, full_name, phone, alternate_phone, email, address, city, district, state, pincode, lead_source, requirement_type, electricity_bill_amount, offered_price, property_type, roof_type, estimated_load_kw, priority, assigned_to, notes",
+    )
+    .order("created_at", { ascending: false });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [] as SurveyLeadSummary[];
+  }
+
+  return (data ?? []) as SurveyLeadSummary[];
+}
+
+export async function fetchSurveyCustomerOptions(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("customers")
+    .select(
+      "id, customer_code, full_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to",
+    )
+    .order("created_at", { ascending: false });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [] as SurveyCustomerSummary[];
+  }
+
+  return (data ?? []) as SurveyCustomerSummary[];
+}
+
+export async function fetchSurveyLead(profile: UserProfile | null, id: string) {
+  const client = requireSupabase();
+  let query = client
+    .from("leads")
+    .select(
+      "id, organization_id, lead_code, customer_id, converted_customer_id, full_name, phone, alternate_phone, email, address, city, district, state, pincode, lead_source, requirement_type, estimated_load_kw, electricity_bill_amount, offered_price, offered_price_updated_at, property_type, roof_type, status, priority, assigned_to, notes, created_by, converted_at, created_at, updated_at",
+    )
+    .eq("id", id);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as Lead | null;
+}
