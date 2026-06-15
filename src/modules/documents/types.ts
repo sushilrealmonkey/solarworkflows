@@ -6,7 +6,9 @@ export type DocumentType =
   | "electricity_bill"
   | "property_document"
   | "quotation_pdf"
+  | "proforma_invoice_pdf"
   | "invoice_pdf"
+  | "purchase_order_pdf"
   | "payment_receipt"
   | "site_photo"
   | "installation_photo"
@@ -31,6 +33,16 @@ export type DocumentQuotationSummary = {
   customer_id: string | null;
 };
 
+export type DocumentPurchaseOrderSummary = {
+  id: string;
+  purchase_code: string | null;
+};
+
+export type DocumentProformaInvoiceSummary = {
+  id: string;
+  proforma_code: string | null;
+};
+
 export type DocumentProfileSummary = {
   id: string;
   full_name: string | null;
@@ -45,7 +57,9 @@ export type OrganizationDocument = {
   lead_id: string | null;
   project_id: string | null;
   quotation_id: string | null;
+  proforma_invoice_id: string | null;
   invoice_id: string | null;
+  purchase_order_id: string | null;
   document_type: DocumentType;
   document_name: string;
   file_url: string;
@@ -68,6 +82,8 @@ export type OrganizationDocumentWithRelations = OrganizationDocument & {
   lead?: SurveyLeadSummary | null;
   project?: DocumentProjectSummary | null;
   quotation?: DocumentQuotationSummary | null;
+  proforma_invoice?: DocumentProformaInvoiceSummary | null;
+  purchase_order?: DocumentPurchaseOrderSummary | null;
   uploaded_by_profile?: DocumentProfileSummary | null;
   verified_by_profile?: DocumentProfileSummary | null;
   preview_url?: string | null;

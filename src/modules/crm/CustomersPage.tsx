@@ -20,16 +20,24 @@ import {
 } from "./crmApi";
 import {
   customerStatusOptions,
+  customerSegmentLabel,
   customerToForm,
-  customerTypeOptions,
+  customerTypeOptionsForSegment,
   emptyCustomerForm,
+  emptyCustomerFormForSegment,
   formatDate,
   hasPermission,
   labelize,
   requiredError,
   staffName,
 } from "./crmUtils";
-import type { Customer, CustomerFormValues, Lead, StaffOption } from "./types";
+import type {
+  Customer,
+  CustomerFormValues,
+  CustomerSegment,
+  Lead,
+  StaffOption,
+} from "./types";
 import {
   AccessDenied,
   Button,
@@ -53,7 +61,7 @@ type CustomerFilters = {
   customerType: string;
 };
 
-export function CustomersPage() {
+export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -98,7 +106,7 @@ export function CustomersPage() {
       setLoading(true);
       setError(null);
       const [nextCustomers, nextLeads, nextStaff] = await Promise.all([
-        fetchCustomers(profile),
+        fetchCustomers(profile, { segment }),
         fetchLeads(profile).catch(() => []),
         fetchStaffOptions(profile),
       ]);
@@ -120,7 +128,7 @@ export function CustomersPage() {
     void loadData();
     // loadData closes over the current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [canView, profile?.id, segment]);
 
   const filteredCustomers = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -128,7 +136,13 @@ export function CustomersPage() {
     return customers.filter((customer) => {
       const matchesSearch =
         !search ||
-        [customer.full_name, customer.phone, customer.customer_code]
+        [
+          customer.full_name,
+          customer.business_name,
+          customer.phone,
+          customer.gst_number,
+          customer.customer_code,
+        ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(search));
       const matchesStatus =
@@ -151,6 +165,11 @@ export function CustomersPage() {
   }
 
   function openCreateForm() {
+    if (segment === "b2b_direct") {
+      openCreateFormForSource("direct");
+      return;
+    }
+
     setChoosingCreateFlow(true);
   }
 
@@ -162,7 +181,7 @@ export function CustomersPage() {
       source,
       customer: null,
       leadId: "",
-      values: emptyCustomerForm(),
+      values: emptyCustomerFormForSegment(segment),
     });
   }
 
@@ -203,7 +222,18 @@ export function CustomersPage() {
         formState.mode === "create" && formState.source === "lead"
           ? requiredError(formState.leadId, "Lead")
           : "",
-      full_name: requiredError(formState.values.full_name, "Full name"),
+      full_name:
+        segment === "project_based"
+          ? requiredError(formState.values.full_name, "Full name")
+          : "",
+      business_name:
+        segment === "b2b_direct"
+          ? requiredError(formState.values.business_name, "Business name")
+          : "",
+      contact_person_name:
+        segment === "b2b_direct"
+          ? requiredError(formState.values.contact_person_name, "Contact person")
+          : "",
       phone: requiredError(formState.values.phone, "Phone"),
     };
     setFormErrors(nextErrors);
@@ -214,14 +244,19 @@ export function CustomersPage() {
 
     try {
       setSaving(true);
+      const submitValues = normalizeCustomerSubmitValues(
+        formState.values,
+        segment,
+      );
+
       if (formState.mode === "create") {
         const createdCustomer =
           formState.source === "lead"
             ? await updateCustomer(
                 (await convertLeadToCustomer(formState.leadId)).id,
-                formState.values,
+                submitValues,
               )
-            : await createCustomer(profile, formState.values);
+            : await createCustomer(profile, submitValues);
         setCustomers((current) => [createdCustomer, ...current]);
         if (formState.source === "lead") {
           setLeads((current) =>
@@ -232,7 +267,7 @@ export function CustomersPage() {
       } else if (formState.customer) {
         const updatedCustomer = await updateCustomer(
           formState.customer.id,
-          formState.values,
+          submitValues,
         );
         setCustomers((current) =>
           current.map((customer) =>
@@ -279,15 +314,27 @@ export function CustomersPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="Customers"
-          description="Manage solar customer records, ownership, contact details, and future workflow entry points."
+          title={
+            segment === "b2b_direct"
+              ? "B2B/Direct Customers"
+              : "Project Based Customers"
+          }
+          description={
+            segment === "b2b_direct"
+              ? "Manage installers, retailers, and direct product-sale customers."
+              : "Manage customers for solar installation leads, surveys, quotations, and projects."
+          }
         />
-        {canCreate ? <Button onClick={openCreateForm}>Add Customer</Button> : null}
+        {canCreate ? (
+          <Button onClick={openCreateForm}>
+            {segment === "b2b_direct" ? "Add B2B/Direct Customer" : "Add Customer"}
+          </Button>
+        ) : null}
       </div>
 
       <Toolbar>
         <SearchInput
-          placeholder="Search name, phone, or customer code"
+          placeholder="Search name, business, phone, GST, or code"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
         />
@@ -304,14 +351,14 @@ export function CustomersPage() {
           ]}
         />
         <SelectInput
-          label="Customer Type"
+          label="Customer Subtype"
           value={filters.customerType}
           onChange={(customerType) =>
             setFilters((current) => ({ ...current, customerType }))
           }
           options={[
             { value: "", label: "All types" },
-            ...customerTypeOptions.map((value) => ({
+            ...customerTypeOptionsForSegment(segment).map((value) => ({
               value,
               label: labelize(value),
             })),
@@ -326,8 +373,18 @@ export function CustomersPage() {
       {!loading && !error && filteredCustomers.length === 0 ? (
         <EmptyState
           title="No customers found"
-          description="Create a customer directly or convert a qualified lead when the workflow is ready."
-          action={canCreate ? <Button onClick={openCreateForm}>Add Customer</Button> : null}
+          description={
+            segment === "b2b_direct"
+              ? "Create a B2B/Direct customer before recording product sales without projects."
+              : "Create a customer directly or convert a qualified lead."
+          }
+          action={
+            canCreate ? (
+              <Button onClick={openCreateForm}>
+                {segment === "b2b_direct" ? "Add B2B/Direct Customer" : "Add Customer"}
+              </Button>
+            ) : null
+          }
         />
       ) : null}
 
@@ -363,7 +420,9 @@ export function CustomersPage() {
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {customer.customer_code ?? "-"}
                     </td>
-                    <td className="px-4 py-3">{customer.full_name}</td>
+                    <td className="px-4 py-3">
+                      {customerName(customer, segment)}
+                    </td>
                     <td className="px-4 py-3">{customer.phone}</td>
                     <td className="px-4 py-3">{customer.city ?? "-"}</td>
                     <td className="px-4 py-3">{labelize(customer.customer_type)}</td>
@@ -448,10 +507,10 @@ export function CustomersPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {customer.customer_code ?? "Customer"}
+                      {customer.customer_code ?? customerSegmentLabel(segment)}
                     </p>
                     <h2 className="mt-1 text-base font-semibold text-slate-950">
-                      {customer.full_name}
+                      {customerName(customer, segment)}
                     </h2>
                   </div>
                   <StatusBadge value={customer.status} />
@@ -506,6 +565,7 @@ export function CustomersPage() {
       {formState ? (
         <CustomerFormModal
           title={formState.mode === "create" ? "Add Customer" : "Edit Customer"}
+          segment={segment}
           source={formState.source}
           leadId={formState.leadId}
           leads={leads}
@@ -557,6 +617,7 @@ export function CustomersPage() {
 
 function CustomerFormModal({
   title,
+  segment,
   source,
   leadId,
   leads,
@@ -570,6 +631,7 @@ function CustomerFormModal({
   saving,
 }: {
   title: string;
+  segment: CustomerSegment;
   source: "direct" | "lead";
   leadId: string;
   leads: Lead[];
@@ -612,13 +674,38 @@ function CustomerFormModal({
           ) : null}
         </div>
       ) : null}
-      <TextInput
-        label="Full Name"
-        value={values.full_name}
-        onChange={(value) => update("full_name", value)}
-        error={errors.full_name}
-        required
-      />
+      {segment === "project_based" ? (
+        <TextInput
+          label="Full Name"
+          value={values.full_name}
+          onChange={(value) => update("full_name", value)}
+          error={errors.full_name}
+          required
+        />
+      ) : null}
+      {segment === "b2b_direct" ? (
+        <>
+          <TextInput
+            label="Business Name"
+            value={values.business_name}
+            onChange={(value) => update("business_name", value)}
+            error={errors.business_name}
+            required
+          />
+          <TextInput
+            label="GST Number"
+            value={values.gst_number}
+            onChange={(value) => update("gst_number", value)}
+          />
+          <TextInput
+            label="Contact Person"
+            value={values.contact_person_name}
+            onChange={(value) => update("contact_person_name", value)}
+            error={errors.contact_person_name}
+            required
+          />
+        </>
+      ) : null}
       <TextInput
         label="Phone"
         value={values.phone}
@@ -659,28 +746,36 @@ function CustomerFormModal({
         value={values.pincode}
         onChange={(value) => update("pincode", value)}
       />
-      <SelectInput
-        label="Customer Type"
-        value={values.customer_type}
-        onChange={(value) => update("customer_type", value)}
-        options={customerTypeOptions.map((value) => ({ value, label: labelize(value) }))}
-      />
-      <TextInput
-        label="Lead Source"
-        value={values.lead_source}
-        onChange={(value) => update("lead_source", value)}
-      />
-      <SelectInput
-        label="Status"
-        value={values.status}
-        onChange={(value) => update("status", value)}
-        options={customerStatusOptions.map((value) => ({ value, label: labelize(value) }))}
-      />
-      <StaffSelect
-        staff={staff}
-        value={values.assigned_to}
-        onChange={(value) => update("assigned_to", value)}
-      />
+      {segment === "project_based" ? (
+        <SelectInput
+          label="Customer Subtype"
+          value={values.customer_type}
+          onChange={(value) => update("customer_type", value)}
+          options={customerTypeOptionsForSegment(segment).map((value) => ({ value, label: labelize(value) }))}
+        />
+      ) : null}
+      {segment === "project_based" ? (
+        <TextInput
+          label="Lead Source"
+          value={values.lead_source}
+          onChange={(value) => update("lead_source", value)}
+        />
+      ) : null}
+      {segment === "project_based" ? (
+        <SelectInput
+          label="Status"
+          value={values.status}
+          onChange={(value) => update("status", value)}
+          options={customerStatusOptions.map((value) => ({ value, label: labelize(value) }))}
+        />
+      ) : null}
+      {segment === "project_based" ? (
+        <StaffSelect
+          staff={staff}
+          value={values.assigned_to}
+          onChange={(value) => update("assigned_to", value)}
+        />
+      ) : null}
       <TextArea label="Notes" value={values.notes} onChange={(value) => update("notes", value)} />
     </Modal>
   );
@@ -751,8 +846,12 @@ function leadToCustomerForm(
 
   return {
     ...currentValues,
-    full_name: lead.full_name ?? "",
-    phone: lead.phone ?? "",
+      full_name: lead.full_name ?? "",
+      customer_segment: "project_based",
+      business_name: currentValues.business_name,
+      gst_number: currentValues.gst_number,
+      contact_person_name: currentValues.contact_person_name,
+      phone: lead.phone ?? "",
     alternate_phone: lead.alternate_phone ?? "",
     email: lead.email ?? "",
     address_line_1: lead.address ?? "",
@@ -767,6 +866,42 @@ function leadToCustomerForm(
     status: "active",
     assigned_to: lead.assigned_to ?? "",
     notes: lead.notes ?? "",
+  };
+}
+
+function customerName(customer: Customer, segment: CustomerSegment) {
+  if (segment === "b2b_direct") {
+    return customer.business_name || customer.full_name;
+  }
+
+  return customer.full_name;
+}
+
+function normalizeCustomerSubmitValues(
+  values: CustomerFormValues,
+  segment: CustomerSegment,
+): CustomerFormValues {
+  if (segment === "project_based") {
+    return {
+      ...values,
+      customer_segment: "project_based",
+      business_name: "",
+      gst_number: "",
+      contact_person_name: "",
+    };
+  }
+
+  return {
+    ...values,
+    customer_segment: "b2b_direct",
+    customer_type: "b2b_installer",
+    status: "active",
+    full_name:
+      values.contact_person_name.trim() ||
+      values.full_name.trim() ||
+      values.business_name.trim(),
+    lead_source: "",
+    assigned_to: "",
   };
 }
 

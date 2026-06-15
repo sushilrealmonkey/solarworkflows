@@ -82,6 +82,7 @@ const permissionModuleKeys = [
   "quotations",
   "invoices",
   "payments",
+  "b2b_sales",
   "documents",
   "product_master",
   "product_pricing",

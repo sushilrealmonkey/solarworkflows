@@ -29,7 +29,6 @@ import {
 } from "./inventoryApi";
 import {
   emptyInventoryTransactionForm,
-  formatCurrency,
   formatStock,
   inventoryBrandName,
   inventoryModelName,
@@ -101,12 +100,6 @@ export function InventoryDetailPage() {
   const canView = hasPermission(profile, permissions, "inventory", "view");
   const canCreate = hasPermission(profile, permissions, "inventory", "create");
   const canUpdate = hasPermission(profile, permissions, "inventory", "update");
-  const canViewPricing = hasPermission(
-    profile,
-    permissions,
-    "product_pricing",
-    "view",
-  );
 
   async function loadItem() {
     if (!canView || !id) {
@@ -134,7 +127,7 @@ export function InventoryDetailPage() {
           fetchPurchaseOrders(
             profile,
             { itemId: id },
-            { includePricing: canViewPricing },
+            { includePricing: false },
           ),
           fetchInventoryBatches(id),
           fetchInventoryMasters(profile),
@@ -161,7 +154,7 @@ export function InventoryDetailPage() {
     void loadItem();
     // loadItem closes over current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, canViewPricing, id, profile?.id]);
+  }, [canView, id, profile?.id]);
 
   if (!canView) {
     return (
@@ -406,13 +399,13 @@ export function InventoryDetailPage() {
           <InventoryBatchesSection
             batches={batches}
             unit={item.unit}
-            showPricing={canViewPricing}
           />
 
           <PurchaseOrdersSection
             orders={purchaseOrders}
-            canUpdate={false}
-            showPricing={canViewPricing}
+            canManageStatus={false}
+            canReceive={false}
+            showPricing={false}
             emptyTitle="No purchase history for this item"
           />
 
@@ -494,11 +487,9 @@ export function InventoryDetailPage() {
 function InventoryBatchesSection({
   batches,
   unit,
-  showPricing,
 }: {
   batches: InventoryBatch[];
   unit: string | null;
-  showPricing: boolean;
 }) {
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -523,7 +514,6 @@ function InventoryBatchesSection({
                   <th className="px-4 py-3">Vendor</th>
                   <th className="px-4 py-3">Received Qty</th>
                   <th className="px-4 py-3">Remaining Qty</th>
-                  {showPricing ? <th className="px-4 py-3">Unit Cost</th> : null}
                   <th className="px-4 py-3">Bill No.</th>
                 </tr>
               </thead>
@@ -540,11 +530,6 @@ function InventoryBatchesSection({
                     <td className="px-4 py-3">
                       {formatStock(batch.remaining_quantity, unit)}
                     </td>
-                    {showPricing ? (
-                      <td className="px-4 py-3">
-                        {formatCurrency(batch.actual_unit_purchase_price)}
-                      </td>
-                    ) : null}
                     <td className="px-4 py-3">{batch.bill_no ?? "-"}</td>
                   </tr>
                 ))}
@@ -573,14 +558,6 @@ function InventoryBatchesSection({
                       {formatStock(batch.remaining_quantity, unit)}
                     </dd>
                   </div>
-                  {showPricing ? (
-                    <div>
-                      <dt className="text-xs text-slate-500">Unit Cost</dt>
-                      <dd className="font-semibold text-slate-950">
-                        {formatCurrency(batch.actual_unit_purchase_price)}
-                      </dd>
-                    </div>
-                  ) : null}
                   <div>
                     <dt className="text-xs text-slate-500">Bill No.</dt>
                     <dd className="font-medium text-slate-900">

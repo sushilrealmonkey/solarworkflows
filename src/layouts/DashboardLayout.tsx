@@ -28,14 +28,18 @@ export function DashboardLayout() {
 
         const children = item.children?.filter(
           (child) =>
-            !child.superAdminOnly && viewableModules.has(child.moduleKey),
+            !child.superAdminOnly &&
+            Boolean(child.moduleKey && viewableModules.has(child.moduleKey)),
         );
 
         if (item.children && (!children || children.length === 0)) {
           return items;
         }
 
-        if (!viewableModules.has(item.moduleKey)) {
+        if (
+          !item.children &&
+          (!item.moduleKey || !viewableModules.has(item.moduleKey))
+        ) {
           return items;
         }
 
@@ -171,10 +175,7 @@ function SidebarNavigation({
               location.pathname.startsWith(child.path),
             ),
           );
-          const groupIsActive =
-            childIsActive ||
-            (item.path.startsWith("/products-materials/") &&
-              location.pathname.startsWith("/products-materials/"));
+          const groupIsActive = childIsActive;
           const isOpen = groupIsActive || openGroups[item.path];
 
           if (hasChildren) {

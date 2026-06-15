@@ -13,7 +13,12 @@ import {
   EmptyState,
   LoadingSkeleton,
 } from "../crm/CrmComponents";
-import { formatDate, hasPermission, labelize } from "../crm/crmUtils";
+import {
+  formatDate,
+  hasAdminPricingAccess,
+  hasPermission,
+  labelize,
+} from "../crm/crmUtils";
 import {
   fetchProduct,
   fetchProductBrandSuggestions,
@@ -56,7 +61,7 @@ import type {
 
 export function ProductDetailPage() {
   const { id } = useParams();
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, roleNames } = useAuth();
   const { showToast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -92,16 +97,16 @@ export function ProductDetailPage() {
     "product_master",
     "update",
   );
-  const canViewPricing = hasPermission(
+  const canViewPricing = hasAdminPricingAccess(
     profile,
     permissions,
-    "product_pricing",
+    roleNames,
     "view",
   );
-  const canUpdatePricing = hasPermission(
+  const canUpdatePricing = hasAdminPricingAccess(
     profile,
     permissions,
-    "product_pricing",
+    roleNames,
     "update",
   );
 
@@ -153,7 +158,7 @@ export function ProductDetailPage() {
     void loadProduct();
     // loadProduct closes over current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, id, profile?.id]);
+  }, [canView, canViewPricing, id, profile?.id]);
 
   if (!canView) {
     return (

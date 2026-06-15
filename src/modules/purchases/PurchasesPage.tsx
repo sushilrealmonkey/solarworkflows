@@ -4,6 +4,7 @@ import {
   useState,
   type FormEvent,
   type KeyboardEvent,
+  type MouseEvent,
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
@@ -23,7 +24,12 @@ import {
   TextInput,
   Toolbar,
 } from "../crm/CrmComponents";
-import { formatDate, hasPermission, labelize } from "../crm/crmUtils";
+import {
+  formatDate,
+  hasAdminPricingAccess,
+  hasPermission,
+  labelize,
+} from "../crm/crmUtils";
 import { fetchInventoryItems } from "../inventory/inventoryApi";
 import { formatCurrency, formatStock } from "../inventory/inventoryUtils";
 import type { InventoryItem } from "../inventory/types";
@@ -72,7 +78,7 @@ type PurchaseVendorOption = Pick<
 >;
 
 export function PurchasesPage() {
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, roleNames } = useAuth();
   const { showToast } = useToast();
   const [orders, setOrders] = useState<PurchaseOrderWithRelations[]>([]);
   const [vendors, setVendors] = useState<PurchaseVendorOption[]>([]);
@@ -104,18 +110,33 @@ export function PurchasesPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
-  const canViewPricing = hasPermission(
+  const canViewPricing = hasAdminPricingAccess(
     profile,
     permissions,
-    "product_pricing",
+    roleNames,
     "view",
+  );
+  const canCreatePricing = hasAdminPricingAccess(
+    profile,
+    permissions,
+    roleNames,
+    "create",
+  );
+  const canUpdatePricing = hasAdminPricingAccess(
+    profile,
+    permissions,
+    roleNames,
+    "update",
   );
   const canCreate =
     hasPermission(profile, permissions, "inventory", "create") &&
-    hasPermission(profile, permissions, "product_pricing", "create");
-  const canUpdate =
+    canCreatePricing;
+  const canManageStatus =
     hasPermission(profile, permissions, "inventory", "update") &&
-    hasPermission(profile, permissions, "product_pricing", "update");
+    canUpdatePricing;
+  const canReceive =
+    hasPermission(profile, permissions, "inventory", "create") &&
+    hasPermission(profile, permissions, "inventory", "update");
 
   async function loadData() {
     if (!canView) {
@@ -152,7 +173,7 @@ export function PurchasesPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [canView, canViewPricing, profile?.id]);
 
   const filteredOrders = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -341,7 +362,8 @@ export function PurchasesPage() {
       {!loading && !error && filteredOrders.length > 0 ? (
         <PurchaseOrdersSection
           orders={filteredOrders}
-          canUpdate={canUpdate}
+          canManageStatus={canManageStatus}
+          canReceive={canReceive}
           showPricing={canViewPricing}
           onStatusChange={(order, status) => setStatusTarget({ order, status })}
           onReceive={openReceiveForm}
@@ -391,6 +413,7 @@ export function PurchasesPage() {
           values={receiveForm}
           setValues={setReceiveForm}
           errors={receiveFormErrors}
+          showPricing={canViewPricing}
           onClose={() => {
             setReceiveTarget(null);
             setReceiveForm(null);
@@ -405,14 +428,16 @@ export function PurchasesPage() {
 
 export function PurchaseOrdersSection({
   orders,
-  canUpdate = false,
+  canManageStatus = false,
+  canReceive = false,
   showPricing = true,
   onStatusChange,
   onReceive,
   emptyTitle = "No purchase orders",
 }: {
   orders: PurchaseOrderWithRelations[];
-  canUpdate?: boolean;
+  canManageStatus?: boolean;
+  canReceive?: boolean;
   showPricing?: boolean;
   onStatusChange?: (
     order: PurchaseOrderWithRelations,
@@ -427,10 +452,32 @@ export function PurchaseOrdersSection({
     navigate(`/purchases/${orderId}`);
   }
 
+  function isInteractiveTarget(target: EventTarget | null) {
+    return (
+      target instanceof HTMLElement &&
+      Boolean(target.closest("a,button,input,select,textarea,label"))
+    );
+  }
+
+  function handlePurchaseRowClick(
+    event: MouseEvent<HTMLTableRowElement | HTMLElement>,
+    orderId: string,
+  ) {
+    if (isInteractiveTarget(event.target)) {
+      return;
+    }
+
+    openPurchaseDetail(orderId);
+  }
+
   function handlePurchaseRowKeyDown(
     event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
     orderId: string,
   ) {
+    if (isInteractiveTarget(event.target)) {
+      return;
+    }
+
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       openPurchaseDetail(orderId);
@@ -473,22 +520,24 @@ export function PurchaseOrdersSection({
               <tr
                 key={order.id}
                 className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                onClick={() => openPurchaseDetail(order.id)}
+                onClick={(event) => handlePurchaseRowClick(event, order.id)}
                 onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
                 role="link"
                 tabIndex={0}
               >
                 <td className="px-4 py-3 font-semibold text-slate-950">
-                  {formatPurchaseCode(order.purchase_code)}
-                </td>
-                <td className="px-4 py-3">
                   <Link
                     className="font-semibold text-brand-700"
                     onClick={(event) => event.stopPropagation()}
-                    to={`/vendors/${order.vendor_id}`}
+                    to={`/purchases/${order.id}`}
                   >
-                    {order.vendor?.vendor_name ?? "Vendor"}
+                    {formatPurchaseCode(order.purchase_code)}
                   </Link>
+                </td>
+                <td className="px-4 py-3">
+                  <span className="font-semibold text-slate-950">
+                    {order.vendor?.vendor_name ?? "Vendor"}
+                  </span>
                   <div className="text-xs text-slate-500">
                     {order.vendor?.phone ?? ""}
                   </div>
@@ -510,10 +559,15 @@ export function PurchaseOrdersSection({
                     {formatCurrency(order.total_amount)}
                   </td>
                 ) : null}
-                <td className="px-4 py-3">
+                <td
+                  className="px-4 py-3"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   <PurchaseStatusActions
                     order={order}
-                    canUpdate={canUpdate}
+                    canManageStatus={canManageStatus}
+                    canReceive={canReceive}
                     onStatusChange={onStatusChange}
                     onReceive={onReceive}
                   />
@@ -528,7 +582,7 @@ export function PurchaseOrdersSection({
           <article
             key={order.id}
             className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-            onClick={() => openPurchaseDetail(order.id)}
+            onClick={(event) => handlePurchaseRowClick(event, order.id)}
             onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
             role="link"
             tabIndex={0}
@@ -536,15 +590,17 @@ export function PurchaseOrdersSection({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {formatPurchaseCode(order.purchase_code)}
+                  <Link
+                    className="text-brand-700"
+                    onClick={(event) => event.stopPropagation()}
+                    to={`/purchases/${order.id}`}
+                  >
+                    {formatPurchaseCode(order.purchase_code)}
+                  </Link>
                 </p>
-                <Link
-                  className="mt-1 block text-base font-semibold text-brand-700"
-                  onClick={(event) => event.stopPropagation()}
-                  to={`/vendors/${order.vendor_id}`}
-                >
+                <span className="mt-1 block text-base font-semibold text-slate-950">
                   {order.vendor?.vendor_name ?? "Vendor"}
-                </Link>
+                </span>
                 <p className="mt-1 text-sm text-slate-600">
                   {formatDate(order.order_date)} / {order.items?.length ?? 0} items
                 </p>
@@ -574,7 +630,8 @@ export function PurchaseOrdersSection({
             >
               <PurchaseStatusActions
                 order={order}
-                canUpdate={canUpdate}
+                canManageStatus={canManageStatus}
+                canReceive={canReceive}
                 onStatusChange={onStatusChange}
                 onReceive={onReceive}
               />
@@ -607,35 +664,47 @@ export function PurchaseStatusBadge({
 
 function PurchaseStatusActions({
   order,
-  canUpdate,
+  canManageStatus,
+  canReceive,
   onStatusChange,
   onReceive,
 }: {
   order: PurchaseOrderWithRelations;
-  canUpdate: boolean;
+  canManageStatus: boolean;
+  canReceive: boolean;
   onStatusChange?: (
     order: PurchaseOrderWithRelations,
     status: PurchaseStatus,
   ) => void;
   onReceive?: (order: PurchaseOrderWithRelations) => void;
 }) {
-  if (!canUpdate || order.status === "received") {
+  const canShowStatusActions = Boolean(
+    canManageStatus && onStatusChange && order.status !== "received",
+  );
+  const canShowReceiveAction = Boolean(
+    canReceive &&
+      onReceive &&
+      order.status !== "received" &&
+      order.status !== "cancelled",
+  );
+
+  if (!canShowStatusActions && !canShowReceiveAction) {
     return <span className="text-sm text-slate-500">-</span>;
   }
 
   return (
     <div className="flex flex-wrap gap-2">
-      {order.status === "draft" && onStatusChange ? (
+      {canShowStatusActions && onStatusChange && order.status === "draft" ? (
         <Button onClick={() => onStatusChange(order, "ordered")} variant="secondary">
           Mark Ordered
         </Button>
       ) : null}
-      {order.status !== "cancelled" && onReceive ? (
+      {canShowReceiveAction && onReceive ? (
         <Button onClick={() => onReceive(order)}>
           Receive Stock
         </Button>
       ) : null}
-      {order.status !== "cancelled" && onStatusChange ? (
+      {canShowStatusActions && onStatusChange && order.status !== "cancelled" ? (
         <Button onClick={() => onStatusChange(order, "cancelled")} variant="danger">
           Cancel
         </Button>
@@ -867,11 +936,12 @@ function PurchaseTotal({
   );
 }
 
-function PurchaseReceiveFormModal({
+export function PurchaseReceiveFormModal({
   order,
   values,
   setValues,
   errors,
+  showPricing,
   onClose,
   onSubmit,
   saving,
@@ -880,6 +950,7 @@ function PurchaseReceiveFormModal({
   values: PurchaseReceiveFormValues;
   setValues: (values: PurchaseReceiveFormValues) => void;
   errors: PurchaseReceiveFormErrors | null;
+  showPricing: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
@@ -959,38 +1030,42 @@ function PurchaseReceiveFormModal({
                 }
                 error={itemErrors?.received_quantity}
               />
-              <TextInput
-                label="Unit Price"
-                type="number"
-                value={item.actual_unit_purchase_price}
-                onChange={(actual_unit_purchase_price) =>
-                  updateItem(index, { ...item, actual_unit_purchase_price })
-                }
-                error={itemErrors?.actual_unit_purchase_price}
-              />
-              <TextInput
-                label="GST %"
-                type="number"
-                value={item.gst_percent}
-                onChange={(gst_percent) =>
-                  updateItem(index, { ...item, gst_percent })
-                }
-                error={itemErrors?.gst_percent}
-              />
-              <label className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 md:col-span-5">
-                <input
-                  checked={item.update_current_purchase_price}
-                  className="h-4 w-4 rounded border-stone-300 text-brand-700 focus:ring-brand-600"
-                  onChange={(event) =>
-                    updateItem(index, {
-                      ...item,
-                      update_current_purchase_price: event.target.checked,
-                    })
-                  }
-                  type="checkbox"
-                />
-                Update current Product Master purchase price from this received cost
-              </label>
+              {showPricing ? (
+                <>
+                  <TextInput
+                    label="Unit Price"
+                    type="number"
+                    value={item.actual_unit_purchase_price}
+                    onChange={(actual_unit_purchase_price) =>
+                      updateItem(index, { ...item, actual_unit_purchase_price })
+                    }
+                    error={itemErrors?.actual_unit_purchase_price}
+                  />
+                  <TextInput
+                    label="GST %"
+                    type="number"
+                    value={item.gst_percent}
+                    onChange={(gst_percent) =>
+                      updateItem(index, { ...item, gst_percent })
+                    }
+                    error={itemErrors?.gst_percent}
+                  />
+                  <label className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 md:col-span-5">
+                    <input
+                      checked={item.update_current_purchase_price}
+                      className="h-4 w-4 rounded border-stone-300 text-brand-700 focus:ring-brand-600"
+                      onChange={(event) =>
+                        updateItem(index, {
+                          ...item,
+                          update_current_purchase_price: event.target.checked,
+                        })
+                      }
+                      type="checkbox"
+                    />
+                    Update current Product Master purchase price from this received cost
+                  </label>
+                </>
+              ) : null}
             </div>
           );
         })}

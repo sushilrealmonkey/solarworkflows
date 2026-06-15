@@ -19,11 +19,17 @@ import {
   SearchInput,
   SelectInput,
 } from "../crm/CrmComponents";
-import { hasPermission, labelize } from "../crm/crmUtils";
+import {
+  formatCurrency,
+  hasAdminPricingAccess,
+  hasPermission,
+  labelize,
+} from "../crm/crmUtils";
 import {
   createProduct,
   fetchProductBrandSuggestions,
   fetchProductCategories,
+  fetchProductPrices,
   fetchProductTypes,
   fetchProducts,
   updateProduct,
@@ -47,6 +53,7 @@ import type {
   Product,
   ProductCategory,
   ProductFormValues,
+  ProductPrice,
   ProductStatus,
   ProductType,
 } from "./types";
@@ -69,10 +76,13 @@ type ProductStatusAction = {
 };
 
 export function ProductMasterPage() {
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, roleNames } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
+  const [productPrices, setProductPrices] = useState(
+    new Map<string, ProductPrice>(),
+  );
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [brandOptions, setBrandOptions] = useState<string[]>([]);
@@ -111,6 +121,12 @@ export function ProductMasterPage() {
     "product_master",
     "update",
   );
+  const canViewPricing = hasAdminPricingAccess(
+    profile,
+    permissions,
+    roleNames,
+    "view",
+  );
 
   async function loadData() {
     if (!canView) {
@@ -121,18 +137,17 @@ export function ProductMasterPage() {
     try {
       setLoading(true);
       setError(null);
-      const [
-        nextProducts,
-        nextCategories,
-        nextProductTypes,
-        nextBrandOptions,
-      ] = await Promise.all([
+      const [nextProducts, nextCategories, nextProductTypes, nextBrandOptions] =
+        await Promise.all([
         fetchProducts(profile),
         fetchProductCategories(profile),
         fetchProductTypes(profile),
         fetchProductBrandSuggestions(profile),
       ]);
       setProducts(nextProducts);
+      setProductPrices(
+        canViewPricing ? await fetchProductPrices(nextProducts) : new Map(),
+      );
       setCategories(nextCategories);
       setProductTypes(nextProductTypes);
       setBrandOptions(nextBrandOptions);
@@ -151,7 +166,7 @@ export function ProductMasterPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [canView, canViewPricing, profile?.id]);
 
   const filteredProducts = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -402,73 +417,98 @@ export function ProductMasterPage() {
                   <th className="px-4 py-3">Model Number</th>
                   <th className="px-4 py-3">Specifications</th>
                   <th className="px-4 py-3">Unit</th>
+                  {canViewPricing ? (
+                    <>
+                      <th className="px-4 py-3">Purchase Price</th>
+                      <th className="px-4 py-3">Selling Price</th>
+                    </>
+                  ) : null}
                   <th className="px-4 py-3">Status</th>
                   <th className="w-12 px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredProducts.map((product) => (
-                  <tr
-                    key={product.id}
-                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
-                    onClick={() => openProductDetail(product.id)}
-                    onKeyDown={(event) =>
-                      handleProductRowKeyDown(event, product.id)
-                    }
-                    role="link"
-                    tabIndex={0}
-                  >
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {product.product_code}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="font-semibold text-brand-700">
-                        {product.product_name}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">{productCategoryName(product)}</td>
-                    <td className="px-4 py-3">{product.hsn_code ?? "-"}</td>
-                    <td className="px-4 py-3">{productTypeName(product)}</td>
-                    <td className="px-4 py-3">{product.brand ?? "-"}</td>
-                    <td className="px-4 py-3">{product.model_number ?? "-"}</td>
-                    <td className="px-4 py-3">
-                      {product.specifications ?? "-"}
-                    </td>
-                    <td className="px-4 py-3">{product.unit}</td>
-                    <td className="px-4 py-3">
-                      <ProductStatusBadge value={product.status} />
-                    </td>
-                    <td
-                      className="relative px-4 py-3 text-right"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
+                {filteredProducts.map((product) => {
+                  const price = productPrices.get(product.id);
+
+                  return (
+                    <tr
+                      key={product.id}
+                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                      onClick={() => openProductDetail(product.id)}
+                      onKeyDown={(event) =>
+                        handleProductRowKeyDown(event, product.id)
+                      }
+                      role="link"
+                      tabIndex={0}
                     >
-                      <ProductActions
-                        product={product}
-                        canUpdate={canUpdate}
-                        open={openActionProductId === product.id}
-                        onToggle={() =>
-                          setOpenActionProductId((current) =>
-                            current === product.id ? null : product.id,
-                          )
-                        }
-                        onView={() => openProductDetail(product.id)}
-                        onEdit={() => openEditForm(product)}
-                        onStatus={(status) => setStatusAction({ product, status })}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                      <td className="px-4 py-3 font-semibold text-slate-950">
+                        {product.product_code}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-brand-700">
+                          {product.product_name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">{productCategoryName(product)}</td>
+                      <td className="px-4 py-3">{product.hsn_code ?? "-"}</td>
+                      <td className="px-4 py-3">{productTypeName(product)}</td>
+                      <td className="px-4 py-3">{product.brand ?? "-"}</td>
+                      <td className="px-4 py-3">{product.model_number ?? "-"}</td>
+                      <td className="px-4 py-3">
+                        {product.specifications ?? "-"}
+                      </td>
+                      <td className="px-4 py-3">{product.unit}</td>
+                      {canViewPricing ? (
+                        <>
+                          <td className="px-4 py-3 font-medium text-slate-900">
+                            {formatCurrency(price?.current_purchase_price)}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-900">
+                            {formatCurrency(price?.current_selling_price)}
+                          </td>
+                        </>
+                      ) : null}
+                      <td className="px-4 py-3">
+                        <ProductStatusBadge value={product.status} />
+                      </td>
+                      <td
+                        className="relative px-4 py-3 text-right"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <ProductActions
+                          product={product}
+                          canUpdate={canUpdate}
+                          open={openActionProductId === product.id}
+                          onToggle={() =>
+                            setOpenActionProductId((current) =>
+                              current === product.id ? null : product.id,
+                            )
+                          }
+                          onView={() => openProductDetail(product.id)}
+                          onEdit={() => openEditForm(product)}
+                          onStatus={(status) =>
+                            setStatusAction({ product, status })
+                          }
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredProducts.map((product) => (
-              <article
-                key={product.id}
-                className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
-              >
+            {filteredProducts.map((product) => {
+              const price = productPrices.get(product.id);
+
+              return (
+                <article
+                  key={product.id}
+                  className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+                >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -526,6 +566,22 @@ export function ProductMasterPage() {
                       {product.specifications ?? "-"}
                     </dd>
                   </div>
+                  {canViewPricing ? (
+                    <>
+                      <div>
+                        <dt className="text-xs text-slate-500">Purchase Price</dt>
+                        <dd className="font-medium text-slate-900">
+                          {formatCurrency(price?.current_purchase_price)}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-slate-500">Selling Price</dt>
+                        <dd className="font-medium text-slate-900">
+                          {formatCurrency(price?.current_selling_price)}
+                        </dd>
+                      </div>
+                    </>
+                  ) : null}
                 </dl>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button onClick={() => openProductDetail(product.id)} variant="secondary">
@@ -562,8 +618,9 @@ export function ProductMasterPage() {
                     </>
                   ) : null}
                 </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </>
       ) : null}

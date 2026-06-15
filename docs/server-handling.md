@@ -40,10 +40,10 @@ The current Supabase project files live under `supabase/`.
 
 ## Storage
 
-Storage is used for organization documents and generated PDF-related workflows.
-Storage access must be protected with Supabase policies. Upload, replace, read,
-and delete behavior should be tested with tenant-scoped users, not only admin
-credentials.
+Storage is used for organization documents and generated PDF-related workflows,
+including quotation, invoice, and purchase order PDFs. Storage access must be
+protected with Supabase policies. Upload, replace, read, and delete behavior
+should be tested with tenant-scoped users, not only admin credentials.
 
 ## Environments
 

@@ -27,17 +27,56 @@ specific compatibility exception.
 | Access control | `modules`, `permissions`, `roles`, `role_permissions`, `user_roles` |
 | CRM | `customers`, `leads`, `lead_followups` |
 | Field operations | `site_surveys`, `projects` |
+| B2B sales | `b2b_sales`, `b2b_sale_items` |
 | Quotations | `quotations`, `quotation_items`, payment terms, warranties, BOM items |
 | Products and BOM | `product_categories`, `product_types`, `products`, `bom_templates`, `bom_template_lines` |
 | Inventory and procurement | `inventory_items`, `inventory_transactions`, `inventory_reservations`, `inventory_batches`, vendors, purchase orders, purchase order items |
-| Finance | `payments`, `project_payment_summary`, invoices, invoice items |
-| Documents and storage metadata | `documents`, generated PDF support, organization document storage |
+| Finance | `payments`, `project_payment_summary`, proforma invoices, invoices, invoice items |
+| Documents and storage metadata | `documents`, generated PDF support for quotations, proforma invoices, invoices, and purchase orders, organization document storage |
 | Reporting and system support | dashboard/report foundations, activity logs, notifications, system settings |
 | Catalog library | Shared admin-managed catalog defaults for categories, product types, and brands |
 
-Invoice records currently use nullable `project_id` and `quotation_id` links so
-the UI can support both project-first invoices and customer-only manual item
-invoices without adding a separate invoice table.
+Proforma invoices are separate pre-payment finance records. They use
+`proforma_invoices` and `proforma_invoice_items`, carry both `company_id` and
+`organization_id`, and can link to a project, quotation, B2B sale, or manual
+customer billing context. Payments can link to `payments.proforma_invoice_id`;
+after the proforma is fully paid, `create_invoice_from_proforma_invoice`
+copies item snapshots into the official `invoices` ledger and records the
+trace through `invoices.proforma_invoice_id`.
+
+Invoice records currently use nullable `project_id`, `quotation_id`, and
+`b2b_sale_id` links so the UI can support project invoices, B2B sale invoices,
+and customer-only manual item invoices without adding separate official invoice
+tables.
+
+Invoice line items can optionally link to `inventory_items` through
+`invoice_items.inventory_item_id`. The invoice line still stores item name,
+unit, price, GST, and description snapshots so historical invoices remain
+stable if inventory metadata changes later. This link is for item selection and
+traceability only; it does not introduce stock movement.
+
+Customers are split by `customers.customer_segment`: `project_based` customers
+belong to solar installation workflows, while `b2b_direct` customers are
+installers, retailers, or direct buyers for project-free product sales.
+`customers.customer_type` remains the subtype field for project-based customers;
+B2B/Direct customers are normalized to the internal `b2b_installer` subtype and
+do not carry `assigned_to`.
+
+B2B/Direct product sales use `b2b_sales` and `b2b_sale_items` for project-free
+sales to B2B/Direct customers. These tables carry both `company_id` and
+`organization_id`: `company_id` satisfies the future business-table rule, while
+`organization_id` keeps compatibility with current customer, inventory,
+invoice, and payment tables. A B2B/Direct sale can generate one linked
+proforma invoice through `b2b_sales.proforma_invoice_id`; after payment, the
+final invoice links through `invoices.b2b_sale_id` and
+`invoices.proforma_invoice_id`. B2B payments can link to the sale, proforma
+invoice, and final invoice through `payments.b2b_sale_id`,
+`payments.proforma_invoice_id`, and `payments.invoice_id`.
+
+B2B stock movement happens only when a confirmed sale is dispatched. Dispatch
+creates `stock_out` rows in `inventory_transactions` with
+`reference_type = 'b2b_sale'`; draft, confirmed, and invoiced sales do not
+directly reduce `inventory_items.current_stock`.
 
 Inventory reservations are soft operational holds created when a quotation is
 accepted. `inventory_reservations` carries both `company_id` and
@@ -66,6 +105,11 @@ tracks line progress, and each received batch stores the actual unit purchase
 price, GST, bill number, vendor, and received date. Normal inventory staff access
 batch history through staff-safe RPCs that omit cost fields unless the user has
 `product_pricing:view`.
+
+Generated proforma invoice, invoice, and purchase order PDFs are stored through
+the same `documents` metadata and organization document storage flow used by
+quotation PDFs. Because PO PDFs include price-bearing purchase totals,
+generation requires both `documents:create` and purchase pricing visibility.
 
 ## RLS Expectations
 

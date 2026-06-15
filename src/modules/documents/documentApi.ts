@@ -39,6 +39,8 @@ const leadSelect =
   "id, lead_code, customer_id, converted_customer_id, full_name, phone, alternate_phone, email, address, city, district, state, pincode, roof_type, estimated_load_kw, offered_price, assigned_to";
 const profileSelect = "id, full_name, phone, email";
 const quotationSelect = "id, quotation_code, customer_id";
+const proformaInvoiceSelect = "id, proforma_code";
+const purchaseOrderSelect = "id, purchase_code";
 const projectSelect = "id, project_code, project_name, customer_id, quotation_id";
 
 const documentSelect = `
@@ -47,6 +49,8 @@ const documentSelect = `
   lead:leads(${leadSelect}),
   project:projects(${projectSelect}),
   quotation:quotations(${quotationSelect}),
+  proforma_invoice:proforma_invoices(${proformaInvoiceSelect}),
+  purchase_order:purchase_orders(${purchaseOrderSelect}),
   uploaded_by_profile:users_profile!documents_uploaded_by_fkey(${profileSelect}),
   verified_by_profile:users_profile!documents_verified_by_fkey(${profileSelect})
 `;

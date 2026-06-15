@@ -89,6 +89,39 @@ const productSelect = `
   product_type:product_types(id, name, category_id, display_order, is_active)
 `;
 
+function isMissingPricingStoreError(error: { code?: string; message?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST202" ||
+    error.code === "PGRST205" ||
+    message.includes("product_prices") ||
+    message.includes("product_price_history") ||
+    message.includes("update_product_price")
+  );
+}
+
+function legacyProductPrice(product: Pick<
+  Product,
+  "id" | "tenant_id" | "purchase_price" | "selling_price" | "gst_percent" | "created_at" | "updated_at"
+>): ProductPrice {
+  return {
+    id: `legacy-${product.id}`,
+    company_id: null,
+    organization_id: product.tenant_id,
+    product_id: product.id,
+    current_purchase_price: product.purchase_price ?? 0,
+    current_selling_price: product.selling_price ?? 0,
+    gst_percent: product.gst_percent ?? 0,
+    effective_date: new Date().toISOString().slice(0, 10),
+    created_by: null,
+    updated_by: null,
+    created_at: product.created_at,
+    updated_at: product.updated_at,
+  };
+}
+
 export async function fetchProductCategories(profile: UserProfile | null) {
   const client = requireSupabase();
   let query = client
@@ -367,6 +400,45 @@ export async function updateProductStatus(
   return data as Product;
 }
 
+export async function fetchProductPrices(products: Product[]) {
+  const client = requireSupabase();
+  const productIds = products.map((product) => product.id);
+
+  if (productIds.length === 0) {
+    return new Map<string, ProductPrice>();
+  }
+
+  const { data, error } = await client
+    .from("product_prices")
+    .select("*")
+    .in("product_id", productIds);
+
+  if (error) {
+    if (isMissingPricingStoreError(error)) {
+      return new Map(
+        products.map((product) => [product.id, legacyProductPrice(product)]),
+      );
+    }
+
+    throw new Error(error.message);
+  }
+
+  const priceMap = new Map(
+    ((data ?? []) as ProductPrice[]).map((price) => [
+      price.product_id,
+      price,
+    ]),
+  );
+
+  products.forEach((product) => {
+    if (!priceMap.has(product.id)) {
+      priceMap.set(product.id, legacyProductPrice(product));
+    }
+  });
+
+  return priceMap;
+}
+
 export async function fetchProductPrice(productId: string) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -376,10 +448,38 @@ export async function fetchProductPrice(productId: string) {
     .maybeSingle();
 
   if (error) {
+    if (isMissingPricingStoreError(error)) {
+      const { data: productData, error: productError } = await client
+        .from("products")
+        .select(productSelect)
+        .eq("id", productId)
+        .maybeSingle();
+
+      if (productError) {
+        throw new Error(productError.message);
+      }
+
+      return productData ? legacyProductPrice(productData as Product) : null;
+    }
+
     throw new Error(error.message);
   }
 
-  return data as ProductPrice | null;
+  if (data) {
+    return data as ProductPrice;
+  }
+
+  const { data: productData, error: productError } = await client
+    .from("products")
+    .select(productSelect)
+    .eq("id", productId)
+    .maybeSingle();
+
+  if (productError) {
+    throw new Error(productError.message);
+  }
+
+  return productData ? legacyProductPrice(productData as Product) : null;
 }
 
 export async function fetchProductPriceHistory(productId: string) {
@@ -391,6 +491,10 @@ export async function fetchProductPriceHistory(productId: string) {
     .order("changed_at", { ascending: false });
 
   if (error) {
+    if (isMissingPricingStoreError(error)) {
+      return [];
+    }
+
     throw new Error(error.message);
   }
 
@@ -412,6 +516,25 @@ export async function saveProductPrice(
   });
 
   if (error) {
+    if (isMissingPricingStoreError(error)) {
+      const { data: productData, error: productError } = await client
+        .from("products")
+        .update({
+          purchase_price: numberValue(values.current_purchase_price),
+          selling_price: numberValue(values.current_selling_price),
+          gst_percent: numberValue(values.gst_percent),
+        })
+        .eq("id", productId)
+        .select(productSelect)
+        .single();
+
+      if (productError) {
+        throw new Error(productError.message);
+      }
+
+      return legacyProductPrice(productData as Product);
+    }
+
     throw new Error(error.message);
   }
 

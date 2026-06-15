@@ -14,10 +14,16 @@ export const routes: AppRoute[] = [
     description: "A tenant-aware overview for future solar operations metrics.",
   },
   {
-    path: "/customers",
-    label: "Customers",
+    path: "/customers/project-based",
+    label: "Project Customers",
     moduleKey: "customers",
-    description: "Customer records and account activity will live here.",
+    description: "Solar installation customers linked to leads, surveys, quotations, and projects.",
+  },
+  {
+    path: "/customers/b2b-direct",
+    label: "B2B/Direct Customers",
+    moduleKey: "customers",
+    description: "Installer, retailer, and direct product-sale customers.",
   },
   {
     path: "/leads",
@@ -48,6 +54,12 @@ export const routes: AppRoute[] = [
     label: "Payments",
     moduleKey: "payments",
     description: "Payment milestones and receipts will live here.",
+  },
+  {
+    path: "/b2b-sales",
+    label: "B2B/Direct Sales",
+    moduleKey: "b2b_sales",
+    description: "Project-free product and bulk sales to B2B/Direct customers.",
   },
   {
     path: "/products-materials/products",
@@ -91,6 +103,12 @@ export const routes: AppRoute[] = [
     label: "Invoices",
     moduleKey: "invoices",
     description: "Invoice generation and billing status will live here.",
+  },
+  {
+    path: "/proforma-invoices",
+    label: "Proforma Invoices",
+    moduleKey: "invoices",
+    description: "Pre-payment proforma invoices and conversion to final invoices.",
   },
   {
     path: "/reports",

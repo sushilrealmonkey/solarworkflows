@@ -6,6 +6,7 @@ import type { SurveyCustomerSummary } from "../site-surveys/types";
 import type {
   Invoice,
   InvoiceFormValues,
+  InvoiceInventoryItemOption,
   InvoiceItem,
   InvoiceItemFormValues,
   InvoiceLinkOptions,
@@ -58,6 +59,7 @@ function invoicePayload(values: InvoiceFormValues) {
 
 function itemPayload(values: InvoiceItemFormValues, sortOrder?: number) {
   return {
+    inventory_item_id: nullable(values.inventory_item_id),
     item_name: values.item_name.trim(),
     description: nullable(values.description),
     quantity: nullableNumber(values.quantity) ?? 1,
@@ -68,8 +70,13 @@ function itemPayload(values: InvoiceItemFormValues, sortOrder?: number) {
   };
 }
 
+type UpdateInvoiceOptions = {
+  includeItems?: boolean;
+  deleteMissingItems?: boolean;
+};
+
 const customerSelect =
-  "id, customer_code, full_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to";
+  "id, customer_code, full_name, business_name, gst_number, contact_person_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, customer_segment, customer_type, assigned_to";
 
 const quotationSummarySelect =
   "id, quotation_code, customer_id, base_amount, gst_amount, discount_amount, total_amount, subsidy_amount, net_payable_amount";
@@ -90,6 +97,8 @@ const invoiceSelect = `
   customer:customers(${customerSelect}),
   project:projects(${projectOptionSelect}),
   quotation:quotations(${quotationSummarySelect}),
+  b2b_sale:b2b_sales(id, sale_code, total_amount, status),
+  proforma_invoice:proforma_invoices(id, proforma_code, total_amount, balance_due, status),
   created_by_profile:users_profile!invoices_created_by_fkey(
     id,
     full_name,
@@ -98,11 +107,29 @@ const invoiceSelect = `
   )
 `;
 
+const invoiceInventoryProductSelect =
+  "id, product_code, product_name, brand, model_number, specifications, unit, gst_percent, status";
+
+const invoiceInventoryItemSelect = `
+  id,
+  organization_id,
+  item_code,
+  item_name,
+  unit,
+  brand,
+  model,
+  current_stock,
+  status,
+  catalog_product:products(${invoiceInventoryProductSelect})
+`;
+
 const paymentSelect = `
   *,
   customer:customers(${customerSelect}),
   project:projects(${projectOptionSelect}),
   quotation:quotations(id, quotation_code, total_amount, subsidy_amount, net_payable_amount),
+  invoice:invoices(id, invoice_code, total_amount, balance_due, status),
+  b2b_sale:b2b_sales(id, sale_code, total_amount, status),
   created_by_profile:users_profile!payments_created_by_fkey(
     id,
     full_name,
@@ -214,7 +241,11 @@ export async function createInvoice(
   return recalculateInvoiceTotals(invoice.id);
 }
 
-export async function updateInvoice(id: string, values: InvoiceFormValues) {
+export async function updateInvoice(
+  id: string,
+  values: InvoiceFormValues,
+  options: UpdateInvoiceOptions = {},
+) {
   const client = requireSupabase();
   const { data, error } = await client
     .from("invoices")
@@ -227,8 +258,79 @@ export async function updateInvoice(id: string, values: InvoiceFormValues) {
     throw new Error(error.message);
   }
 
-  await recalculateInvoiceTotals(id);
+  if (options.includeItems) {
+    await syncInvoiceItems(id, values.items, {
+      deleteMissing: Boolean(options.deleteMissingItems),
+    });
+  } else {
+    await recalculateInvoiceTotals(id);
+  }
+
   return data as Invoice;
+}
+
+async function syncInvoiceItems(
+  invoiceId: string,
+  values: InvoiceItemFormValues[],
+  options: { deleteMissing: boolean },
+) {
+  const client = requireSupabase();
+  const items = values.filter((item) => item.item_name.trim());
+  const { data: existingItems, error: existingError } = await client
+    .from("invoice_items")
+    .select("id")
+    .eq("invoice_id", invoiceId);
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
+  const submittedIds = new Set(
+    items.map((item) => item.id).filter((itemId): itemId is string => Boolean(itemId)),
+  );
+
+  for (const [index, item] of items.entries()) {
+    if (item.id) {
+      const { error } = await client
+        .from("invoice_items")
+        .update(itemPayload(item, index + 1))
+        .eq("invoice_id", invoiceId)
+        .eq("id", item.id);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    } else {
+      const { error } = await client.from("invoice_items").insert({
+        invoice_id: invoiceId,
+        ...itemPayload(item, index + 1),
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+  }
+
+  if (options.deleteMissing) {
+    const missingIds = (existingItems ?? [])
+      .map((item) => item.id)
+      .filter((itemId) => !submittedIds.has(itemId));
+
+    if (missingIds.length > 0) {
+      const { error } = await client
+        .from("invoice_items")
+        .delete()
+        .eq("invoice_id", invoiceId)
+        .in("id", missingIds);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+  }
+
+  await recalculateInvoiceTotals(invoiceId);
 }
 
 export async function deleteInvoice(id: string) {
@@ -354,23 +456,35 @@ export async function fetchInvoiceLinkOptions(
     .from("quotations")
     .select(quotationSummarySelect)
     .order("created_at", { ascending: false });
+  let inventoryQuery = client
+    .from("inventory_items")
+    .select(invoiceInventoryItemSelect)
+    .eq("status", "active")
+    .not("catalog_product_id", "is", null)
+    .order("item_name", { ascending: true });
 
   if (organizationId) {
     customersQuery = customersQuery.eq("organization_id", organizationId);
     projectsQuery = projectsQuery.eq("organization_id", organizationId);
     quotationsQuery = quotationsQuery.eq("organization_id", organizationId);
+    inventoryQuery = inventoryQuery.eq("organization_id", organizationId);
   }
 
-  const [customersResult, projectsResult, quotationsResult] = await Promise.all([
-    customersQuery,
-    projectsQuery,
-    quotationsQuery,
-  ]);
+  const [customersResult, projectsResult, quotationsResult, inventoryResult] =
+    await Promise.all([
+      customersQuery,
+      projectsQuery,
+      quotationsQuery,
+      inventoryQuery,
+    ]);
 
   return {
     customers: (customersResult.data ?? []) as SurveyCustomerSummary[],
     projects: (projectsResult.data ?? []) as unknown as InvoiceProjectOption[],
     quotations: (quotationsResult.data ?? []) as InvoiceQuotationSummary[],
+    inventoryItems: inventoryResult.error
+      ? []
+      : ((inventoryResult.data ?? []) as unknown as InvoiceInventoryItemOption[]),
   };
 }
 
@@ -412,6 +526,35 @@ export async function fetchProjectInvoicePayments(
     .from("payments")
     .select(paymentSelect)
     .eq("project_id", projectId)
+    .order("payment_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [] as PaymentWithRelations[];
+  }
+
+  return (data ?? []) as unknown as PaymentWithRelations[];
+}
+
+export async function fetchInvoicePayments(
+  profile: UserProfile | null,
+  invoiceId: string | null,
+) {
+  if (!invoiceId) {
+    return [] as PaymentWithRelations[];
+  }
+
+  const client = requireSupabase();
+  let query = client
+    .from("payments")
+    .select(paymentSelect)
+    .eq("invoice_id", invoiceId)
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false });
 

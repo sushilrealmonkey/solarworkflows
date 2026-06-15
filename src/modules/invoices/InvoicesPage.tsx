@@ -21,6 +21,7 @@ import type { QuotationItem } from "../quotations/types";
 import {
   createInvoice,
   deleteInvoice,
+  fetchInvoiceItems,
   fetchInvoiceLinkOptions,
   fetchInvoices,
   fetchQuotationItemsForInvoice,
@@ -31,6 +32,7 @@ import {
   emptyInvoiceForm,
   emptyInvoiceItemForm,
   invoiceContextLabel,
+  invoiceItemToForm,
   isActiveInvoice,
   invoiceStatusOptions,
   invoiceToForm,
@@ -61,6 +63,7 @@ export function InvoicesPage() {
     customers: [],
     projects: [],
     quotations: [],
+    inventoryItems: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -141,10 +144,13 @@ export function InvoicesPage() {
         !search ||
         [
           invoice.invoice_code,
+          invoice.customer?.business_name,
           invoice.customer?.full_name,
           invoice.customer?.phone,
           invoice.customer?.alternate_phone,
           invoice.project?.project_code,
+          invoice.b2b_sale?.sale_code,
+          invoice.proforma_invoice?.proforma_code,
         ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(search));
@@ -199,13 +205,29 @@ export function InvoicesPage() {
     });
   }
 
-  function openEditForm(invoice: InvoiceWithRelations) {
-    setFormErrors({});
-    setFormState({
-      mode: "edit",
-      invoice,
-      values: invoiceToForm(invoice),
-    });
+  async function openEditForm(invoice: InvoiceWithRelations) {
+    try {
+      const invoiceItems = await fetchInvoiceItems(profile, invoice.id);
+      setFormErrors({});
+      setFormState({
+        mode: "edit",
+        invoice,
+        values: {
+          ...invoiceToForm(invoice),
+          items:
+            invoiceItems.length > 0
+              ? invoiceItems.map(invoiceItemToForm)
+              : [emptyInvoiceItemForm()],
+        },
+      });
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load invoice items.",
+        "error",
+      );
+    }
   }
 
   function handleCreationModeChange(creationMode: InvoiceCreationMode) {
@@ -265,7 +287,7 @@ export function InvoicesPage() {
       return;
     }
 
-    const includeItems = formState.mode === "create";
+    const includeItems = true;
     const nextErrors = validateInvoiceForm(formState.values, {
       includeItems,
       requireProject:
@@ -284,7 +306,10 @@ export function InvoicesPage() {
         await createInvoice(profile, formState.values);
         showToast("Invoice created.", "success");
       } else if (formState.invoice) {
-        await updateInvoice(formState.invoice.id, formState.values);
+        await updateInvoice(formState.invoice.id, formState.values, {
+          includeItems: true,
+          deleteMissingItems: canDelete,
+        });
         showToast("Invoice updated.", "success");
       }
 
@@ -343,6 +368,7 @@ export function InvoicesPage() {
 
     return [
       {
+        inventory_item_id: "",
         item_name: "Solar project invoice",
         description: quotation.quotation_code ?? "",
         quantity: "1",
@@ -444,7 +470,9 @@ export function InvoicesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">
-                        {invoice.customer?.full_name ?? "-"}
+                        {invoice.customer?.business_name ||
+                          invoice.customer?.full_name ||
+                          "-"}
                       </div>
                       <div className="text-xs text-slate-500">
                         {invoice.customer?.phone ?? "-"}
@@ -470,7 +498,7 @@ export function InvoicesPage() {
                         <ViewLink to={`/invoices/${invoice.id}`}>View</ViewLink>
                         {canUpdate ? (
                           <Button
-                            onClick={() => openEditForm(invoice)}
+                            onClick={() => void openEditForm(invoice)}
                             variant="secondary"
                           >
                             Edit
@@ -507,7 +535,9 @@ export function InvoicesPage() {
                       {invoice.invoice_code ?? "Invoice"}
                     </h2>
                     <p className="mt-1 text-sm text-slate-600">
-                      {invoice.customer?.full_name ?? "-"} /{" "}
+                      {invoice.customer?.business_name ||
+                        invoice.customer?.full_name ||
+                        "-"} /{" "}
                       {invoiceContextLabel(invoice)}
                     </p>
                   </div>
@@ -534,7 +564,10 @@ export function InvoicesPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <ViewLink to={`/invoices/${invoice.id}`}>View</ViewLink>
                   {canUpdate ? (
-                    <Button onClick={() => openEditForm(invoice)} variant="secondary">
+                    <Button
+                      onClick={() => void openEditForm(invoice)}
+                      variant="secondary"
+                    >
                       Edit
                     </Button>
                   ) : null}
@@ -569,7 +602,9 @@ export function InvoicesPage() {
           }
           errors={formErrors}
           options={options}
-          includeItems={formState.mode === "create"}
+          includeItems
+          canAddItems={formState.mode === "create" || (canCreate && canUpdate)}
+          canRemoveItems={formState.mode === "create" || (canDelete && canUpdate)}
           creationMode={formState.values.creation_mode}
           duplicateProjectInvoice={duplicateProjectInvoice}
           onCreationModeChange={
@@ -601,6 +636,7 @@ export function InvoicesPage() {
 
 function quotationItemToInvoiceItem(item: QuotationItem) {
   return {
+    inventory_item_id: "",
     item_name: item.item_name ?? "",
     description: item.description ?? "",
     quantity: numberToInput(item.quantity) || "1",

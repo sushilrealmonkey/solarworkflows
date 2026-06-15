@@ -32,6 +32,7 @@ export type PurchaseOrderItem = {
   item_id: string;
   quantity: number;
   received_quantity: number | null;
+  last_received_at: string | null;
   unit_price: number | null;
   gst_percent: number | null;
   line_total: number | null;
@@ -46,11 +47,26 @@ export type PurchaseOrderItemWithRelations = PurchaseOrderItem & {
   > | null;
 };
 
+export type PurchaseOrderVendorSummary = Pick<
+  Vendor,
+  "id" | "vendor_code" | "vendor_name" | "contact_person" | "phone"
+> &
+  Partial<
+    Pick<
+      Vendor,
+      | "email"
+      | "gst_number"
+      | "address_line_1"
+      | "address_line_2"
+      | "city"
+      | "district"
+      | "state"
+      | "pincode"
+    >
+  >;
+
 export type PurchaseOrderWithRelations = PurchaseOrder & {
-  vendor?: Pick<
-    Vendor,
-    "id" | "vendor_code" | "vendor_name" | "contact_person" | "phone"
-  > | null;
+  vendor?: PurchaseOrderVendorSummary | null;
   items?: PurchaseOrderItemWithRelations[] | null;
   creator?: {
     id: string;

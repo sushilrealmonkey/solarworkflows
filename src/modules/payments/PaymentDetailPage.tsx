@@ -161,10 +161,10 @@ export function PaymentDetailPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <PageHeader
               title={formatMoney(payment.amount)}
-              description={`${payment.project?.project_code ?? "Payment"} / ${payment.customer?.full_name ?? "Customer"}`}
+              description={`${paymentContextLabel(payment)} / ${payment.customer?.business_name || payment.customer?.full_name || "Customer"}`}
             />
             <div className="flex flex-wrap gap-2">
-              {canUpdate ? (
+              {canUpdate && payment.project_id ? (
                 <Button
                   onClick={() => {
                     setFormErrors({});
@@ -201,10 +201,11 @@ export function PaymentDetailPage() {
             />
           </DetailSection>
 
-          <DetailSection title="Linked Project">
+          <DetailSection title="Linked Record">
             <DetailItem
               label="Project"
               value={
+                payment.project_id ? (
                 <Link
                   className="font-semibold text-brand-700"
                   to={`/projects/${payment.project_id}`}
@@ -213,6 +214,55 @@ export function PaymentDetailPage() {
                     payment.project?.project_name ??
                     "Open project"}
                 </Link>
+                ) : (
+                  "-"
+                )
+              }
+            />
+            <DetailItem
+              label="B2B Sale"
+              value={
+                payment.b2b_sale_id ? (
+                  <Link
+                    className="font-semibold text-brand-700"
+                    to={`/b2b-sales/${payment.b2b_sale_id}`}
+                  >
+                    {payment.b2b_sale?.sale_code ?? "Open B2B sale"}
+                  </Link>
+                ) : (
+                  "-"
+                )
+              }
+            />
+            <DetailItem
+              label="Proforma Invoice"
+              value={
+                payment.proforma_invoice_id ? (
+                  <Link
+                    className="font-semibold text-brand-700"
+                    to={`/proforma-invoices/${payment.proforma_invoice_id}`}
+                  >
+                    {payment.proforma_invoice?.proforma_code ??
+                      "Open proforma invoice"}
+                  </Link>
+                ) : (
+                  "-"
+                )
+              }
+            />
+            <DetailItem
+              label="Invoice"
+              value={
+                payment.invoice_id ? (
+                  <Link
+                    className="font-semibold text-brand-700"
+                    to={`/invoices/${payment.invoice_id}`}
+                  >
+                    {payment.invoice?.invoice_code ?? "Open invoice"}
+                  </Link>
+                ) : (
+                  "-"
+                )
               }
             />
             <DetailItem
@@ -222,7 +272,8 @@ export function PaymentDetailPage() {
                   className="font-semibold text-brand-700"
                   to={`/customers/${payment.customer_id}`}
                 >
-                  {payment.customer?.full_name ??
+                  {payment.customer?.business_name ??
+                    payment.customer?.full_name ??
                     payment.customer?.customer_code ??
                     "Open customer"}
                 </Link>
@@ -292,7 +343,7 @@ export function PaymentDetailPage() {
       {confirmingDelete && payment ? (
         <ConfirmDialog
           title="Delete payment?"
-          description={`This will remove the ${formatMoney(payment.amount)} payment from ${payment.project?.project_code ?? "this project"}.`}
+          description={`This will remove the ${formatMoney(payment.amount)} payment from ${paymentContextLabel(payment)}.`}
           confirming={deleting}
           onCancel={() => setConfirmingDelete(false)}
           onConfirm={handleDelete}
@@ -308,5 +359,16 @@ function createdByName(payment: PaymentWithRelations) {
     payment.created_by_profile?.email ??
     payment.created_by_profile?.phone ??
     "-"
+  );
+}
+
+function paymentContextLabel(payment: PaymentWithRelations) {
+  return (
+    payment.project?.project_code ??
+    payment.project?.project_name ??
+    payment.b2b_sale?.sale_code ??
+    payment.proforma_invoice?.proforma_code ??
+    payment.invoice?.invoice_code ??
+    "Payment"
   );
 }

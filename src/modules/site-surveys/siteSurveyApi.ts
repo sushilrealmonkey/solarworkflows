@@ -358,6 +358,7 @@ export async function fetchSurveyCustomerOptions(profile: UserProfile | null) {
     .select(
       "id, customer_code, full_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to",
     )
+    .eq("customer_segment", "project_based")
     .order("created_at", { ascending: false });
 
   if (!profile?.is_super_admin) {

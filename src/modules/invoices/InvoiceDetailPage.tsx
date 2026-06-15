@@ -12,7 +12,7 @@ import {
   EmptyState,
   LoadingSkeleton,
   Modal,
-  PlaceholderAction,
+  SelectInput,
   TextArea,
   TextInput,
 } from "../crm/CrmComponents";
@@ -33,6 +33,7 @@ import {
   fetchInvoice,
   fetchInvoiceItems,
   fetchInvoiceLinkOptions,
+  fetchInvoicePayments,
   fetchProjectInvoicePayments,
   markInvoiceCancelled,
   markInvoiceSent,
@@ -47,7 +48,9 @@ import {
 } from "./InvoiceComponents";
 import {
   emptyInvoiceItemForm,
+  inventoryItemToInvoiceItemForm,
   invoiceContextDescription,
+  invoiceInventoryItemLabel,
   invoiceItemToForm,
   invoiceToForm,
   lineGrossAmount,
@@ -84,6 +87,7 @@ export function InvoiceDetailPage() {
     customers: [],
     projects: [],
     quotations: [],
+    inventoryItems: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +149,8 @@ export function InvoiceDetailPage() {
       setOptions(nextOptions);
       if (nextInvoice?.project_id && canViewPayments) {
         setPayments(await fetchProjectInvoicePayments(profile, nextInvoice.project_id));
+      } else if (nextInvoice?.b2b_sale_id && canViewPayments) {
+        setPayments(await fetchInvoicePayments(profile, nextInvoice.id));
       } else {
         setPayments([]);
       }
@@ -184,7 +190,7 @@ export function InvoiceDetailPage() {
       return;
     }
 
-    const nextErrors = validateInvoiceForm(editing, { includeItems: false });
+    const nextErrors = validateInvoiceForm(editing, { includeItems: true });
     setFormErrors(nextErrors);
 
     if (Object.values(nextErrors).some(Boolean)) {
@@ -193,7 +199,10 @@ export function InvoiceDetailPage() {
 
     try {
       setSaving(true);
-      await updateInvoice(invoice.id, editing);
+      await updateInvoice(invoice.id, editing, {
+        includeItems: true,
+        deleteMissingItems: canDeleteItems,
+      });
       setEditing(null);
       showToast("Invoice updated.", "success");
       await loadInvoice();
@@ -215,7 +224,9 @@ export function InvoiceDetailPage() {
     }
 
     const nextErrors = {
-      item_name: requiredError(itemForm.values.item_name, "Item name"),
+      inventory_item_id: itemForm.values.item_name
+        ? ""
+        : requiredError(itemForm.values.inventory_item_id, "Inventory item"),
     };
     setItemErrors(nextErrors);
 
@@ -426,7 +437,13 @@ export function InvoiceDetailPage() {
                   <Button
                     onClick={() => {
                       setFormErrors({});
-                      setEditing(invoiceToForm(invoice));
+                      setEditing({
+                        ...invoiceToForm(invoice),
+                        items:
+                          items.length > 0
+                            ? items.map(invoiceItemToForm)
+                            : [emptyInvoiceItemForm()],
+                      });
                     }}
                     variant="secondary"
                   >
@@ -465,7 +482,6 @@ export function InvoiceDetailPage() {
                   Open PDF
                 </a>
               ) : null}
-              <PlaceholderAction>Send Invoice</PlaceholderAction>
               {canDelete ? (
                 <Button onClick={() => setConfirmingDelete(true)} variant="danger">
                   Delete Invoice
@@ -486,6 +502,8 @@ export function InvoiceDetailPage() {
               <DetailSection title="Invoice Context">
                 <DetailItem label="Project" value={projectLink(invoice)} />
                 <DetailItem label="Quotation" value={quotationLink(invoice)} />
+                <DetailItem label="B2B Sale" value={b2bSaleLink(invoice)} />
+                <DetailItem label="Proforma Invoice" value={proformaInvoiceLink(invoice)} />
                 <DetailItem
                   label="Invoice Date"
                   value={formatDate(invoice.invoice_date)}
@@ -588,7 +606,9 @@ export function InvoiceDetailPage() {
           setValues={setEditing}
           errors={formErrors}
           options={options}
-          includeItems={false}
+          includeItems
+          canAddItems={canAddItems}
+          canRemoveItems={canDeleteItems}
           onClose={() => setEditing(null)}
           onSubmit={handleEditSubmit}
           saving={saving}
@@ -599,6 +619,7 @@ export function InvoiceDetailPage() {
         <InvoiceItemModal
           title={itemForm.mode === "create" ? "Add Invoice Item" : "Edit Invoice Item"}
           values={itemForm.values}
+          inventoryItems={options.inventoryItems}
           setValues={(values) =>
             setItemForm((current) => (current ? { ...current, values } : current))
           }
@@ -806,7 +827,7 @@ function RelatedPaymentsSection({
         <div className="mt-4">
           <EmptyState
             title="No related payments"
-            description="Received project payments will appear here when this invoice is linked to a project."
+            description="Received project or B2B invoice payments will appear here."
           />
         </div>
       ) : (
@@ -845,6 +866,7 @@ function RelatedPaymentsSection({
 function InvoiceItemModal({
   title,
   values,
+  inventoryItems,
   setValues,
   errors,
   onClose,
@@ -853,6 +875,7 @@ function InvoiceItemModal({
 }: {
   title: string;
   values: InvoiceItemFormValues;
+  inventoryItems: InvoiceLinkOptions["inventoryItems"];
   setValues: (values: InvoiceItemFormValues) => void;
   errors: Record<string, string>;
   onClose: () => void;
@@ -861,6 +884,11 @@ function InvoiceItemModal({
 }) {
   const update = (key: keyof InvoiceItemFormValues, value: string) =>
     setValues({ ...values, [key]: value });
+  const selectedInventoryItem = inventoryItems.find(
+    (option) => option.id === values.inventory_item_id,
+  );
+  const selectedItemLabel =
+    selectedInventoryItem ? invoiceInventoryItemLabel(selectedInventoryItem) : values.item_name;
 
   return (
     <Modal
@@ -870,13 +898,33 @@ function InvoiceItemModal({
       submitLabel="Save Item"
       submitting={saving}
     >
-      <TextInput
-        label="Item Name"
-        value={values.item_name}
-        onChange={(value) => update("item_name", value)}
-        error={errors.item_name}
-        required
+      <SelectInput
+        label="Inventory Item"
+        value={values.inventory_item_id}
+        onChange={(inventoryItemId) => {
+          const nextInventoryItem = inventoryItems.find(
+            (option) => option.id === inventoryItemId,
+          );
+          setValues(
+            nextInventoryItem
+              ? inventoryItemToInvoiceItemForm(nextInventoryItem, values)
+              : { ...values, inventory_item_id: "", item_name: "" },
+          );
+        }}
+        options={[
+          {
+            value: "",
+            label: selectedItemLabel || "Select inventory item",
+          },
+          ...inventoryItems.map((option) => ({
+            value: option.id,
+            label: invoiceInventoryItemLabel(option),
+          })),
+        ]}
       />
+      {errors.inventory_item_id ? (
+        <p className="-mt-3 text-xs text-rose-700">{errors.inventory_item_id}</p>
+      ) : null}
       <TextInput
         label="Quantity"
         value={values.quantity}
@@ -948,6 +996,36 @@ function quotationLink(invoice: InvoiceWithRelations) {
       to={`/quotations/${invoice.quotation_id}`}
     >
       {invoice.quotation?.quotation_code ?? "Quotation"}
+    </Link>
+  );
+}
+
+function b2bSaleLink(invoice: InvoiceWithRelations) {
+  if (!invoice.b2b_sale_id) {
+    return "-";
+  }
+
+  return (
+    <Link
+      className="font-semibold text-brand-700"
+      to={`/b2b-sales/${invoice.b2b_sale_id}`}
+    >
+      {invoice.b2b_sale?.sale_code ?? "B2B sale"}
+    </Link>
+  );
+}
+
+function proformaInvoiceLink(invoice: InvoiceWithRelations) {
+  if (!invoice.proforma_invoice_id) {
+    return "-";
+  }
+
+  return (
+    <Link
+      className="font-semibold text-brand-700"
+      to={`/proforma-invoices/${invoice.proforma_invoice_id}`}
+    >
+      {invoice.proforma_invoice?.proforma_code ?? "Proforma invoice"}
     </Link>
   );
 }

@@ -12,7 +12,12 @@ import {
   EmptyState,
   LoadingSkeleton,
 } from "../crm/CrmComponents";
-import { formatDate, hasPermission, labelize } from "../crm/crmUtils";
+import {
+  formatDate,
+  hasAdminPricingAccess,
+  hasPermission,
+  labelize,
+} from "../crm/crmUtils";
 import {
   PurchaseOrdersSection,
 } from "../purchases/PurchasesPage";
@@ -34,7 +39,7 @@ import type { Vendor, VendorFormValues } from "./types";
 export function VendorDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, roleNames } = useAuth();
   const { showToast } = useToast();
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [purchaseOrders, setPurchaseOrders] = useState<
@@ -52,11 +57,11 @@ export function VendorDetailPage() {
   const canUpdate = hasPermission(profile, permissions, "vendors", "update");
   const canDelete = hasPermission(profile, permissions, "vendors", "delete");
   const canViewPurchases = hasPermission(profile, permissions, "inventory", "view");
-  const canUpdatePurchases = hasPermission(
+  const canViewPricing = hasAdminPricingAccess(
     profile,
     permissions,
-    "inventory",
-    "update",
+    roleNames,
+    "view",
   );
 
   async function loadVendor() {
@@ -71,7 +76,9 @@ export function VendorDetailPage() {
       const [nextVendor, nextPurchaseOrders] = await Promise.all([
         fetchVendor(profile, id),
         canViewPurchases
-          ? fetchPurchaseOrders(profile, { vendorId: id })
+          ? fetchPurchaseOrders(profile, { vendorId: id }, {
+              includePricing: canViewPricing,
+            })
           : Promise.resolve([]),
       ]);
       setVendor(nextVendor);
@@ -89,7 +96,7 @@ export function VendorDetailPage() {
     void loadVendor();
     // loadVendor closes over current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, canViewPurchases, id, profile?.id]);
+  }, [canView, canViewPurchases, canViewPricing, id, profile?.id]);
 
   if (!canView) {
     return (
@@ -224,7 +231,9 @@ export function VendorDetailPage() {
           {canViewPurchases ? (
             <PurchaseOrdersSection
               orders={purchaseOrders}
-              canUpdate={canUpdatePurchases}
+              canManageStatus={false}
+              canReceive={false}
+              showPricing={canViewPricing}
               emptyTitle="No purchase orders for this vendor"
             />
           ) : null}

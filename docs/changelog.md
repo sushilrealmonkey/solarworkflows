@@ -3,13 +3,47 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-06-15
+
+- Added Proforma Invoices as separate pre-payment finance records with PI
+  payments, final invoice conversion, B2B sale links, and PI PDF generation.
+- Split Customers into nested Project Based and B2B/Direct customer lists using
+  `customers.customer_segment`.
+- Updated B2B/Direct Sales to select active B2B/Direct customers and support
+  sale creation from a B2B/Direct customer profile.
+- Added backend customer normalization so Project Based customers stay free of
+  business fields and B2B/Direct customers have no subtype or assignee choices.
+
+## 2026-06-13
+
+- Added a dedicated B2B Sales workflow for project-free installer product sales,
+  including B2B customer fields, sale/order tables, invoice links,
+  dispatch-driven inventory stock-out, and B2B invoice payments.
+- Added generated purchase order PDF support through the shared document storage
+  workflow, including purchase order document metadata and pricing-aware access
+  checks.
+- Added nullable inventory item links for invoice lines and changed invoice item
+  entry to use inventory dropdown selection instead of manual product naming.
+
 ## 2026-06-12
 
 - Added admin-only product pricing tables, price history, and pricing
   permissions.
 - Added purchase partial receiving with inventory batch cost records.
+- Added `receive_purchase_order_items` RPC support for controlled purchase
+  receiving, automatic `stock_in` inventory transactions, received quantity
+  tracking, and `partially_received` purchase order status.
+- Added an inventory-only receiving permission path so warehouse/staff users can
+  receive quantities without product pricing access; pricing users can still
+  edit received cost and update current Product Master purchase price.
 - Updated Product, Inventory, and Purchase screens to hide purchase/selling
   prices from users without product pricing permission.
+- Updated Purchase list actions to use the Receive Stock workflow and fixed
+  desktop action buttons so they no longer trigger row navigation.
+- Updated purchase and inventory types for received quantities and
+  `last_received_at`.
+- Applied pending Supabase migrations for product pricing, batch receiving, and
+  inventory-only purchase receiving to the linked remote database.
 - Documented pricing, batch receiving, and staff-safe data access rules.
 
 ## 2026-06-06

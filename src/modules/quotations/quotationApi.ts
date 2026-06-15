@@ -1149,6 +1149,7 @@ export async function fetchQuotationCustomers(profile: UserProfile | null) {
   let query = client
     .from("customers")
     .select(customerSelect)
+    .eq("customer_segment", "project_based")
     .order("created_at", { ascending: false });
 
   if (!profile?.is_super_admin) {

@@ -17,9 +17,12 @@ export type ProjectPaymentStatus = "pending" | "partial" | "paid" | "overdue";
 export type Payment = {
   id: string;
   organization_id: string;
-  project_id: string;
+  project_id: string | null;
   customer_id: string;
   quotation_id: string | null;
+  proforma_invoice_id: string | null;
+  invoice_id: string | null;
+  b2b_sale_id: string | null;
   payment_source: PaymentSource;
   payment_mode: PaymentMode | null;
   amount: number;
@@ -74,6 +77,26 @@ export type PaymentWithRelations = Payment & {
   customer?: SurveyCustomerSummary | null;
   project?: PaymentProjectOption | null;
   quotation?: PaymentQuotationSummary | null;
+  invoice?: {
+    id: string;
+    invoice_code: string | null;
+    total_amount: number | null;
+    balance_due: number | null;
+    status: string | null;
+  } | null;
+  proforma_invoice?: {
+    id: string;
+    proforma_code: string | null;
+    total_amount: number | null;
+    balance_due: number | null;
+    status: string | null;
+  } | null;
+  b2b_sale?: {
+    id: string;
+    sale_code: string | null;
+    total_amount: number | null;
+    status: string | null;
+  } | null;
   created_by_profile?: {
     id: string;
     full_name: string | null;
@@ -86,6 +109,9 @@ export type PaymentFormValues = {
   project_id: string;
   customer_id: string;
   quotation_id: string;
+  proforma_invoice_id: string;
+  invoice_id: string;
+  b2b_sale_id: string;
   payment_source: PaymentSource;
   payment_mode: PaymentMode;
   amount: string;

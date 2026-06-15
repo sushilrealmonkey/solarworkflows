@@ -5,13 +5,18 @@ import type { DocumentType, OrganizationDocument } from "./types";
 import type { OrganizationSettings } from "../settings/types";
 
 export type GeneratedDocumentPayload = {
-  document_type: Extract<DocumentType, "quotation_pdf" | "invoice_pdf">;
+  document_type: Extract<
+    DocumentType,
+    "quotation_pdf" | "proforma_invoice_pdf" | "invoice_pdf" | "purchase_order_pdf"
+  >;
   document_name: string;
   file_path: string;
   customer_id: string | null;
   project_id?: string | null;
   quotation_id?: string | null;
+  proforma_invoice_id?: string | null;
   invoice_id?: string | null;
+  purchase_order_id?: string | null;
   notes?: string | null;
 };
 
@@ -94,6 +99,8 @@ export async function uploadGeneratedPdf(
     target_project_id: payload.project_id ?? null,
     target_quotation_id: payload.quotation_id ?? null,
     target_invoice_id: payload.invoice_id ?? null,
+    target_proforma_invoice_id: payload.proforma_invoice_id ?? null,
+    target_purchase_order_id: payload.purchase_order_id ?? null,
     target_notes: payload.notes ?? null,
   });
 
@@ -136,6 +143,24 @@ export function buildInvoicePdfPath(
   fallbackId: string,
 ) {
   return `${organizationId}/invoices/${sanitizePdfName(invoiceCode || `${prefix}-${fallbackId.slice(0, 8)}`)}.pdf`;
+}
+
+export function buildProformaInvoicePdfPath(
+  organizationId: string,
+  proformaCode: string | null,
+  prefix: string,
+  fallbackId: string,
+) {
+  return `${organizationId}/proforma-invoices/${sanitizePdfName(proformaCode || `${prefix}-${fallbackId.slice(0, 8)}`)}.pdf`;
+}
+
+export function buildPurchaseOrderPdfPath(
+  organizationId: string,
+  purchaseCode: string | null,
+  prefix: string,
+  fallbackId: string,
+) {
+  return `${organizationId}/purchase-orders/${sanitizePdfName(purchaseCode || `${prefix}-${fallbackId.slice(0, 8)}`)}.pdf`;
 }
 
 function sanitizePdfName(value: string) {

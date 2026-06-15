@@ -2,6 +2,7 @@ import { supabase } from "../../services/supabaseClient";
 import type { UserProfile } from "../../app/AuthProvider";
 import type {
   Customer,
+  CustomerSegment,
   CustomerFormValues,
   Lead,
   LeadActionState,
@@ -109,7 +110,10 @@ export async function fetchStaffOptions(profile: UserProfile | null) {
   return (data ?? []) as StaffOption[];
 }
 
-export async function fetchCustomers(profile: UserProfile | null) {
+export async function fetchCustomers(
+  profile: UserProfile | null,
+  options: { segment?: CustomerSegment } = {},
+) {
   const client = requireSupabase();
   let query = client
     .from("customers")
@@ -120,6 +124,10 @@ export async function fetchCustomers(profile: UserProfile | null) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
     query = query.eq("organization_id", profile.organization_id);
+  }
+
+  if (options.segment) {
+    query = query.eq("customer_segment", options.segment);
   }
 
   const { data, error } = await query;
@@ -159,6 +167,10 @@ export async function createCustomer(
       organization_id: requireOrganization(profile),
       created_by: profile?.id ?? null,
       full_name: values.full_name.trim(),
+      customer_segment: values.customer_segment,
+      business_name: nullable(values.business_name),
+      gst_number: nullable(values.gst_number),
+      contact_person_name: nullable(values.contact_person_name),
       phone: values.phone.trim(),
       alternate_phone: nullable(values.alternate_phone),
       email: nullable(values.email),
@@ -190,6 +202,10 @@ export async function updateCustomer(id: string, values: CustomerFormValues) {
     .from("customers")
     .update({
       full_name: values.full_name.trim(),
+      customer_segment: values.customer_segment,
+      business_name: nullable(values.business_name),
+      gst_number: nullable(values.gst_number),
+      contact_person_name: nullable(values.contact_person_name),
       phone: values.phone.trim(),
       alternate_phone: nullable(values.alternate_phone),
       email: nullable(values.email),

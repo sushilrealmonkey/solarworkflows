@@ -3,43 +3,70 @@ import { routes } from "./routes";
 export type NavigationItem = {
   label: string;
   path: string;
-  moduleKey: string;
+  moduleKey?: string;
   superAdminOnly?: boolean;
   children?: NavigationItem[];
 };
 
-const productRoutes = routes.filter((route) =>
-  route.path.startsWith("/products-materials/"),
-);
+const routeByPath = new Map(routes.map((route) => [route.path, route]));
 
-export const navigationItems: NavigationItem[] = routes.reduce<
-  NavigationItem[]
->((items, route) => {
-  if (route.path === "/products-materials/products") {
-    items.push({
-      label: "Products & Materials",
-      path: "/products-materials/products",
-      moduleKey: "product_master",
-      children: productRoutes.map((productRoute) => ({
-        label: productRoute.label,
-        path: productRoute.path,
-        moduleKey: productRoute.moduleKey,
-        superAdminOnly: productRoute.superAdminOnly,
-      })),
-    });
-    return items;
+function navigationRoute(path: string): NavigationItem {
+  const route = routeByPath.get(path);
+
+  if (!route) {
+    throw new Error(`Missing navigation route: ${path}`);
   }
 
-  if (route.path.startsWith("/products-materials/")) {
-    return items;
-  }
-
-  items.push({
+  return {
     label: route.label,
     path: route.path,
     moduleKey: route.moduleKey,
     superAdminOnly: route.superAdminOnly,
-  });
+  };
+}
 
-  return items;
-}, []);
+export const navigationItems: NavigationItem[] = [
+  navigationRoute("/dashboard"),
+  {
+    label: "Sales",
+    path: "/sales",
+    children: [
+      navigationRoute("/leads"),
+      navigationRoute("/customers/project-based"),
+      navigationRoute("/customers/b2b-direct"),
+      navigationRoute("/quotations"),
+      navigationRoute("/b2b-sales"),
+    ],
+  },
+  {
+    label: "Projects",
+    path: "/projects-workflow",
+    children: [
+      navigationRoute("/site-surveys"),
+      navigationRoute("/projects"),
+    ],
+  },
+  {
+    label: "Stock & Purchasing",
+    path: "/stock-purchasing",
+    children: [
+      navigationRoute("/products-materials/products"),
+      navigationRoute("/products-materials/categories"),
+      navigationRoute("/products-materials/catalog-library"),
+      navigationRoute("/inventory"),
+      navigationRoute("/vendors"),
+      navigationRoute("/purchases"),
+    ],
+  },
+  {
+    label: "Finance",
+    path: "/finance",
+    children: [
+      navigationRoute("/proforma-invoices"),
+      navigationRoute("/invoices"),
+      navigationRoute("/payments"),
+    ],
+  },
+  navigationRoute("/reports"),
+  navigationRoute("/settings"),
+];

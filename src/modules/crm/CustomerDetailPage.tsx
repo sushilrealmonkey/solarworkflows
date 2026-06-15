@@ -10,9 +10,10 @@ import {
   updateCustomer,
 } from "./crmApi";
 import {
+  customerSegmentLabel,
   customerStatusOptions,
   customerToForm,
-  customerTypeOptions,
+  customerTypeOptionsForSegment,
   formatDate,
   hasPermission,
   labelize,
@@ -96,6 +97,10 @@ export function CustomerDetailPage() {
   const canView = hasPermission(profile, permissions, "customers", "view");
   const canUpdate = hasPermission(profile, permissions, "customers", "update");
   const canDelete = hasPermission(profile, permissions, "customers", "delete");
+  const canCreateB2BSale = hasPermission(profile, permissions, "b2b_sales", "create");
+  const canViewB2BSales = hasPermission(profile, permissions, "b2b_sales", "view");
+  const canViewInvoices = hasPermission(profile, permissions, "invoices", "view");
+  const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canViewDocuments = hasPermission(profile, permissions, "documents", "view");
   const canCreateDocument = hasPermission(
     profile,
@@ -167,8 +172,20 @@ export function CustomerDetailPage() {
       return;
     }
 
+    const segment = editing.customer_segment;
     const nextErrors = {
-      full_name: requiredError(editing.full_name, "Full name"),
+      full_name:
+        segment === "project_based"
+          ? requiredError(editing.full_name, "Full name")
+          : "",
+      business_name:
+        segment === "b2b_direct"
+          ? requiredError(editing.business_name, "Business name")
+          : "",
+      contact_person_name:
+        segment === "b2b_direct"
+          ? requiredError(editing.contact_person_name, "Contact person")
+          : "",
       phone: requiredError(editing.phone, "Phone"),
     };
     setFormErrors(nextErrors);
@@ -179,7 +196,10 @@ export function CustomerDetailPage() {
 
     try {
       setSaving(true);
-      const updatedCustomer = await updateCustomer(customer.id, editing);
+      const updatedCustomer = await updateCustomer(
+        customer.id,
+        normalizeCustomerSubmitValues(editing),
+      );
       setCustomer(updatedCustomer);
       setEditing(null);
       showToast("Customer updated.", "success");
@@ -323,8 +343,8 @@ export function CustomerDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/customers">
-        Back to customers
+      <Link className="text-sm font-semibold text-brand-700" to={customerListPath(customer)}>
+        Back to {customerSegmentLabel(customer?.customer_segment)}
       </Link>
 
       {loading ? <LoadingSkeleton /> : null}
@@ -337,10 +357,22 @@ export function CustomerDetailPage() {
         <>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <PageHeader
-              title={customer.full_name}
+              title={
+                customer.customer_segment === "b2b_direct"
+                  ? customer.business_name || customer.full_name
+                  : customer.full_name
+              }
               description={`${customer.customer_code ?? "Customer"} / ${customer.phone}`}
             />
             <div className="flex flex-wrap gap-2">
+              {customer.customer_segment === "b2b_direct" && canCreateB2BSale ? (
+                <Link
+                  className="inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-800"
+                  to={`/b2b-sales?customerId=${customer.id}&new=1`}
+                >
+                  Create Sale
+                </Link>
+              ) : null}
               {canUpdate ? (
                 <Button
                   onClick={() => {
@@ -363,7 +395,18 @@ export function CustomerDetailPage() {
           <DetailSection title="Basic Details">
             <DetailItem label="Customer Code" value={customer.customer_code ?? "-"} />
             <DetailItem label="Status" value={<StatusBadge value={customer.status} />} />
-            <DetailItem label="Customer Type" value={labelize(customer.customer_type)} />
+            <DetailItem label="Customer Segment" value={customerSegmentLabel(customer.customer_segment)} />
+            <DetailItem label="Customer Subtype" value={labelize(customer.customer_type)} />
+            {customer.customer_segment === "b2b_direct" ? (
+              <>
+                <DetailItem label="Business Name" value={customer.business_name ?? "-"} />
+                <DetailItem label="GST Number" value={customer.gst_number ?? "-"} />
+                <DetailItem
+                  label="Contact Person"
+                  value={customer.contact_person_name ?? "-"}
+                />
+              </>
+            ) : null}
             <DetailItem label="Lead Source" value={customer.lead_source ?? "-"} />
             <DetailItem label="Phone" value={customer.phone} />
             <DetailItem label="Alternate Phone" value={customer.alternate_phone ?? "-"} />
@@ -426,15 +469,48 @@ export function CustomerDetailPage() {
             </section>
           ) : null}
 
-          <DetailSection title="Future Workflow">
-            <DetailItem label="Related Leads" value="Placeholder for linked lead history." />
-            <DetailItem label="Related Projects" value="Placeholder for customer project records." />
-            <div className="flex flex-wrap gap-2 sm:col-span-2">
-              <PlaceholderAction>Schedule Site Survey</PlaceholderAction>
-              <PlaceholderAction>Create Quotation</PlaceholderAction>
-              <PlaceholderAction>Create Project</PlaceholderAction>
-            </div>
-          </DetailSection>
+          {customer.customer_segment === "b2b_direct" ? (
+            <DetailSection title="B2B/Direct Workflow">
+              <DetailItem label="Sales" value="Create and review project-free product sales." />
+              <DetailItem label="Billing" value="Generate invoices and record direct payments from sale details." />
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                {canViewB2BSales ? (
+                  <Link
+                    className="inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
+                    to={`/b2b-sales?customerId=${customer.id}`}
+                  >
+                    View Sales
+                  </Link>
+                ) : null}
+                {canViewInvoices ? (
+                  <Link
+                    className="inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
+                    to={`/invoices?customerId=${customer.id}`}
+                  >
+                    View Invoices
+                  </Link>
+                ) : null}
+                {canViewPayments ? (
+                  <Link
+                    className="inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
+                    to={`/payments?customerId=${customer.id}`}
+                  >
+                    View Payments
+                  </Link>
+                ) : null}
+              </div>
+            </DetailSection>
+          ) : (
+            <DetailSection title="Future Workflow">
+              <DetailItem label="Related Leads" value="Placeholder for linked lead history." />
+              <DetailItem label="Related Projects" value="Placeholder for customer project records." />
+              <div className="flex flex-wrap gap-2 sm:col-span-2">
+                <PlaceholderAction>Schedule Site Survey</PlaceholderAction>
+                <PlaceholderAction>Create Quotation</PlaceholderAction>
+                <PlaceholderAction>Create Project</PlaceholderAction>
+              </div>
+            </DetailSection>
+          )}
         </>
       ) : null}
 
@@ -517,6 +593,7 @@ function CustomerEditModal({
 }) {
   const update = (key: keyof CustomerFormValues, value: string) =>
     setValues({ ...values, [key]: value });
+  const segment = values.customer_segment;
 
   return (
     <Modal
@@ -526,7 +603,16 @@ function CustomerEditModal({
       submitLabel="Save Customer"
       submitting={saving}
     >
-      <TextInput label="Full Name" value={values.full_name} onChange={(value) => update("full_name", value)} error={errors.full_name} required />
+      {segment === "project_based" ? (
+        <TextInput label="Full Name" value={values.full_name} onChange={(value) => update("full_name", value)} error={errors.full_name} required />
+      ) : null}
+      {segment === "b2b_direct" ? (
+        <>
+          <TextInput label="Business Name" value={values.business_name} onChange={(value) => update("business_name", value)} error={errors.business_name} required />
+          <TextInput label="GST Number" value={values.gst_number} onChange={(value) => update("gst_number", value)} />
+          <TextInput label="Contact Person" value={values.contact_person_name} onChange={(value) => update("contact_person_name", value)} error={errors.contact_person_name} required />
+        </>
+      ) : null}
       <TextInput label="Phone" value={values.phone} onChange={(value) => update("phone", value)} error={errors.phone} required />
       <TextInput label="Alternate Phone" value={values.alternate_phone} onChange={(value) => update("alternate_phone", value)} />
       <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} type="email" />
@@ -536,11 +622,52 @@ function CustomerEditModal({
       <TextInput label="District" value={values.district} onChange={(value) => update("district", value)} />
       <TextInput label="State" value={values.state} onChange={(value) => update("state", value)} />
       <TextInput label="Pincode" value={values.pincode} onChange={(value) => update("pincode", value)} />
-      <SelectInput label="Customer Type" value={values.customer_type} onChange={(value) => update("customer_type", value)} options={customerTypeOptions.map((value) => ({ value, label: labelize(value) }))} />
-      <TextInput label="Lead Source" value={values.lead_source} onChange={(value) => update("lead_source", value)} />
-      <SelectInput label="Status" value={values.status} onChange={(value) => update("status", value)} options={customerStatusOptions.map((value) => ({ value, label: labelize(value) }))} />
-      <StaffSelect staff={staff} value={values.assigned_to} onChange={(value) => update("assigned_to", value)} />
+      {segment === "project_based" ? (
+        <SelectInput label="Customer Subtype" value={values.customer_type} onChange={(value) => update("customer_type", value)} options={customerTypeOptionsForSegment(segment).map((value) => ({ value, label: labelize(value) }))} />
+      ) : null}
+      {segment === "project_based" ? (
+        <TextInput label="Lead Source" value={values.lead_source} onChange={(value) => update("lead_source", value)} />
+      ) : null}
+      {segment === "project_based" ? (
+        <SelectInput label="Status" value={values.status} onChange={(value) => update("status", value)} options={customerStatusOptions.map((value) => ({ value, label: labelize(value) }))} />
+      ) : null}
+      {segment === "project_based" ? (
+        <StaffSelect staff={staff} value={values.assigned_to} onChange={(value) => update("assigned_to", value)} />
+      ) : null}
       <TextArea label="Notes" value={values.notes} onChange={(value) => update("notes", value)} />
     </Modal>
   );
+}
+
+function customerListPath(customer: Customer | null) {
+  return customer?.customer_segment === "b2b_direct"
+    ? "/customers/b2b-direct"
+    : "/customers/project-based";
+}
+
+function normalizeCustomerSubmitValues(
+  values: CustomerFormValues,
+): CustomerFormValues {
+  if (values.customer_segment === "project_based") {
+    return {
+      ...values,
+      customer_segment: "project_based",
+      business_name: "",
+      gst_number: "",
+      contact_person_name: "",
+    };
+  }
+
+  return {
+    ...values,
+    customer_segment: "b2b_direct",
+    customer_type: "b2b_installer",
+    status: "active",
+    full_name:
+      values.contact_person_name.trim() ||
+      values.full_name.trim() ||
+      values.business_name.trim(),
+    lead_source: "",
+    assigned_to: "",
+  };
 }

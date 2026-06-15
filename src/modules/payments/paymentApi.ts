@@ -40,9 +40,12 @@ function nullableNumber(value: string) {
 
 function paymentPayload(values: PaymentFormValues) {
   return {
-    project_id: values.project_id,
+    project_id: nullable(values.project_id),
     customer_id: values.customer_id,
     quotation_id: nullable(values.quotation_id),
+    proforma_invoice_id: nullable(values.proforma_invoice_id),
+    invoice_id: nullable(values.invoice_id),
+    b2b_sale_id: nullable(values.b2b_sale_id),
     payment_source: values.payment_source,
     payment_mode: nullable(values.payment_mode),
     amount: nullableNumber(values.amount) ?? 0,
@@ -57,7 +60,7 @@ function paymentPayload(values: PaymentFormValues) {
 }
 
 const customerSelect =
-  "id, customer_code, full_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to";
+  "id, customer_code, full_name, business_name, gst_number, contact_person_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, customer_type, assigned_to";
 
 const quotationSummarySelect =
   "id, quotation_code, total_amount, subsidy_amount, net_payable_amount";
@@ -78,6 +81,9 @@ const paymentSelect = `
   customer:customers(${customerSelect}),
   project:projects(${projectOptionSelect}),
   quotation:quotations(${quotationSummarySelect}),
+  proforma_invoice:proforma_invoices(id, proforma_code, total_amount, balance_due, status),
+  invoice:invoices(id, invoice_code, total_amount, balance_due, status),
+  b2b_sale:b2b_sales(id, sale_code, total_amount, status),
   created_by_profile:users_profile!payments_created_by_fkey(
     id,
     full_name,

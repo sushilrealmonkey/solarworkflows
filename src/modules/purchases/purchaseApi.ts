@@ -34,7 +34,7 @@ function nullable(value: string) {
 
 const purchaseOrderSelect = `
   *,
-  vendor:vendors(id, vendor_code, vendor_name, contact_person, phone),
+  vendor:vendors(id, vendor_code, vendor_name, contact_person, phone, email, gst_number, address_line_1, address_line_2, city, district, state, pincode),
   creator:users_profile!purchase_orders_created_by_fkey(id, full_name, email, phone),
   items:purchase_order_items(
     *,
@@ -42,32 +42,48 @@ const purchaseOrderSelect = `
   )
 `;
 
-export async function fetchPurchaseOrders(
+function isMissingPurchaseSafeRpcError(error: { code?: string; message?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  return (
+    error.code === "PGRST202" ||
+    message.includes("purchase_order_public_rows")
+  );
+}
+
+function isMissingPricingStoreError(error: { code?: string; message?: string }) {
+  const message = error.message?.toLowerCase() ?? "";
+
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    message.includes("product_prices")
+  );
+}
+
+function hidePurchasePricing(
+  order: PurchaseOrderWithRelations,
+): PurchaseOrderWithRelations {
+  return {
+    ...order,
+    subtotal: null,
+    gst_amount: null,
+    total_amount: null,
+    items:
+      order.items?.map((item) => ({
+        ...item,
+        unit_price: null,
+        gst_percent: null,
+        line_total: null,
+      })) ?? null,
+  };
+}
+
+async function fetchPurchaseOrdersDirect(
   profile: UserProfile | null,
   filters?: { vendorId?: string; itemId?: string },
-  options: { includePricing?: boolean } = {},
 ) {
   const client = requireSupabase();
-  const includePricing = options.includePricing !== false;
-
-  if (!includePricing) {
-    const { data, error } = await client.rpc("purchase_order_public_rows", {
-      target_item_id: filters?.itemId ?? null,
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
-      (row) => row.order_data as PurchaseOrderWithRelations,
-    );
-
-    return filters?.vendorId
-      ? orders.filter((order) => order.vendor_id === filters.vendorId)
-      : orders;
-  }
-
   const vendorOptions = await fetchPurchaseVendorOptions();
   let query = client
     .from("purchase_orders")
@@ -109,6 +125,66 @@ export async function fetchPurchaseOrders(
   return orders;
 }
 
+export async function fetchPurchaseOrders(
+  profile: UserProfile | null,
+  filters?: { vendorId?: string; itemId?: string },
+  options: { includePricing?: boolean } = {},
+) {
+  const client = requireSupabase();
+  const includePricing = options.includePricing !== false;
+
+  if (!includePricing) {
+    const { data, error } = await client.rpc("purchase_order_public_rows", {
+      target_item_id: filters?.itemId ?? null,
+    });
+
+    if (error) {
+      if (isMissingPurchaseSafeRpcError(error)) {
+        const fallbackOrders = await fetchPurchaseOrdersDirect(profile, filters);
+
+        return fallbackOrders
+          .map(hidePurchasePricing)
+          .filter((order) =>
+            filters?.vendorId ? order.vendor_id === filters.vendorId : true,
+          );
+      }
+
+      throw new Error(error.message);
+    }
+
+    const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
+      (row) => row.order_data as PurchaseOrderWithRelations,
+    );
+
+    return filters?.vendorId
+      ? orders.filter((order) => order.vendor_id === filters.vendorId)
+      : orders;
+  }
+
+  try {
+    return await fetchPurchaseOrdersDirect(profile, filters);
+  } catch (error) {
+    const { data, error: publicError } = await client.rpc(
+      "purchase_order_public_rows",
+      {
+        target_item_id: filters?.itemId ?? null,
+      },
+    );
+
+    if (publicError) {
+      throw error;
+    }
+
+    const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
+      (row) => row.order_data as PurchaseOrderWithRelations,
+    );
+
+    return filters?.vendorId
+      ? orders.filter((order) => order.vendor_id === filters.vendorId)
+      : orders;
+  }
+}
+
 export async function fetchPurchaseOrder(profile: UserProfile | null, id: string) {
   const client = requireSupabase();
   const vendorOptions = await fetchPurchaseVendorOptions();
@@ -126,6 +202,12 @@ export async function fetchPurchaseOrder(profile: UserProfile | null, id: string
   const { data, error } = await query.single();
 
   if (error) {
+    const safeOrder = await fetchPurchaseOrderSafe(id);
+
+    if (safeOrder) {
+      return safeOrder;
+    }
+
     throw new Error(error.message);
   }
 
@@ -147,6 +229,22 @@ export async function fetchPurchaseOrderSafe(id: string) {
   });
 
   if (error) {
+    if (isMissingPurchaseSafeRpcError(error)) {
+      const { data: orderData, error: orderError } = await client
+        .from("purchase_orders")
+        .select(purchaseOrderSelect)
+        .eq("id", id)
+        .maybeSingle();
+
+      if (orderError) {
+        throw new Error(orderError.message);
+      }
+
+      const order = orderData as unknown as PurchaseOrderWithRelations | null;
+
+      return order ? hidePurchasePricing(order) : null;
+    }
+
     throw new Error(error.message);
   }
 
@@ -233,6 +331,27 @@ export async function fetchPurchasePriceDefaults(items: InventoryItem[]) {
     .in("product_id", productIds);
 
   if (error) {
+    if (isMissingPricingStoreError(error)) {
+      const { data: productData, error: productError } = await client
+        .from("products")
+        .select("id, purchase_price, gst_percent")
+        .in("id", productIds);
+
+      if (productError) {
+        throw new Error(productError.message);
+      }
+
+      return new Map(
+        (productData ?? []).map((product) => [
+          product.id as string,
+          {
+            current_purchase_price: product.purchase_price as number | null,
+            gst_percent: product.gst_percent as number | null,
+          },
+        ]),
+      );
+    }
+
     throw new Error(error.message);
   }
 

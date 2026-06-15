@@ -1,6 +1,7 @@
 import type { UserPermission, UserProfile } from "../../app/AuthProvider";
 import type {
   Customer,
+  CustomerSegment,
   CustomerFormValues,
   Lead,
   LeadFollowup,
@@ -10,13 +11,22 @@ import type {
 } from "./types";
 
 export const customerStatusOptions = ["active", "inactive", "converted", "lost"];
-export const customerTypeOptions = [
+export const projectCustomerTypeOptions = [
   "residential",
   "commercial",
   "industrial",
   "government",
   "other",
 ];
+export const directCustomerTypeOptions = [
+  "b2b_installer",
+  "retailer",
+  "distributor",
+  "other",
+];
+export const customerTypeOptions = Array.from(
+  new Set([...projectCustomerTypeOptions, ...directCustomerTypeOptions]),
+);
 
 export const leadStatusOptions = [
   "new",
@@ -87,6 +97,22 @@ export function hasPermission(
       (permission) =>
         permission.moduleKey === moduleKey && permission.actionKey === actionKey,
     )
+  );
+}
+
+export function hasAdminPricingAccess(
+  profile: UserProfile | null,
+  permissions: UserPermission[],
+  roleNames: string[],
+  actionKey: "view" | "create" | "update" | "delete" = "view",
+) {
+  return (
+    hasPermission(profile, permissions, "product_pricing", actionKey) ||
+    roleNames.some((roleName) => {
+      const normalizedRole = roleName.trim().toLowerCase();
+
+      return normalizedRole === "admin" || normalizedRole === "administrator";
+    })
   );
 }
 
@@ -181,6 +207,10 @@ export function staffName(staff: StaffOption[], staffId: string | null) {
 export function emptyCustomerForm(): CustomerFormValues {
   return {
     full_name: "",
+    customer_segment: "project_based",
+    business_name: "",
+    gst_number: "",
+    contact_person_name: "",
     phone: "",
     alternate_phone: "",
     email: "",
@@ -198,9 +228,25 @@ export function emptyCustomerForm(): CustomerFormValues {
   };
 }
 
+export function emptyCustomerFormForSegment(
+  segment: CustomerSegment = "project_based",
+): CustomerFormValues {
+  const values = emptyCustomerForm();
+
+  return {
+    ...values,
+    customer_segment: segment,
+    customer_type: segment === "b2b_direct" ? "b2b_installer" : "residential",
+  };
+}
+
 export function customerToForm(customer: Customer): CustomerFormValues {
   return {
     full_name: customer.full_name ?? "",
+    customer_segment: customer.customer_segment ?? "project_based",
+    business_name: customer.business_name ?? "",
+    gst_number: customer.gst_number ?? "",
+    contact_person_name: customer.contact_person_name ?? "",
     phone: customer.phone ?? "",
     alternate_phone: customer.alternate_phone ?? "",
     email: customer.email ?? "",
@@ -216,6 +262,20 @@ export function customerToForm(customer: Customer): CustomerFormValues {
     assigned_to: customer.assigned_to ?? "",
     notes: customer.notes ?? "",
   };
+}
+
+export function customerTypeOptionsForSegment(segment: CustomerSegment) {
+  return segment === "b2b_direct"
+    ? directCustomerTypeOptions
+    : projectCustomerTypeOptions;
+}
+
+export function customerSegmentLabel(segment: CustomerSegment | null | undefined) {
+  if (segment === "b2b_direct") {
+    return "B2B/Direct";
+  }
+
+  return "Project Based";
 }
 
 export function emptyLeadForm(): LeadFormValues {

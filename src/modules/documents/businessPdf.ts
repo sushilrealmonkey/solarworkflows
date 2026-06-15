@@ -6,6 +6,11 @@ import type { OrganizationSettings } from "../settings/types";
 import { formatCustomerAddress } from "../site-surveys/surveyUtils";
 import type { InvoiceItem, InvoiceWithRelations } from "../invoices/types";
 import type {
+  ProformaInvoiceItem,
+  ProformaInvoiceWithRelations,
+} from "../proforma-invoices/types";
+import type { PurchaseOrderWithRelations } from "../purchases/types";
+import type {
   QuotationItem,
   QuotationMaterialItem,
   QuotationPaymentTerm,
@@ -18,7 +23,7 @@ import {
   hasTurnkeyGstAmount,
 } from "../quotations/quotationUtils";
 
-type PdfDocumentKind = "quotation" | "invoice";
+type PdfDocumentKind = "quotation" | "proforma_invoice" | "invoice" | "purchase_order";
 type PdfDoc = InstanceType<typeof import("jspdf").jsPDF>;
 type PdfImageData = {
   dataUrl: string;
@@ -62,6 +67,7 @@ type BusinessPdfInput = {
     address?: string | null;
     extraLines?: string[];
   };
+  partyTitle?: string;
   detailTitle?: string;
   details: Array<[string, string]>;
   projectSummaryLines?: string[];
@@ -212,7 +218,14 @@ export async function buildInvoicePdf(
   settings: OrganizationSettings,
 ) {
   const details: Array<[string, string]> = [
-    ["Invoice Type", invoice.project_id ? "Project invoice" : "Manual item invoice"],
+    [
+      "Invoice Type",
+      invoice.project_id
+        ? "Project invoice"
+        : invoice.b2b_sale_id
+          ? "B2B sale invoice"
+          : "Manual item invoice",
+    ],
     ["Invoice Date", formatDate(invoice.invoice_date, settings.date_format)],
     ["Due Date", formatDate(invoice.due_date, settings.date_format)],
     ["Status", labelize(invoice.status)],
@@ -225,6 +238,19 @@ export async function buildInvoicePdf(
       ["Project", invoice.project?.project_code ?? invoice.project?.project_name ?? "-"],
       ["Quotation", invoice.quotation?.quotation_code ?? "-"],
     );
+  } else if (invoice.b2b_sale_id) {
+    details.splice(
+      3,
+      0,
+      ["B2B Sale", invoice.b2b_sale?.sale_code ?? "-"],
+    );
+  }
+
+  if (invoice.proforma_invoice_id) {
+    details.splice(3, 0, [
+      "Proforma Invoice",
+      invoice.proforma_invoice?.proforma_code ?? "-",
+    ]);
   }
 
   return buildBusinessPdf({
@@ -236,11 +262,20 @@ export async function buildInvoicePdf(
     organization,
     settings,
     customer: {
-      name: invoice.customer?.full_name ?? "Customer",
+      name:
+        invoice.customer?.business_name ||
+        invoice.customer?.full_name ||
+        "Customer",
       code: invoice.customer?.customer_code,
       phone: invoice.customer?.phone,
       email: invoice.customer?.email,
       address: invoice.customer ? formatCustomerAddress(invoice.customer) : null,
+      extraLines: [
+        invoice.customer?.contact_person_name
+          ? `Contact: ${invoice.customer.contact_person_name}`
+          : "",
+        invoice.customer?.gst_number ? `GST: ${invoice.customer.gst_number}` : "",
+      ].filter(Boolean),
     },
     details,
     items: items.map((item) => ({
@@ -263,8 +298,166 @@ export async function buildInvoicePdf(
     paymentTerms: "Pay by the due date mentioned on this invoice.",
     bankLines: settingsBankLines(settings),
     termsAndConditions:
-      "This invoice is generated from SolarWorkflows and is subject to the agreed project terms.",
+      invoice.b2b_sale_id
+        ? "This invoice is generated from SolarWorkflows and is subject to the agreed B2B product sale terms."
+        : "This invoice is generated from SolarWorkflows and is subject to the agreed project terms.",
     notes: invoice.notes,
+  });
+}
+
+export async function buildProformaInvoicePdf(
+  proformaInvoice: ProformaInvoiceWithRelations,
+  items: ProformaInvoiceItem[],
+  organization: OrganizationBranding,
+  settings: OrganizationSettings,
+) {
+  const details: Array<[string, string]> = [
+    [
+      "Proforma Type",
+      proformaInvoice.project_id
+        ? "Project proforma"
+        : proformaInvoice.b2b_sale_id
+          ? "B2B sale proforma"
+          : "Manual proforma",
+    ],
+    ["PI Date", formatDate(proformaInvoice.proforma_date, settings.date_format)],
+    ["Due Date", formatDate(proformaInvoice.due_date, settings.date_format)],
+    ["Status", labelize(proformaInvoice.status)],
+  ];
+
+  if (proformaInvoice.project_id) {
+    details.splice(
+      3,
+      0,
+      [
+        "Project",
+        proformaInvoice.project?.project_code ??
+          proformaInvoice.project?.project_name ??
+          "-",
+      ],
+      ["Quotation", proformaInvoice.quotation?.quotation_code ?? "-"],
+    );
+  } else if (proformaInvoice.b2b_sale_id) {
+    details.splice(
+      3,
+      0,
+      ["B2B Sale", proformaInvoice.b2b_sale?.sale_code ?? "-"],
+    );
+  }
+
+  return buildBusinessPdf({
+    kind: "proforma_invoice",
+    title: "Proforma Invoice",
+    code: proformaInvoice.proforma_code ?? "Proforma Invoice",
+    documentDate: proformaInvoice.proforma_date,
+    dueDate: proformaInvoice.due_date,
+    organization,
+    settings,
+    customer: {
+      name:
+        proformaInvoice.customer?.business_name ||
+        proformaInvoice.customer?.full_name ||
+        "Customer",
+      code: proformaInvoice.customer?.customer_code,
+      phone: proformaInvoice.customer?.phone,
+      email: proformaInvoice.customer?.email,
+      address: proformaInvoice.customer
+        ? formatCustomerAddress(proformaInvoice.customer)
+        : null,
+      extraLines: [
+        proformaInvoice.customer?.contact_person_name
+          ? `Contact: ${proformaInvoice.customer.contact_person_name}`
+          : "",
+        proformaInvoice.customer?.gst_number
+          ? `GST: ${proformaInvoice.customer.gst_number}`
+          : "",
+      ].filter(Boolean),
+    },
+    details,
+    items: items.map((item) => ({
+      name: item.item_name,
+      description: item.description,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPrice: item.unit_price,
+      gstPercent: item.gst_percent,
+      lineTotal: item.line_total,
+    })),
+    totals: {
+      baseAmount: proformaInvoice.base_amount,
+      gstAmount: proformaInvoice.gst_amount,
+      discountAmount: proformaInvoice.discount_amount,
+      totalAmount: proformaInvoice.total_amount,
+      amountPaid: proformaInvoice.amount_paid,
+      netPayableAmount: proformaInvoice.balance_due,
+    },
+    paymentTerms: "Payment is requested against this proforma invoice before final invoice issuance.",
+    bankLines: settingsBankLines(settings),
+    termsAndConditions:
+      "This proforma invoice is a payment request and is not the final tax invoice.",
+    notes: proformaInvoice.notes,
+  });
+}
+
+export async function buildPurchaseOrderPdf(
+  order: PurchaseOrderWithRelations,
+  organization: OrganizationBranding,
+  settings: OrganizationSettings,
+) {
+  return buildBusinessPdf({
+    kind: "purchase_order",
+    title: "Purchase Order",
+    code: order.purchase_code ?? "Purchase Order",
+    documentDate: order.order_date,
+    dueDate: order.expected_delivery_date,
+    organization,
+    settings,
+    partyTitle: "Vendor Details",
+    customer: {
+      name: order.vendor?.vendor_name ?? "Vendor",
+      code: order.vendor?.vendor_code,
+      phone: order.vendor?.phone,
+      email: order.vendor?.email,
+      address: vendorAddress(order),
+      extraLines: [
+        order.vendor?.contact_person
+          ? `Contact person: ${order.vendor.contact_person}`
+          : "",
+        order.vendor?.gst_number ? `GST: ${order.vendor.gst_number}` : "",
+      ].filter(Boolean),
+    },
+    detailTitle: "Purchase Details",
+    details: [
+      ["Order Date", formatDate(order.order_date, settings.date_format)],
+      [
+        "Expected Delivery",
+        formatDate(order.expected_delivery_date, settings.date_format),
+      ],
+      ["Status", labelize(order.status)],
+      ["Created By", order.creator?.full_name ?? "-"],
+    ],
+    items: (order.items ?? []).map((item) => ({
+      name: item.item?.item_name ?? "Inventory item",
+      description:
+        [item.item?.item_code, item.item?.brand, item.item?.model]
+          .filter(Boolean)
+          .join(" / ") || null,
+      quantity: item.quantity,
+      unit: item.item?.unit ?? null,
+      unitPrice: item.unit_price,
+      gstPercent: item.gst_percent,
+      lineTotal: purchaseItemBaseAmount(item),
+    })),
+    totals: {
+      baseAmount: order.subtotal,
+      gstAmount: order.gst_amount,
+      discountAmount: null,
+      totalAmount: order.total_amount,
+      netPayableAmount: order.total_amount,
+    },
+    termsAndConditions:
+      "This purchase order is generated from SolarWorkflows and is subject to the agreed vendor terms.",
+    notes: order.notes,
   });
 }
 
@@ -1232,11 +1425,11 @@ function drawPartyAndDetails(
   y: number,
 ) {
   const columnWidth = (contentWidth - 6) / 2;
-  const boxHeight =
-    input.kind === "quotation"
-      ? Math.max(50, 18 + input.details.length * 4.6)
-      : 42;
-  drawBox(doc, margin, y, columnWidth, boxHeight, "Customer Details", colors);
+  const boxHeight = Math.max(
+    input.kind === "quotation" ? 50 : 42,
+    18 + input.details.length * 4.6,
+  );
+  drawBox(doc, margin, y, columnWidth, boxHeight, input.partyTitle ?? "Customer Details", colors);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(colors.text);
@@ -1594,7 +1787,10 @@ function drawTotals(
   y: number,
 ) {
   y = ensureSpace(doc, y, input.kind === "quotation" ? 76 : 66, colors.primary);
-  const gstRows = input.kind === "invoice" ? gstBreakdown(input.items) : [];
+  const gstRows =
+    input.kind === "invoice" || input.kind === "purchase_order"
+      ? gstBreakdown(input.items)
+      : [];
   const hasLeftPanel = input.kind === "quotation" || gstRows.length > 0;
   const leftWidth = 92;
   const rightX = hasLeftPanel ? margin + leftWidth + 12 : margin;
@@ -1642,7 +1838,7 @@ function drawTotals(
   totalY = totalRow(doc, "Total Amount", input.totals.totalAmount, input, rightX, rightWidth, totalY, colors);
   if (input.kind === "quotation") {
     totalY = totalRow(doc, "Subsidy", input.totals.subsidyAmount, input, rightX, rightWidth, totalY, colors);
-  } else {
+  } else if (input.kind === "invoice") {
     totalY = totalRow(doc, "Amount Paid", input.totals.amountPaid, input, rightX, rightWidth, totalY, colors);
   }
 
@@ -1651,7 +1847,7 @@ function drawTotals(
   doc.setFont("helvetica", "bold");
   doc.setTextColor(colors.primary);
   doc.setFontSize(11);
-  doc.text(input.kind === "quotation" ? "Net Payable" : "Balance Due", rightX + 4, totalY + 7);
+  doc.text(summaryTotalLabel(input), rightX + 4, totalY + 7);
   drawPdfText(
     doc,
     formatAmount(input.totals.netPayableAmount, input.settings.currency),
@@ -1729,7 +1925,9 @@ function drawTerms(
 
   return drawTextCard(
     doc,
-    "Payment Terms And Conditions",
+    input.kind === "purchase_order"
+      ? "Terms And Conditions"
+      : "Payment Terms And Conditions",
     [
       ...(input.pricingLines ?? []),
       input.paymentTerms ? `Payment terms: ${input.paymentTerms}` : "",
@@ -1791,6 +1989,18 @@ function drawSignature(
   doc.setFontSize(8.5);
   doc.setTextColor(colors.muted);
   doc.text("Authorized Signature", x + width, y + 14, { align: "right" });
+}
+
+function summaryTotalLabel(input: BusinessPdfInput) {
+  if (input.kind === "quotation") {
+    return "Net Payable";
+  }
+
+  if (input.kind === "purchase_order") {
+    return "Total Amount";
+  }
+
+  return "Balance Due";
 }
 
 function drawBox(
@@ -2066,6 +2276,12 @@ function lineGrossAmount(item: PdfLineItem) {
   return base + base * Number(item.gstPercent ?? 0) / 100;
 }
 
+function purchaseItemBaseAmount(
+  item: NonNullable<PurchaseOrderWithRelations["items"]>[number],
+) {
+  return Number(item.quantity ?? 0) * Number(item.unit_price ?? 0);
+}
+
 function formatQuantity(item: PdfLineItem) {
   if (item.quantity === null || item.quantity === undefined) {
     return "";
@@ -2117,6 +2333,19 @@ function quotationPdfTotals(quotation: QuotationWithRelations): Totals {
     totalAmount,
     netPayableAmount: Math.max(totalAmount - subsidyAmount, 0),
   };
+}
+
+function vendorAddress(order: PurchaseOrderWithRelations) {
+  return [
+    order.vendor?.address_line_1,
+    order.vendor?.address_line_2,
+    order.vendor?.city,
+    order.vendor?.district,
+    order.vendor?.state,
+    order.vendor?.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ") || null;
 }
 
 function technicalQuotationTitle(quotation: QuotationWithRelations) {

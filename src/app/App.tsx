@@ -18,6 +18,8 @@ import { ProjectsPage } from "../modules/projects/ProjectsPage";
 import { ProjectDetailPage } from "../modules/projects/ProjectDetailPage";
 import { PaymentsPage } from "../modules/payments/PaymentsPage";
 import { PaymentDetailPage } from "../modules/payments/PaymentDetailPage";
+import { B2BSalesPage } from "../modules/b2b-sales/B2BSalesPage";
+import { B2BSaleDetailPage } from "../modules/b2b-sales/B2BSaleDetailPage";
 import { CategoryMasterPage } from "../modules/product-master/CategoryMasterPage";
 import { ProductMasterPage } from "../modules/product-master/ProductMasterPage";
 import { ProductDetailPage } from "../modules/product-master/ProductDetailPage";
@@ -30,6 +32,8 @@ import { PurchasesPage } from "../modules/purchases/PurchasesPage";
 import { PurchaseDetailPage } from "../modules/purchases/PurchaseDetailPage";
 import { InvoicesPage } from "../modules/invoices/InvoicesPage";
 import { InvoiceDetailPage } from "../modules/invoices/InvoiceDetailPage";
+import { ProformaInvoicesPage } from "../modules/proforma-invoices/ProformaInvoicesPage";
+import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/ProformaInvoiceDetailPage";
 import { ReportsPage } from "../modules/reports/ReportsPage";
 import {
   OrganizationSettingsPage,
@@ -44,10 +48,21 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
-        <Route element={<DashboardLayout />}>
+          <Route element={<DashboardLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
+          <Route
+            path="/customers"
+            element={<Navigate to="/customers/project-based" replace />}
+          />
+          <Route
+            path="/customers/project-based"
+            element={<CustomersPage segment="project_based" />}
+          />
+          <Route
+            path="/customers/b2b-direct"
+            element={<CustomersPage segment="b2b_direct" />}
+          />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />
@@ -61,6 +76,8 @@ export default function App() {
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
           <Route path="/payments" element={<PaymentsPage />} />
           <Route path="/payments/:id" element={<PaymentDetailPage />} />
+          <Route path="/b2b-sales" element={<B2BSalesPage />} />
+          <Route path="/b2b-sales/:id" element={<B2BSaleDetailPage />} />
           <Route
             path="/product-master"
             element={<Navigate to="/products-materials/products" replace />}
@@ -96,6 +113,8 @@ export default function App() {
           <Route path="/vendors/:id" element={<VendorDetailPage />} />
           <Route path="/purchases" element={<PurchasesPage />} />
           <Route path="/purchases/:id" element={<PurchaseDetailPage />} />
+          <Route path="/proforma-invoices" element={<ProformaInvoicesPage />} />
+          <Route path="/proforma-invoices/:id" element={<ProformaInvoiceDetailPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
           <Route path="/reports" element={<ReportsPage />} />
@@ -110,18 +129,21 @@ export default function App() {
               (route) =>
                 ![
                   "/dashboard",
-                  "/customers",
+                  "/customers/project-based",
+                  "/customers/b2b-direct",
                   "/leads",
                   "/site-surveys",
                   "/quotations",
                   "/projects",
                   "/payments",
+                  "/b2b-sales",
                   "/products-materials/products",
                   "/products-materials/categories",
                   "/products-materials/catalog-library",
                   "/inventory",
                   "/vendors",
                   "/purchases",
+                  "/proforma-invoices",
                   "/invoices",
                   "/reports",
                   "/settings",

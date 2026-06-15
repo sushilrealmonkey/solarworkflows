@@ -119,9 +119,13 @@ export function PaymentsPage() {
         !search ||
         [
           payment.customer?.full_name,
+          payment.customer?.business_name,
           payment.customer?.phone,
           payment.customer?.alternate_phone,
           payment.project?.project_code,
+          payment.b2b_sale?.sale_code,
+          payment.proforma_invoice?.proforma_code,
+          payment.invoice?.invoice_code,
           payment.reference_number,
         ]
           .filter(Boolean)
@@ -307,7 +311,7 @@ export function PaymentsPage() {
                 <tr>
                   <th className="px-4 py-3">Payment Date</th>
                   <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Context</th>
                   <th className="px-4 py-3">Source</th>
                   <th className="px-4 py-3">Mode</th>
                   <th className="px-4 py-3">Amount</th>
@@ -325,14 +329,16 @@ export function PaymentsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">
-                        {payment.customer?.full_name ?? "-"}
+                        {payment.customer?.business_name ||
+                          payment.customer?.full_name ||
+                          "-"}
                       </div>
                       <div className="text-xs text-slate-500">
                         {payment.customer?.phone ?? "-"}
                       </div>
                     </td>
                     <td className="px-4 py-3 font-semibold text-slate-950">
-                      {payment.project?.project_code ?? "-"}
+                      {paymentContextLabel(payment)}
                     </td>
                     <td className="px-4 py-3">{labelize(payment.payment_source)}</td>
                     <td className="px-4 py-3">{labelize(payment.payment_mode)}</td>
@@ -349,7 +355,7 @@ export function PaymentsPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         <ViewLink to={`/payments/${payment.id}`}>View</ViewLink>
-                        {canUpdate ? (
+                        {canUpdate && payment.project_id ? (
                           <Button
                             onClick={() => openEditForm(payment)}
                             variant="secondary"
@@ -388,8 +394,9 @@ export function PaymentsPage() {
                       {formatMoney(payment.amount)}
                     </h2>
                     <p className="mt-1 text-sm text-slate-600">
-                      {payment.customer?.full_name ?? "-"} /{" "}
-                      {payment.project?.project_code ?? "-"}
+                      {payment.customer?.business_name ||
+                        payment.customer?.full_name ||
+                        "-"} / {paymentContextLabel(payment)}
                     </p>
                   </div>
                   <PaymentStatusBadge value={payment.status} />
@@ -411,7 +418,7 @@ export function PaymentsPage() {
                 </dl>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <ViewLink to={`/payments/${payment.id}`}>View</ViewLink>
-                  {canUpdate ? (
+                  {canUpdate && payment.project_id ? (
                     <Button onClick={() => openEditForm(payment)} variant="secondary">
                       Edit
                     </Button>
@@ -449,7 +456,7 @@ export function PaymentsPage() {
       {deleteTarget ? (
         <ConfirmDialog
           title="Delete payment?"
-          description={`This will remove the ${formatMoney(deleteTarget.amount)} payment from ${deleteTarget.project?.project_code ?? "this project"}.`}
+          description={`This will remove the ${formatMoney(deleteTarget.amount)} payment from ${paymentContextLabel(deleteTarget)}.`}
           confirming={deleting}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={confirmDelete}
@@ -464,6 +471,17 @@ function createdByName(payment: PaymentWithRelations) {
     payment.created_by_profile?.full_name ??
     payment.created_by_profile?.email ??
     payment.created_by_profile?.phone ??
+    "-"
+  );
+}
+
+function paymentContextLabel(payment: PaymentWithRelations) {
+  return (
+    payment.project?.project_code ??
+    payment.project?.project_name ??
+    payment.b2b_sale?.sale_code ??
+    payment.proforma_invoice?.proforma_code ??
+    payment.invoice?.invoice_code ??
     "-"
   );
 }

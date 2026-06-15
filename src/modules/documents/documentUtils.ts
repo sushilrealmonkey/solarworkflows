@@ -15,7 +15,9 @@ export const documentTypeOptions: DocumentType[] = [
   "electricity_bill",
   "property_document",
   "quotation_pdf",
+  "proforma_invoice_pdf",
   "invoice_pdf",
+  "purchase_order_pdf",
   "payment_receipt",
   "site_photo",
   "installation_photo",
@@ -82,6 +84,14 @@ export function documentRelatedLabel(document: OrganizationDocumentWithRelations
 
   if (document.quotation) {
     return document.quotation.quotation_code ?? "Quotation";
+  }
+
+  if (document.proforma_invoice) {
+    return document.proforma_invoice.proforma_code ?? "Proforma Invoice";
+  }
+
+  if (document.purchase_order) {
+    return document.purchase_order.purchase_code ?? "Purchase Order";
   }
 
   return "General";

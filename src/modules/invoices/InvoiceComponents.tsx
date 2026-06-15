@@ -13,6 +13,8 @@ import { formatMoney } from "../quotations/quotationUtils";
 import {
   draftLineTotal,
   emptyInvoiceItemForm,
+  inventoryItemToInvoiceItemForm,
+  invoiceInventoryItemLabel,
   invoiceStatusTone,
   projectInvoiceLabel,
 } from "./invoiceUtils";
@@ -86,6 +88,8 @@ export function InvoiceFormModal({
   creationMode,
   onCreationModeChange,
   duplicateProjectInvoice,
+  canAddItems = true,
+  canRemoveItems = true,
   onProjectChange,
   onClose,
   onSubmit,
@@ -100,6 +104,8 @@ export function InvoiceFormModal({
   creationMode?: InvoiceCreationMode;
   onCreationModeChange?: (mode: InvoiceCreationMode) => void;
   duplicateProjectInvoice?: InvoiceWithRelations | null;
+  canAddItems?: boolean;
+  canRemoveItems?: boolean;
   onProjectChange?: (projectId: string) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -347,12 +353,14 @@ export function InvoiceFormModal({
         <div className="md:col-span-2">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-semibold text-slate-950">Invoice Items</h3>
-            <Button
-              onClick={() => setItems([...values.items, emptyInvoiceItemForm()])}
-              variant="secondary"
-            >
-              Add Item
-            </Button>
+            {canAddItems ? (
+              <Button
+                onClick={() => setItems([...values.items, emptyInvoiceItemForm()])}
+                variant="secondary"
+              >
+                Add Item
+              </Button>
+            ) : null}
           </div>
           <div className="mt-3 space-y-3">
             {values.items.map((item, index) => (
@@ -360,8 +368,11 @@ export function InvoiceFormModal({
                 key={index}
                 index={index}
                 item={item}
+                inventoryItems={options.inventoryItems}
                 errors={errors}
-                canRemove={values.items.length > 1}
+                canRemove={
+                  values.items.length > 1 && (canRemoveItems || !item.id)
+                }
                 onChange={(nextItem) =>
                   setItems(
                     values.items.map((current, itemIndex) =>
@@ -412,6 +423,7 @@ function InvoiceContextPreview({
 function InvoiceItemEditor({
   index,
   item,
+  inventoryItems,
   errors,
   canRemove,
   onChange,
@@ -419,6 +431,7 @@ function InvoiceItemEditor({
 }: {
   index: number;
   item: InvoiceItemFormValues;
+  inventoryItems: InvoiceLinkOptions["inventoryItems"];
   errors: Record<string, string>;
   canRemove: boolean;
   onChange: (item: InvoiceItemFormValues) => void;
@@ -426,6 +439,11 @@ function InvoiceItemEditor({
 }) {
   const update = (key: keyof InvoiceItemFormValues, value: string) =>
     onChange({ ...item, [key]: value });
+  const selectedInventoryItem = inventoryItems.find(
+    (option) => option.id === item.inventory_item_id,
+  );
+  const selectedItemLabel =
+    selectedInventoryItem ? invoiceInventoryItemLabel(selectedInventoryItem) : item.item_name;
   const line = draftLineTotal(item);
 
   return (
@@ -446,13 +464,35 @@ function InvoiceItemEditor({
         ) : null}
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
-        <TextInput
-          label="Item Name"
-          value={item.item_name}
-          onChange={(value) => update("item_name", value)}
-          error={errors[`items.${index}.item_name`]}
-          required
+        <SelectInput
+          label="Inventory Item"
+          value={item.inventory_item_id}
+          onChange={(inventoryItemId) => {
+            const nextInventoryItem = inventoryItems.find(
+              (option) => option.id === inventoryItemId,
+            );
+            onChange(
+              nextInventoryItem
+                ? inventoryItemToInvoiceItemForm(nextInventoryItem, item)
+                : { ...item, inventory_item_id: "", item_name: "" },
+            );
+          }}
+          options={[
+            {
+              value: "",
+              label: selectedItemLabel || "Select inventory item",
+            },
+            ...inventoryItems.map((option) => ({
+              value: option.id,
+              label: invoiceInventoryItemLabel(option),
+            })),
+          ]}
         />
+        {errors[`items.${index}.inventory_item_id`] ? (
+          <p className="-mt-2 text-xs text-rose-700">
+            {errors[`items.${index}.inventory_item_id`]}
+          </p>
+        ) : null}
         <TextInput
           label="Quantity"
           value={item.quantity}

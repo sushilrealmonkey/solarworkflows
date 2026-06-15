@@ -4,6 +4,7 @@ import type {
   Invoice,
   InvoiceCreationMode,
   InvoiceFormValues,
+  InvoiceInventoryItemOption,
   InvoiceItem,
   InvoiceItemFormValues,
   InvoiceProjectOption,
@@ -35,6 +36,7 @@ export function defaultDueDateInput() {
 
 export function emptyInvoiceItemForm(): InvoiceItemFormValues {
   return {
+    inventory_item_id: "",
     item_name: "",
     description: "",
     quantity: "1",
@@ -77,6 +79,8 @@ export function invoiceToForm(invoice: Invoice): InvoiceFormValues {
 
 export function invoiceItemToForm(item: InvoiceItem): InvoiceItemFormValues {
   return {
+    id: item.id,
+    inventory_item_id: item.inventory_item_id ?? "",
     item_name: item.item_name ?? "",
     description: item.description ?? "",
     quantity: numberToInput(item.quantity) || "1",
@@ -84,6 +88,50 @@ export function invoiceItemToForm(item: InvoiceItem): InvoiceItemFormValues {
     unit_price: numberToInput(item.unit_price),
     gst_percent: numberToInput(item.gst_percent) || "0",
   };
+}
+
+export function inventoryItemToInvoiceItemForm(
+  item: InvoiceInventoryItemOption,
+  current: InvoiceItemFormValues = emptyInvoiceItemForm(),
+): InvoiceItemFormValues {
+  const product = item.catalog_product;
+  const itemName = invoiceInventoryItemName(item);
+  const details = [
+    item.item_code,
+    product?.product_code,
+    product?.specifications,
+    item.brand ?? product?.brand,
+    item.model ?? product?.model_number,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  return {
+    ...current,
+    inventory_item_id: item.id,
+    item_name: itemName,
+    description: details,
+    unit: item.unit || product?.unit || current.unit,
+    gst_percent:
+      product?.gst_percent === null || product?.gst_percent === undefined
+        ? current.gst_percent || "0"
+        : numberToInput(product.gst_percent) || "0",
+  };
+}
+
+export function invoiceInventoryItemName(item: InvoiceInventoryItemOption) {
+  return item.catalog_product?.product_name || item.item_name || "Inventory item";
+}
+
+export function invoiceInventoryItemLabel(item: InvoiceInventoryItemOption) {
+  return [
+    item.item_code ?? item.catalog_product?.product_code ?? "Item",
+    invoiceInventoryItemName(item),
+    item.brand ?? item.catalog_product?.brand,
+    item.model ?? item.catalog_product?.model_number,
+  ]
+    .filter(Boolean)
+    .join(" - ");
 }
 
 export function projectInvoiceLabel(project: InvoiceProjectOption) {
@@ -98,12 +146,20 @@ export function invoiceContextLabel(invoice: InvoiceWithRelations) {
     return invoice.project?.project_code ?? invoice.project?.project_name ?? "Project invoice";
   }
 
+  if (invoice.b2b_sale_id) {
+    return invoice.b2b_sale?.sale_code ?? "B2B sale invoice";
+  }
+
   return "Manual item invoice";
 }
 
 export function invoiceContextDescription(invoice: InvoiceWithRelations) {
   if (invoice.project_id) {
     return `${invoice.customer?.full_name ?? "Customer"} / ${invoiceContextLabel(invoice)}`;
+  }
+
+  if (invoice.b2b_sale_id) {
+    return `${invoice.customer?.business_name || invoice.customer?.full_name || "Customer"} / ${invoiceContextLabel(invoice)}`;
   }
 
   return `${invoice.customer?.full_name ?? "Customer"} / Manual item invoice`;
@@ -185,7 +241,7 @@ export function validateInvoiceForm(
       const gstPercent = Number(item.gst_percent || 0);
 
       if (!item.item_name.trim()) {
-        nextErrors[`items.${index}.item_name`] = "Item name is required.";
+        nextErrors[`items.${index}.inventory_item_id`] = "Select an inventory item.";
       }
 
       if (!Number.isFinite(quantity) || quantity <= 0) {

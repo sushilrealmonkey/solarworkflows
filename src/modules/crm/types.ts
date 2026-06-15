@@ -7,11 +7,17 @@ export type StaffOption = {
   organization_id: string | null;
 };
 
+export type CustomerSegment = "project_based" | "b2b_direct";
+
 export type Customer = {
   id: string;
   organization_id: string;
   customer_code: string | null;
   full_name: string;
+  customer_segment: CustomerSegment | null;
+  business_name: string | null;
+  gst_number: string | null;
+  contact_person_name: string | null;
   phone: string;
   alternate_phone: string | null;
   email: string | null;
@@ -96,6 +102,10 @@ export type LeadFollowupWithLead = LeadFollowup & {
 
 export type CustomerFormValues = {
   full_name: string;
+  customer_segment: CustomerSegment;
+  business_name: string;
+  gst_number: string;
+  contact_person_name: string;
   phone: string;
   alternate_phone: string;
   email: string;
