@@ -21,6 +21,16 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 ```
 
+Set server-only values when running trusted setup scripts or Supabase Edge
+Functions locally:
+
+```text
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+APP_BASE_URL=
+```
+
 ## Commands
 
 ```bash
@@ -93,6 +103,14 @@ browser code.
 The script creates or updates the Supabase Auth user, marks email as confirmed,
 and links active super-admin rows in `users_profile`, `profiles`, and
 `platform_admins`.
+
+## EPC Admin Invite Setup
+
+Super admins invite EPC company admins through the platform Companies page. That
+flow calls the `invite-epc-company-admin` Supabase Edge Function, which requires
+the server-only Supabase environment variables above. `APP_BASE_URL` controls
+the invite redirect target and should point to the frontend origin that serves
+`/create-password`.
 
 ## Documentation Workflow
 

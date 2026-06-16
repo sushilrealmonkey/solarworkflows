@@ -90,7 +90,7 @@ export function CompaniesPage() {
       await createPlatformCompany(values);
       setValues(emptyFormValues);
       await loadCompanies();
-      showToast("EPC company workspace created.", "success");
+      showToast("EPC company invite email sent.", "success");
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -151,7 +151,11 @@ export function CompaniesPage() {
             </h2>
             <p className="mt-1 text-sm leading-6 text-slate-600">
               This creates the tenant workspace, default Admin role, all role
-              permissions, and the first admin profile.
+              permissions, first admin profile, and Supabase invite email.
+            </p>
+            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+              Supabase sends the invite to the primary admin email. The invite
+              link opens the create-password screen for that admin.
             </p>
           </div>
 
@@ -202,12 +206,12 @@ export function CompaniesPage() {
             disabled={isSubmitting}
             type="submit"
           >
-            {isSubmitting ? "Creating workspace" : "Create EPC company"}
+            {isSubmitting ? "Sending invite" : "Create and invite EPC admin"}
           </button>
 
           <p className="mt-4 text-xs leading-5 text-slate-500">
-            Auth passwords are created by a trusted server setup or invitation
-            flow, never from this browser page.
+            The service-role key stays inside the Supabase Edge Function. The
+            browser never creates Auth users directly.
           </p>
         </form>
 
@@ -274,7 +278,7 @@ function CompanyRow({ company }: { company: PlatformCompany }) {
             <p>{company.admin.email ?? "No email"}</p>
             <div className="pt-1">
               <Badge tone={company.admin.auth_user_id ? "success" : "warning"}>
-                {company.admin.auth_user_id ? "Auth linked" : "Pending auth"}
+                {company.admin.auth_user_id ? "Invite sent" : "Pending invite"}
               </Badge>
             </div>
           </div>

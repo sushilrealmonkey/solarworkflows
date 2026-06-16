@@ -92,14 +92,18 @@ export async function createPlatformCompany(
   values: CreatePlatformCompanyFormValues,
 ) {
   const client = requireSupabase();
-  const { data, error } = await client.rpc("create_organization_with_admin", {
-    organization_name: values.organization_name.trim(),
-    organization_slug: values.organization_slug.trim(),
-    admin_full_name: values.admin_full_name.trim(),
-    admin_phone: nullable(values.admin_phone),
-    admin_email: nullable(values.admin_email),
-    admin_auth_user_id: null,
-  });
+  const { data, error } = await client.functions.invoke(
+    "invite-epc-company-admin",
+    {
+      body: {
+        organization_name: values.organization_name.trim(),
+        organization_slug: values.organization_slug.trim(),
+        admin_full_name: values.admin_full_name.trim(),
+        admin_phone: nullable(values.admin_phone),
+        admin_email: nullable(values.admin_email),
+      },
+    },
+  );
 
   if (error) {
     throw new Error(error.message);

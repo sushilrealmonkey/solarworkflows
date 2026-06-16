@@ -34,4 +34,6 @@ export type CreatePlatformCompanyResult = {
   admin_profile_id: string;
   admin_auth_user_id: string | null;
   admin_profile_status: string;
+  invite_email_sent: boolean;
+  invited_admin_email: string;
 };

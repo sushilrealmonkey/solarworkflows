@@ -26,6 +26,7 @@ the repository. It does not approve new business logic by itself.
 | Settings | Organization settings, branding, and access-related settings foundation. |
 | Users, Permissions, Companies, Domains | Tenant/platform administration foundations. |
 | EPC Companies | Super-admin company onboarding screen for creating tenant workspaces and first admin profiles. |
+| EPC Admin Invite Activation | Supabase invite email activation for EPC company admins, linked through Supabase Auth and `users_profile`. |
 
 ## Access And Permissions
 
@@ -36,8 +37,11 @@ the repository. It does not approve new business logic by itself.
 - Platform-only areas must remain clearly separated from tenant user workflows.
 - Super admins can add EPC company workspaces through the platform Companies
   page. That workflow creates the organization, settings row, default Admin
-  role, role permissions, and first admin profile; Auth passwords remain a
-  trusted server/invitation concern.
+  role, role permissions, and first admin profile.
+- EPC company admins activate their own accounts from the Supabase invite email
+  sent during platform onboarding. The invite opens `/create-password`, where
+  the admin sets a password and `sync_auth_user_profile` links the Auth user to
+  the invited profile.
 
 ## Documentation Boundary
 

@@ -28,31 +28,13 @@ export function isValidPassword(password: string) {
   return password.length > 0;
 }
 
-export async function signInWithPasswordAndSyncProfile(
-  email: string,
-  password: string,
-): Promise<LoginAccessResult> {
+export function isValidNewPassword(password: string) {
+  return password.length >= 8;
+}
+
+export async function syncCurrentAuthUserProfile(): Promise<LoginAccessResult> {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
-  }
-
-  const normalizedEmail = normalizeEmail(email);
-
-  if (!isValidLoginEmail(normalizedEmail)) {
-    throw new Error("Enter a valid email address.");
-  }
-
-  if (!isValidPassword(password)) {
-    throw new Error("Enter your password.");
-  }
-
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: normalizedEmail,
-    password,
-  });
-
-  if (signInError) {
-    throw new Error(mapPasswordError(signInError.message));
   }
 
   const { data: syncedProfile, error: syncError } = await supabase.rpc(
@@ -92,6 +74,58 @@ export async function signInWithPasswordAndSyncProfile(
   };
 }
 
+export async function signInWithPasswordAndSyncProfile(
+  email: string,
+  password: string,
+): Promise<LoginAccessResult> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!isValidLoginEmail(normalizedEmail)) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  if (!isValidPassword(password)) {
+    throw new Error("Enter your password.");
+  }
+
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: normalizedEmail,
+    password,
+  });
+
+  if (signInError) {
+    throw new Error(mapPasswordError(signInError.message));
+  }
+
+  return syncCurrentAuthUserProfile();
+}
+
+export async function completeInvitedAdminPassword(
+  password: string,
+): Promise<LoginAccessResult> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  if (!isValidNewPassword(password)) {
+    throw new Error("Use at least 8 characters for your password.");
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password,
+  });
+
+  if (error) {
+    throw new Error(mapPasswordError(error.message));
+  }
+
+  return syncCurrentAuthUserProfile();
+}
+
 function mapPasswordError(message: string) {
   const normalizedMessage = message.toLowerCase();
 
@@ -104,6 +138,10 @@ function mapPasswordError(message: string) {
 
   if (normalizedMessage.includes("email not confirmed")) {
     return "This account email is not confirmed.";
+  }
+
+  if (normalizedMessage.includes("user already registered")) {
+    return "This email is already registered. Sign in instead.";
   }
 
   return message || "Supabase auth error. Please try again.";

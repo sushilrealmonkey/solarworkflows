@@ -3,6 +3,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 import { DashboardLayout } from "../layouts/DashboardLayout";
 import { routes } from "./routes";
 import { LoginPage } from "../modules/auth/LoginPage";
+import { CreatePasswordPage } from "../modules/auth/CreatePasswordPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
 import { DashboardPage } from "../modules/dashboard/DashboardPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
@@ -48,8 +49,9 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/create-password" element={<CreatePasswordPage />} />
       <Route element={<ProtectedRoute />}>
-          <Route element={<DashboardLayout />}>
+        <Route element={<DashboardLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
@@ -153,17 +155,17 @@ export default function App() {
                 ].includes(route.path),
             )
             .map((route) => (
-            <Route
-              key={route.path}
-              path={route.path}
-              element={
-                <ModulePlaceholderPage
-                  title={route.label}
-                  description={route.description}
-                />
-              }
-            />
-          ))}
+              <Route
+                key={route.path}
+                path={route.path}
+                element={
+                  <ModulePlaceholderPage
+                    title={route.label}
+                    description={route.description}
+                  />
+                }
+              />
+            ))}
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

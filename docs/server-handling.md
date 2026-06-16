@@ -33,6 +33,34 @@ Super admin Auth users are created from a trusted environment with
 `npm run setup:super-admin`. That command needs the Supabase service-role key
 and must not be run from browser code or committed configuration.
 
+EPC company admins are invited by super admins from the platform Companies page.
+The browser calls the `invite-epc-company-admin` Supabase Edge Function, and the
+function uses the service-role key to send the Supabase invite email. The
+service-role key must stay inside trusted server or Edge Function environments
+and must never be exposed to browser code.
+
+The invite email redirects admins to `/create-password`. After the admin sets a
+password, `sync_auth_user_profile` links the Supabase Auth user to the invited
+`users_profile` row and activates the admin profile.
+
+Configure the Edge Function environment with:
+
+```text
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+APP_BASE_URL=
+```
+
+`APP_BASE_URL` should be the deployed frontend origin, without a trailing slash.
+Supabase Auth URL configuration must include each deployed app origin and the
+`/create-password` redirect URL, for example:
+
+```text
+http://localhost:3002/create-password
+https://<production-domain>/create-password
+```
+
 The current Supabase project files live under `supabase/`.
 
 ## Migrations

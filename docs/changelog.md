@@ -5,6 +5,8 @@ Keep entries short and factual.
 
 ## 2026-06-16
 
+- Added Supabase invite email activation for EPC admins through the
+  `invite-epc-company-admin` Edge Function and `/create-password` route.
 - Added a trusted `setup:super-admin` script for creating or resetting the
   platform super admin Auth user and linked profile rows.
 - Added a super-admin-only EPC Companies page for tenant workspace onboarding

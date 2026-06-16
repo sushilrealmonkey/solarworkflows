@@ -230,6 +230,10 @@ export function LoginPage() {
                       : "Sign In"}
                 </button>
               </form>
+
+              <p className="mt-5 text-center text-sm leading-6 text-slate-600">
+                New EPC admins should use the invite email to create a password.
+              </p>
             </div>
           </div>
         </section>
