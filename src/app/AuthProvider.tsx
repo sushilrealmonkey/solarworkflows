@@ -60,6 +60,12 @@ type UserRoleNameRow = {
   role_name: string | null;
 };
 
+type OrganizationRow = {
+  id: string;
+  name: string | null;
+  status: string | null;
+};
+
 const defaultOrganization: OrganizationBranding = {
   id: null,
   name: "SolarWorkflows",
@@ -160,10 +166,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: organizationData } = loadedProfile.organization_id
         ? await supabase
             .from("organizations")
-            .select("id, name")
+            .select("id, name, status")
             .eq("id", loadedProfile.organization_id)
             .maybeSingle()
         : { data: null };
+
+      const loadedOrganization = organizationData as OrganizationRow | null;
 
       const { data: settingsData } = await supabase.rpc(
         "get_organization_settings",
@@ -175,8 +183,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name:
           typeof settingsData?.company_name === "string" && settingsData.company_name
             ? settingsData.company_name
-            : typeof organizationData?.name === "string"
-              ? organizationData.name
+            : typeof loadedOrganization?.name === "string"
+              ? loadedOrganization.name
               : defaultOrganization.name,
         logoUrl:
           typeof settingsData?.company_logo_url === "string"
@@ -208,6 +216,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRoleNames(["Super Admin"]);
         setPermissions([]);
         setStatus("ready");
+        return;
+      }
+
+      if (loadedOrganization?.status && loadedOrganization.status !== "active") {
+        setRoleNames([]);
+        setPermissions([]);
+        setStatus("inactive");
         return;
       }
 

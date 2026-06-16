@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import { authenticatedHomePath } from "../../app/redirects";
 import {
   completeInvitedAdminPassword,
   isValidNewPassword,
@@ -13,7 +14,7 @@ type InviteNotice = {
 };
 
 export function CreatePasswordPage() {
-  const { session, status, refresh } = useAuth();
+  const { session, status, profile, refresh } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -22,7 +23,7 @@ export function CreatePasswordPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (status === "ready") {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={authenticatedHomePath(profile)} replace />;
   }
 
   const hasInviteSession = Boolean(session);
@@ -77,7 +78,7 @@ export function CreatePasswordPage() {
       }
 
       await refresh();
-      navigate("/dashboard", { replace: true });
+      navigate(authenticatedHomePath(result.profile), { replace: true });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {

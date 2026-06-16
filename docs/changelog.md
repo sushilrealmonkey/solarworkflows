@@ -5,6 +5,13 @@ Keep entries short and factual.
 
 ## 2026-06-16
 
+- Restricted super-admin navigation and redirects to the platform EPC Companies
+  area, while keeping tenant users on the permission-filtered dashboard flow.
+- Expanded EPC Companies into a super-admin management console with search,
+  status filters, setup queue, workspace status actions, admin status actions,
+  and setup-link resend support.
+- Extended the `invite-epc-company-admin` Edge Function with trusted
+  super-admin actions for setup links and workspace/admin status changes.
 - Added Supabase invite email activation for EPC admins through the
   `invite-epc-company-admin` Edge Function and `/create-password` route.
 - Added a trusted `setup:super-admin` script for creating or resetting the

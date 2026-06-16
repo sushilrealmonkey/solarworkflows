@@ -33,11 +33,19 @@ Super admin Auth users are created from a trusted environment with
 `npm run setup:super-admin`. That command needs the Supabase service-role key
 and must not be run from browser code or committed configuration.
 
+Super admins use the platform area at `/companies`. The frontend redirects
+super admins away from tenant operational routes, while Supabase RLS and
+super-admin checks remain the server-side enforcement layer for platform data.
+
 EPC company admins are invited by super admins from the platform Companies page.
 The browser calls the `invite-epc-company-admin` Supabase Edge Function, and the
 function uses the service-role key to send the Supabase invite email. The
 service-role key must stay inside trusted server or Edge Function environments
 and must never be exposed to browser code.
+
+The same Edge Function accepts authenticated super-admin requests to resend
+setup links, mark workspaces active/inactive, and mark primary admin profiles
+invited/active/inactive.
 
 The invite email redirects admins to `/create-password`. After the admin sets a
 password, `sync_auth_user_profile` links the Supabase Auth user to the invited

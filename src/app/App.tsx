@@ -1,5 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
+import { useAuth } from "./AuthProvider";
+import { authenticatedHomePath } from "./redirects";
 import { DashboardLayout } from "../layouts/DashboardLayout";
 import { routes } from "./routes";
 import { LoginPage } from "../modules/auth/LoginPage";
@@ -52,7 +54,7 @@ export default function App() {
       <Route path="/create-password" element={<CreatePasswordPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<DefaultWorkspaceRedirect />} />
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route
@@ -168,7 +170,13 @@ export default function App() {
             ))}
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
+}
+
+function DefaultWorkspaceRedirect() {
+  const { profile } = useAuth();
+
+  return <Navigate to={authenticatedHomePath(profile)} replace />;
 }

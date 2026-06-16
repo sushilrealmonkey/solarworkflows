@@ -1,6 +1,11 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { navigationItems, type NavigationItem } from "../app/navigation";
+import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
+import {
+  navigationItems,
+  platformNavigationItems,
+  type NavigationItem,
+} from "../app/navigation";
+import { isPlatformPath } from "../app/redirects";
 import { useAuth } from "../app/AuthProvider";
 
 const linkBase =
@@ -8,11 +13,12 @@ const linkBase =
 
 export function DashboardLayout() {
   const { profile, roleNames, permissions, organization } = useAuth();
+  const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const visibleNavigationItems = useMemo<NavigationItem[]>(() => {
     if (profile?.is_super_admin) {
-      return navigationItems;
+      return platformNavigationItems;
     }
 
     const viewableModules = new Set(
@@ -51,6 +57,10 @@ export function DashboardLayout() {
         return items;
       }, []);
   }, [permissions, profile?.is_super_admin]);
+
+  if (profile?.is_super_admin && !isPlatformPath(location.pathname)) {
+    return <Navigate to="/companies" replace />;
+  }
 
   const shellStyle = {
     "--org-primary": organization.primaryColor,
@@ -159,7 +169,7 @@ function SidebarNavigation({
   items,
   onNavigate,
 }: {
-  items: typeof navigationItems;
+  items: NavigationItem[];
   onNavigate?: () => void;
 }) {
   const location = useLocation();

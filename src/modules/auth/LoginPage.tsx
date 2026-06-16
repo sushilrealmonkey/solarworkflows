@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import { safeAuthenticatedRedirect } from "../../app/redirects";
 import { env, type TestLoginAccount } from "../../config/env";
 import {
   isValidLoginEmail,
@@ -16,7 +17,7 @@ type AccessNotice = {
 };
 
 export function LoginPage() {
-  const { status, refresh } = useAuth();
+  const { status, profile, refresh } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -26,7 +27,10 @@ export function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [accessNotice, setAccessNotice] = useState<AccessNotice | null>(null);
 
-  const redirectTo = getRedirectPath(location.state);
+  const redirectTo = safeAuthenticatedRedirect(
+    profile,
+    getRedirectPath(location.state),
+  );
 
   if (status === "ready" && !isRedirecting) {
     return <Navigate to={redirectTo} replace />;
@@ -82,7 +86,9 @@ export function LoginPage() {
 
       setIsRedirecting(true);
       await refresh();
-      navigate("/dashboard", { replace: true });
+      navigate(safeAuthenticatedRedirect(accessResult.profile, "/dashboard"), {
+        replace: true,
+      });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {

@@ -1,11 +1,28 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 type InviteRequestBody = {
+  action?:
+    | "create_company"
+    | "send_admin_setup_link"
+    | "update_company_status"
+    | "update_admin_status";
+  admin_profile_id?: string;
+  organization_id?: string;
   organization_name?: string;
   organization_slug?: string;
   admin_full_name?: string;
   admin_email?: string;
   admin_phone?: string | null;
+  status?: string;
+};
+
+type AdminProfileRow = {
+  id: string;
+  auth_user_id: string | null;
+  organization_id: string | null;
+  full_name: string | null;
+  email: string | null;
+  status: string | null;
 };
 
 const corsHeaders = {
@@ -36,7 +53,7 @@ Deno.serve(async (request) => {
     }
 
     const body = await request.json() as InviteRequestBody;
-    const payload = validateBody(body);
+    const action = body.action ?? "create_company";
 
     const callerClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -67,6 +84,24 @@ Deno.serve(async (request) => {
         persistSession: false,
       },
     });
+
+    if (action === "send_admin_setup_link") {
+      return await sendAdminSetupLink(serviceClient, body, appBaseUrl);
+    }
+
+    if (action === "update_company_status") {
+      return await updateCompanyStatus(serviceClient, body);
+    }
+
+    if (action === "update_admin_status") {
+      return await updateAdminStatus(serviceClient, body);
+    }
+
+    if (action !== "create_company") {
+      return jsonResponse({ error: "Unsupported action" }, 400);
+    }
+
+    const payload = validateCreateBody(body);
 
     const { data: inviteData, error: inviteError } =
       await serviceClient.auth.admin.inviteUserByEmail(payload.admin_email, {
@@ -110,7 +145,172 @@ Deno.serve(async (request) => {
   }
 });
 
-function validateBody(body: InviteRequestBody) {
+async function sendAdminSetupLink(
+  serviceClient: ReturnType<typeof createClient>,
+  body: InviteRequestBody,
+  appBaseUrl: string,
+) {
+  const adminProfileId = normalizeText(body.admin_profile_id);
+
+  if (!adminProfileId) {
+    return jsonResponse({ error: "Admin profile is required" }, 400);
+  }
+
+  const { data: profileData, error: profileError } = await serviceClient
+    .from("users_profile")
+    .select("id, auth_user_id, organization_id, full_name, email, status")
+    .eq("id", adminProfileId)
+    .eq("is_super_admin", false)
+    .maybeSingle();
+
+  if (profileError || !profileData) {
+    return jsonResponse(
+      { error: profileError?.message ?? "Admin profile not found" },
+      404,
+    );
+  }
+
+  const profile = profileData as AdminProfileRow;
+  const adminEmail = normalizeEmail(profile.email ?? "");
+
+  if (!adminEmail) {
+    return jsonResponse({ error: "Admin profile email is required" }, 400);
+  }
+
+  if (profile.status === "inactive") {
+    return jsonResponse(
+      { error: "Reactivate the admin profile before sending a setup link" },
+      400,
+    );
+  }
+
+  if (profile.auth_user_id) {
+    const { error } = await serviceClient.auth.resetPasswordForEmail(
+      adminEmail,
+      {
+        redirectTo: `${appBaseUrl}/create-password`,
+      },
+    );
+
+    if (error) {
+      return jsonResponse({ error: error.message }, 400);
+    }
+
+    await serviceClient
+      .from("users_profile")
+      .update({ invited_at: new Date().toISOString() })
+      .eq("id", profile.id);
+
+    return jsonResponse({
+      ok: true,
+      message: "Admin setup link sent",
+    });
+  }
+
+  const { data: inviteData, error: inviteError } =
+    await serviceClient.auth.admin.inviteUserByEmail(adminEmail, {
+      redirectTo: `${appBaseUrl}/create-password`,
+      data: {
+        full_name: profile.full_name,
+      },
+    });
+
+  if (inviteError || !inviteData.user) {
+    return jsonResponse(
+      { error: inviteError?.message ?? "Unable to create invite" },
+      400,
+    );
+  }
+
+  const { error: updateError } = await serviceClient
+    .from("users_profile")
+    .update({
+      auth_user_id: inviteData.user.id,
+      status: "invited",
+      invited_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", profile.id);
+
+  if (updateError) {
+    await serviceClient.auth.admin.deleteUser(inviteData.user.id);
+    return jsonResponse({ error: updateError.message }, 400);
+  }
+
+  return jsonResponse({
+    ok: true,
+    message: "Admin invite sent",
+  });
+}
+
+async function updateCompanyStatus(
+  serviceClient: ReturnType<typeof createClient>,
+  body: InviteRequestBody,
+) {
+  const organizationId = normalizeText(body.organization_id);
+  const status = normalizeStatus(body.status, ["active", "inactive"]);
+
+  if (!organizationId) {
+    return jsonResponse({ error: "Organization is required" }, 400);
+  }
+
+  if (!status) {
+    return jsonResponse({ error: "Invalid company status" }, 400);
+  }
+
+  const { error } = await serviceClient
+    .from("organizations")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", organizationId);
+
+  if (error) {
+    return jsonResponse({ error: error.message }, 400);
+  }
+
+  return jsonResponse({
+    ok: true,
+    message: `Workspace marked ${status}`,
+  });
+}
+
+async function updateAdminStatus(
+  serviceClient: ReturnType<typeof createClient>,
+  body: InviteRequestBody,
+) {
+  const adminProfileId = normalizeText(body.admin_profile_id);
+  const status = normalizeStatus(body.status, ["invited", "active", "inactive"]);
+
+  if (!adminProfileId) {
+    return jsonResponse({ error: "Admin profile is required" }, 400);
+  }
+
+  if (!status) {
+    return jsonResponse({ error: "Invalid admin status" }, 400);
+  }
+
+  const { error } = await serviceClient
+    .from("users_profile")
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", adminProfileId)
+    .eq("is_super_admin", false);
+
+  if (error) {
+    return jsonResponse({ error: error.message }, 400);
+  }
+
+  return jsonResponse({
+    ok: true,
+    message: `Admin marked ${status}`,
+  });
+}
+
+function validateCreateBody(body: InviteRequestBody) {
   const organizationName = normalizeText(body.organization_name);
   const organizationSlug = slugify(normalizeText(body.organization_slug));
   const adminFullName = normalizeText(body.admin_full_name);
@@ -149,6 +349,11 @@ function normalizeText(value: string | undefined) {
 function normalizeNullableText(value: string | null) {
   const normalized = (value ?? "").trim();
   return normalized ? normalized : null;
+}
+
+function normalizeStatus(value: string | undefined, allowedValues: string[]) {
+  const normalized = normalizeText(value).toLowerCase();
+  return allowedValues.includes(normalized) ? normalized : null;
 }
 
 function normalizeEmail(value: string) {

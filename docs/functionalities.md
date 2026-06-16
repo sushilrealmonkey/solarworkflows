@@ -25,7 +25,7 @@ the repository. It does not approve new business logic by itself.
 | Reports | Reporting page and report API foundation. |
 | Settings | Organization settings, branding, and access-related settings foundation. |
 | Users, Permissions, Companies, Domains | Tenant/platform administration foundations. |
-| EPC Companies | Super-admin company onboarding screen for creating tenant workspaces and first admin profiles. |
+| EPC Companies | Super-admin company management console for creating tenant workspaces, inviting first admins, tracking setup, and managing workspace/admin status. |
 | EPC Admin Invite Activation | Supabase invite email activation for EPC company admins, linked through Supabase Auth and `users_profile`. |
 
 ## Access And Permissions
@@ -35,9 +35,13 @@ the repository. It does not approve new business logic by itself.
 - UI navigation can hide unavailable modules, but backend policies must still
   prevent unauthorized reads and writes.
 - Platform-only areas must remain clearly separated from tenant user workflows.
+- Super admins land on `/companies` and only see platform navigation. Tenant
+  operational routes redirect super admins back to the platform area.
 - Super admins can add EPC company workspaces through the platform Companies
   page. That workflow creates the organization, settings row, default Admin
   role, role permissions, and first admin profile.
+- Super admins can resend admin setup links and mark EPC workspaces or primary
+  admin profiles active/inactive from the EPC Companies page.
 - EPC company admins activate their own accounts from the Supabase invite email
   sent during platform onboarding. The invite opens `/create-password`, where
   the admin sets a password and `sync_auth_user_profile` links the Auth user to

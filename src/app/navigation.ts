@@ -76,3 +76,7 @@ export const navigationItems: NavigationItem[] = [
   navigationRoute("/reports"),
   navigationRoute("/settings"),
 ];
+
+export const platformNavigationItems = navigationItems.filter(
+  (item) => item.superAdminOnly,
+);

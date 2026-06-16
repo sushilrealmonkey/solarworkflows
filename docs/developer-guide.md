@@ -104,6 +104,10 @@ The script creates or updates the Supabase Auth user, marks email as confirmed,
 and links active super-admin rows in `users_profile`, `profiles`, and
 `platform_admins`.
 
+Super admins are routed to `/companies` after login. The app sidebar should show
+only platform navigation for super admins; tenant operational modules remain for
+tenant users and are still protected by Supabase RLS.
+
 ## EPC Admin Invite Setup
 
 Super admins invite EPC company admins through the platform Companies page. That
@@ -112,6 +116,10 @@ the server-only Supabase environment variables above. `APP_BASE_URL` controls
 the invite redirect target and should point to the frontend origin that serves
 `/create-password`; if omitted, the function falls back to the browser request
 origin.
+
+The same Edge Function also handles trusted setup-link resend, workspace status,
+and primary-admin status actions after checking the caller with
+`is_super_admin()`.
 
 ## Documentation Workflow
 
