@@ -25,6 +25,7 @@ the repository. It does not approve new business logic by itself.
 | Reports | Reporting page and report API foundation. |
 | Settings | Organization settings, branding, and access-related settings foundation. |
 | Users, Permissions, Companies, Domains | Tenant/platform administration foundations. |
+| EPC Companies | Super-admin company onboarding screen for creating tenant workspaces and first admin profiles. |
 
 ## Access And Permissions
 
@@ -33,6 +34,10 @@ the repository. It does not approve new business logic by itself.
 - UI navigation can hide unavailable modules, but backend policies must still
   prevent unauthorized reads and writes.
 - Platform-only areas must remain clearly separated from tenant user workflows.
+- Super admins can add EPC company workspaces through the platform Companies
+  page. That workflow creates the organization, settings row, default Admin
+  role, role permissions, and first admin profile; Auth passwords remain a
+  trusted server/invitation concern.
 
 ## Documentation Boundary
 

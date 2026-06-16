@@ -8,6 +8,13 @@ export type AppRoute = {
 
 export const routes: AppRoute[] = [
   {
+    path: "/companies",
+    label: "EPC Companies",
+    moduleKey: "companies",
+    description: "Super-admin onboarding for solar EPC tenant workspaces and primary admins.",
+    superAdminOnly: true,
+  },
+  {
     path: "/dashboard",
     label: "Dashboard",
     moduleKey: "dashboard",

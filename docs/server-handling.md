@@ -29,6 +29,10 @@ Supabase owns:
 - Local/staging/production migrations
 - Seed data for local or disposable environments
 
+Super admin Auth users are created from a trusted environment with
+`npm run setup:super-admin`. That command needs the Supabase service-role key
+and must not be run from browser code or committed configuration.
+
 The current Supabase project files live under `supabase/`.
 
 ## Migrations

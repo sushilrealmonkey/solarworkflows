@@ -26,6 +26,12 @@ function navigationRoute(path: string): NavigationItem {
 }
 
 export const navigationItems: NavigationItem[] = [
+  {
+    label: "Platform",
+    path: "/platform",
+    superAdminOnly: true,
+    children: [navigationRoute("/companies")],
+  },
   navigationRoute("/dashboard"),
   {
     label: "Sales",

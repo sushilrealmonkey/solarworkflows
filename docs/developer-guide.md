@@ -28,6 +28,7 @@ npm run dev
 npm run build
 npm run lint
 npm run preview
+npm run setup:super-admin
 ```
 
 For documentation-only changes, a build is usually unnecessary unless the docs
@@ -72,6 +73,26 @@ also change generated references or examples that need validation.
 - Actual purchase cost belongs to purchase lines and received
   `inventory_batches`; changing current Product Master pricing must never alter
   historical PO or batch costs.
+
+## Super Admin Setup
+
+Use `npm run setup:super-admin` from a trusted local or server environment to
+create or reset the platform super admin Auth user. The script requires:
+
+```text
+SUPABASE_SERVICE_ROLE_KEY=
+SUPER_ADMIN_EMAIL=
+SUPER_ADMIN_PASSWORD=
+SUPER_ADMIN_FULL_NAME=
+```
+
+`SUPABASE_URL` or `VITE_SUPABASE_URL` must also be available. The service-role
+key is server-only and must never be exposed through `VITE_` variables or
+browser code.
+
+The script creates or updates the Supabase Auth user, marks email as confirmed,
+and links active super-admin rows in `users_profile`, `profiles`, and
+`platform_admins`.
 
 ## Documentation Workflow
 

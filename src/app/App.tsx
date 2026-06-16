@@ -35,6 +35,7 @@ import { InvoiceDetailPage } from "../modules/invoices/InvoiceDetailPage";
 import { ProformaInvoicesPage } from "../modules/proforma-invoices/ProformaInvoicesPage";
 import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/ProformaInvoiceDetailPage";
 import { ReportsPage } from "../modules/reports/ReportsPage";
+import { CompaniesPage } from "../modules/companies/CompaniesPage";
 import {
   OrganizationSettingsPage,
   RolesPage,
@@ -50,6 +51,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route
             path="/customers"
@@ -129,6 +131,7 @@ export default function App() {
               (route) =>
                 ![
                   "/dashboard",
+                  "/companies",
                   "/customers/project-based",
                   "/customers/b2b-direct",
                   "/leads",

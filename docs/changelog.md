@@ -3,6 +3,15 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-06-16
+
+- Added a trusted `setup:super-admin` script for creating or resetting the
+  platform super admin Auth user and linked profile rows.
+- Added a super-admin-only EPC Companies page for tenant workspace onboarding
+  through the existing `create_organization_with_admin` RPC.
+- Added Platform navigation for super admins and documented the service-role
+  boundary for super admin credential setup.
+
 ## 2026-06-15
 
 - Added Proforma Invoices as separate pre-payment finance records with PI

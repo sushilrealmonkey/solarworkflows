@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "setup:super-admin": "node scripts/setup-super-admin.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
