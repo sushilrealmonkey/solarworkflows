@@ -28,7 +28,7 @@ Deno.serve(async (request) => {
     const supabaseUrl = requireEnv("SUPABASE_URL");
     const supabaseAnonKey = requireEnv("SUPABASE_ANON_KEY");
     const serviceRoleKey = requireEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const appBaseUrl = requireEnv("APP_BASE_URL").replace(/\/+$/, "");
+    const appBaseUrl = resolveAppBaseUrl(request);
     const authorization = request.headers.get("Authorization");
 
     if (!authorization) {
@@ -171,6 +171,18 @@ function requireEnv(name: string) {
   }
 
   return value;
+}
+
+function resolveAppBaseUrl(request: Request) {
+  const configuredBaseUrl = Deno.env.get("APP_BASE_URL");
+  const originBaseUrl = request.headers.get("Origin");
+  const appBaseUrl = configuredBaseUrl || originBaseUrl;
+
+  if (!appBaseUrl) {
+    throw new Error("APP_BASE_URL is not configured and request origin is unavailable");
+  }
+
+  return appBaseUrl.replace(/\/+$/, "");
 }
 
 function jsonResponse(body: unknown, status = 200) {

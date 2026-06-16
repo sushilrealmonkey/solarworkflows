@@ -53,8 +53,9 @@ APP_BASE_URL=
 ```
 
 `APP_BASE_URL` should be the deployed frontend origin, without a trailing slash.
-Supabase Auth URL configuration must include each deployed app origin and the
-`/create-password` redirect URL, for example:
+If it is not configured, the Edge Function falls back to the browser request
+origin. Supabase Auth URL configuration must include each deployed app origin
+and the `/create-password` redirect URL, for example:
 
 ```text
 http://localhost:3002/create-password
