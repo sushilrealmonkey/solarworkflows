@@ -23,6 +23,7 @@ type AdminProfileRow = {
   full_name: string | null;
   email: string | null;
   status: string | null;
+  onboarded_at: string | null;
 };
 
 const corsHeaders = {
@@ -104,12 +105,9 @@ Deno.serve(async (request) => {
     const payload = validateCreateBody(body);
 
     const { data: inviteData, error: inviteError } =
-      await serviceClient.auth.admin.inviteUserByEmail(payload.admin_email, {
-        redirectTo: `${appBaseUrl}/create-password`,
-        data: {
-          full_name: payload.admin_full_name,
-          organization_slug: payload.organization_slug,
-        },
+      await sendInviteEmail(serviceClient, payload.admin_email, appBaseUrl, {
+        full_name: payload.admin_full_name,
+        organization_slug: payload.organization_slug,
       });
 
     if (inviteError || !inviteData.user) {
@@ -158,7 +156,7 @@ async function sendAdminSetupLink(
 
   const { data: profileData, error: profileError } = await serviceClient
     .from("users_profile")
-    .select("id, auth_user_id, organization_id, full_name, email, status")
+    .select("id, auth_user_id, organization_id, full_name, email, status, onboarded_at")
     .eq("id", adminProfileId)
     .eq("is_super_admin", false)
     .maybeSingle();
@@ -184,7 +182,7 @@ async function sendAdminSetupLink(
     );
   }
 
-  if (profile.auth_user_id) {
+  if (profile.auth_user_id && !isAdminStillInSetup(profile)) {
     const { error } = await serviceClient.auth.resetPasswordForEmail(
       adminEmail,
       {
@@ -208,11 +206,8 @@ async function sendAdminSetupLink(
   }
 
   const { data: inviteData, error: inviteError } =
-    await serviceClient.auth.admin.inviteUserByEmail(adminEmail, {
-      redirectTo: `${appBaseUrl}/create-password`,
-      data: {
-        full_name: profile.full_name,
-      },
+    await sendInviteEmail(serviceClient, adminEmail, appBaseUrl, {
+      full_name: profile.full_name,
     });
 
   if (inviteError || !inviteData.user) {
@@ -241,6 +236,22 @@ async function sendAdminSetupLink(
     ok: true,
     message: "Admin invite sent",
   });
+}
+
+function sendInviteEmail(
+  serviceClient: ReturnType<typeof createClient>,
+  email: string,
+  appBaseUrl: string,
+  data: Record<string, string | null>,
+) {
+  return serviceClient.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${appBaseUrl}/create-password`,
+    data,
+  });
+}
+
+function isAdminStillInSetup(profile: AdminProfileRow) {
+  return profile.status === "invited" || !profile.onboarded_at;
 }
 
 async function updateCompanyStatus(

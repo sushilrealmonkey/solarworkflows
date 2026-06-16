@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../../services/supabaseClient";
 import type {
   CreatePlatformCompanyFormValues,
@@ -183,7 +184,7 @@ export async function createPlatformCompany(
   );
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(await getFunctionErrorMessage(error));
   }
 
   return data as CreatePlatformCompanyResult;
@@ -226,8 +227,34 @@ async function invokeCompanyAction(body: Record<string, unknown>) {
   );
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(await getFunctionErrorMessage(error));
   }
 
   return data as PlatformCompanyActionResult;
+}
+
+async function getFunctionErrorMessage(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = (await error.context.json()) as unknown;
+
+      if (isErrorBody(body)) {
+        return body.error;
+      }
+    } catch {
+      return error.message;
+    }
+  }
+
+  return error instanceof Error ? error.message : "Action failed.";
+}
+
+function isErrorBody(value: unknown): value is { error: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "error" in value &&
+    typeof value.error === "string" &&
+    value.error.trim().length > 0
+  );
 }
