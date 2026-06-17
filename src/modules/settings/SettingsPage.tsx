@@ -140,7 +140,7 @@ function PlatformSettingsPage() {
       <section className="grid gap-4 lg:grid-cols-3">
         <SettingsCard
           title="Application"
-          description="SolarWorkflows platform workspace for EPC company onboarding."
+          description="SolarFlow CRM platform workspace for EPC company onboarding."
         />
         <SettingsCard
           title="Supabase"

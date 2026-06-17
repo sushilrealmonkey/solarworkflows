@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { authenticatedHomePath } from "../../app/redirects";
+import { PortalLogo } from "../../components/PortalBrand";
 import {
   completeInvitedAdminPassword,
   isValidNewPassword,
@@ -91,7 +92,11 @@ export function CreatePasswordPage() {
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm lg:grid-cols-[1.02fr_0.98fr]">
         <section className="relative hidden bg-brand-900 px-10 py-10 text-white lg:flex lg:flex-col lg:justify-between">
           <div>
-            <span className="inline-flex rounded-full border border-amber-200/50 bg-amber-200/15 px-3 py-1 text-sm font-semibold text-amber-100">
+            <PortalLogo
+              className="h-28 w-full max-w-md object-contain object-left"
+              tone="dark"
+            />
+            <span className="mt-6 inline-flex rounded-full border border-amber-200/50 bg-amber-200/15 px-3 py-1 text-sm font-semibold text-amber-100">
               EPC invite
             </span>
             <h1 className="mt-8 max-w-lg text-4xl font-semibold tracking-normal">
@@ -118,7 +123,8 @@ export function CreatePasswordPage() {
         <section className="flex items-center justify-center px-5 py-10 sm:px-10">
           <div className="w-full max-w-md">
             <div className="lg:hidden">
-              <span className="inline-flex rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800">
+              <PortalLogo className="h-20 w-full max-w-xs object-contain object-left" />
+              <span className="mt-5 inline-flex rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800">
                 EPC invite
               </span>
               <h1 className="mt-5 text-3xl font-semibold tracking-normal text-slate-950">

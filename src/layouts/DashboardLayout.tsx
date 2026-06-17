@@ -7,6 +7,7 @@ import {
 } from "../app/navigation";
 import { isPlatformPath } from "../app/redirects";
 import { useAuth } from "../app/AuthProvider";
+import { PortalLogo } from "../components/PortalBrand";
 
 const linkBase =
   "flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
@@ -176,24 +177,24 @@ function ShellBrand() {
   return (
     <div className="flex items-center gap-3 px-2">
       {organization.logoUrl ? (
-        <img
-          alt=""
-          className="h-11 w-11 rounded-xl border border-stone-200 object-contain"
-          src={organization.logoUrl}
-        />
+        <>
+          <img
+            alt=""
+            className="h-11 w-11 rounded-xl border border-stone-200 object-contain"
+            src={organization.logoUrl}
+          />
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-slate-950">
+              {organization.name}
+            </p>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">
+              Solar operations
+            </p>
+          </div>
+        </>
       ) : (
-        <div className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--org-primary)] text-sm font-bold text-white shadow-sm">
-          SW
-        </div>
+        <PortalLogo className="h-16 w-full max-w-56 object-contain object-left" />
       )}
-      <div className="min-w-0">
-        <p className="truncate text-base font-semibold text-slate-950">
-          {organization.name}
-        </p>
-        <p className="mt-0.5 text-xs font-medium text-slate-500">
-          Solar operations
-        </p>
-      </div>
     </div>
   );
 }

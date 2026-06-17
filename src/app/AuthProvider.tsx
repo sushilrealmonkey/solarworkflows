@@ -69,7 +69,7 @@ type OrganizationRow = {
 
 const defaultOrganization: OrganizationBranding = {
   id: null,
-  name: "SolarWorkflows",
+  name: "SolarFlow CRM",
   logoUrl: null,
   primaryColor: "#166534",
   secondaryColor: "#0f766e",

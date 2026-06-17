@@ -3,6 +3,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { safeAuthenticatedRedirect } from "../../app/redirects";
 import { env, type TestLoginAccount } from "../../config/env";
+import { PortalLogo } from "../../components/PortalBrand";
 import {
   isValidLoginEmail,
   isValidPassword,
@@ -112,9 +113,10 @@ export function LoginPage() {
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm lg:grid-cols-[1.08fr_0.92fr]">
         <section className="relative hidden bg-brand-900 px-10 py-10 text-white lg:flex lg:flex-col lg:justify-between">
           <div>
-            <span className="inline-flex rounded-full border border-amber-200/50 bg-amber-200/15 px-3 py-1 text-sm font-semibold text-amber-100">
-              Solar CRM
-            </span>
+            <PortalLogo
+              className="h-28 w-full max-w-md object-contain object-left"
+              tone="dark"
+            />
             <h1 className="mt-8 max-w-lg text-4xl font-semibold tracking-normal">
               Intelligent Solar Management
             </h1>
@@ -128,7 +130,7 @@ export function LoginPage() {
             <div className="flex items-center justify-between border-b border-white/15 pb-4">
               <div>
                 <p className="text-sm font-semibold text-emerald-50">
-                  SolarWorkflows
+                  SolarFlow CRM
                 </p>
                 <p className="mt-1 text-xs text-emerald-100">
                   Secure operations access
@@ -147,9 +149,7 @@ export function LoginPage() {
         <section className="flex items-center justify-center px-5 py-10 sm:px-10">
           <div className="w-full max-w-md">
             <div className="lg:hidden">
-              <span className="inline-flex rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800">
-                Solar CRM
-              </span>
+              <PortalLogo className="h-20 w-full max-w-xs object-contain object-left" />
               <h1 className="mt-5 text-3xl font-semibold tracking-normal text-slate-950">
                 Intelligent Solar Management
               </h1>
