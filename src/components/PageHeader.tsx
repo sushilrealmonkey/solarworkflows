@@ -6,7 +6,7 @@ type PageHeaderProps = {
 export function PageHeader({ title, description }: PageHeaderProps) {
   return (
     <header className="space-y-2">
-      <p className="text-sm font-medium text-brand-600">SolarFlow CRM</p>
+      <p className="text-sm font-medium text-brand-600">SolarOS</p>
       <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
         {title}
       </h1>

@@ -600,7 +600,7 @@ export function QuotationDetailPage() {
         <>
           <div>
             <header className="space-y-3">
-              <p className="text-sm font-medium text-brand-600">SolarFlow CRM</p>
+              <p className="text-sm font-medium text-brand-600">SolarOS</p>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
                   {quotation.quotation_title ?? quotation.quotation_code ?? "Quotation"}

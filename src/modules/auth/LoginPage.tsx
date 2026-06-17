@@ -130,7 +130,7 @@ export function LoginPage() {
             <div className="flex items-center justify-between border-b border-white/15 pb-4">
               <div>
                 <p className="text-sm font-semibold text-emerald-50">
-                  SolarFlow CRM
+                  SolarOS
                 </p>
                 <p className="mt-1 text-xs text-emerald-100">
                   Secure operations access

@@ -299,8 +299,8 @@ export async function buildInvoicePdf(
     bankLines: settingsBankLines(settings),
     termsAndConditions:
       invoice.b2b_sale_id
-        ? "This invoice is generated from SolarFlow CRM and is subject to the agreed B2B product sale terms."
-        : "This invoice is generated from SolarFlow CRM and is subject to the agreed project terms.",
+        ? "This invoice is generated from SolarOS and is subject to the agreed B2B product sale terms."
+        : "This invoice is generated from SolarOS and is subject to the agreed project terms.",
     notes: invoice.notes,
   });
 }
@@ -456,7 +456,7 @@ export async function buildPurchaseOrderPdf(
       netPayableAmount: order.total_amount,
     },
     termsAndConditions:
-      "This purchase order is generated from SolarFlow CRM and is subject to the agreed vendor terms.",
+      "This purchase order is generated from SolarOS and is subject to the agreed vendor terms.",
     notes: order.notes,
   });
 }
