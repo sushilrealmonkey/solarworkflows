@@ -106,7 +106,9 @@ export type CreatePlatformCompanyResult = {
 
 export type PlatformCompanyActionResult = {
   ok: boolean;
+  email_sent?: boolean;
   message?: string;
+  setup_link?: string | null;
 };
 
 export type PlatformDashboardSnapshot = {

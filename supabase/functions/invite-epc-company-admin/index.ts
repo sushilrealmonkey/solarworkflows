@@ -202,16 +202,15 @@ async function sendAdminSetupLink(
     );
   }
 
-  if (profile.auth_user_id && !isAdminStillInSetup(profile)) {
-    const { error } = await serviceClient.auth.resetPasswordForEmail(
+  if (profile.auth_user_id) {
+    const setupDelivery = await createPasswordSetupDelivery(
+      serviceClient,
       adminEmail,
-      {
-        redirectTo: `${appBaseUrl}/create-password`,
-      },
+      appBaseUrl,
     );
 
-    if (error) {
-      return jsonResponse({ error: error.message }, 400);
+    if (setupDelivery.error) {
+      return jsonResponse({ error: setupDelivery.error }, 400);
     }
 
     await serviceClient
@@ -221,7 +220,11 @@ async function sendAdminSetupLink(
 
     return jsonResponse({
       ok: true,
-      message: "Admin setup link sent",
+      email_sent: setupDelivery.email_sent,
+      message: setupDelivery.email_sent
+        ? "Admin password setup email sent"
+        : "Admin password setup link generated",
+      setup_link: setupDelivery.setup_link,
     });
   }
 
@@ -252,9 +255,17 @@ async function sendAdminSetupLink(
     return jsonResponse({ error: updateError.message }, 400);
   }
 
+  const setupDelivery = await createRecoverySetupLink(
+    serviceClient,
+    adminEmail,
+    appBaseUrl,
+  );
+
   return jsonResponse({
     ok: true,
+    email_sent: true,
     message: "Admin invite sent",
+    setup_link: setupDelivery.setup_link,
   });
 }
 
@@ -270,8 +281,58 @@ function sendInviteEmail(
   });
 }
 
-function isAdminStillInSetup(profile: AdminProfileRow) {
-  return profile.status === "invited" || !profile.onboarded_at;
+async function createPasswordSetupDelivery(
+  serviceClient: ReturnType<typeof createClient>,
+  email: string,
+  appBaseUrl: string,
+) {
+  const { error: emailError } = await serviceClient.auth.resetPasswordForEmail(
+    email,
+    {
+      redirectTo: `${appBaseUrl}/create-password`,
+    },
+  );
+  const setupLink = await createRecoverySetupLink(serviceClient, email, appBaseUrl);
+
+  if (emailError && setupLink.error) {
+    return {
+      email_sent: false,
+      error: `${emailError.message}. ${setupLink.error}`,
+      setup_link: null,
+    };
+  }
+
+  return {
+    email_sent: !emailError,
+    error: null,
+    setup_link: setupLink.setup_link,
+  };
+}
+
+async function createRecoverySetupLink(
+  serviceClient: ReturnType<typeof createClient>,
+  email: string,
+  appBaseUrl: string,
+) {
+  const { data, error } = await serviceClient.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: {
+      redirectTo: `${appBaseUrl}/create-password`,
+    },
+  });
+
+  if (error) {
+    return {
+      error: error.message,
+      setup_link: null,
+    };
+  }
+
+  return {
+    error: null,
+    setup_link: data.properties?.action_link ?? null,
+  };
 }
 
 async function updateCompanyStatus(

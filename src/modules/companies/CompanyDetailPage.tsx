@@ -38,12 +38,19 @@ import {
 } from "./companyUtils";
 import type {
   PlatformCompany,
+  PlatformCompanyActionResult,
   UpdatePlatformCompanyFormValues,
 } from "./types";
 
 type EditState = {
   values: UpdatePlatformCompanyFormValues;
   error: string | null;
+};
+
+type SetupLinkNotice = {
+  email: string;
+  emailSent: boolean;
+  link: string;
 };
 
 export function CompanyDetailPage() {
@@ -55,6 +62,8 @@ export function CompanyDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [editState, setEditState] = useState<EditState | null>(null);
+  const [setupLinkNotice, setSetupLinkNotice] =
+    useState<SetupLinkNotice | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const loadCompany = useCallback(async () => {
@@ -91,6 +100,7 @@ export function CompanyDetailPage() {
     try {
       setBusyAction(actionKey);
       setError(null);
+      setSetupLinkNotice(null);
       await action();
       await loadCompany();
       showToast(successMessage, "success");
@@ -160,6 +170,15 @@ export function CompanyDetailPage() {
     }
   }
 
+  async function copySetupLink(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      showToast("Setup link copied.", "success");
+    } catch {
+      showToast("Unable to copy setup link.", "error");
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -213,9 +232,21 @@ export function CompanyDetailPage() {
             disabled={Boolean(busyAction) || !company.admin || company.admin.status === "inactive"}
             onClick={() =>
               company.admin
-                ? void runAction("setup-link", "Admin setup link sent.", () =>
-                    sendPlatformAdminSetupLink(company.admin!.id),
-                  )
+                ? void runAction("setup-link", "Admin setup link prepared.", async () => {
+                    const result = await sendPlatformAdminSetupLink(
+                      company.admin!.id,
+                    );
+
+                    if (hasSetupLink(result)) {
+                      setSetupLinkNotice({
+                        email: company.admin!.email ?? "the primary admin",
+                        emailSent: result.email_sent !== false,
+                        link: result.setup_link,
+                      });
+                    }
+
+                    return result;
+                  })
                 : undefined
             }
             variant="secondary"
@@ -235,6 +266,35 @@ export function CompanyDetailPage() {
       {error ? (
         <section className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm leading-6 text-rose-900">
           {error}
+        </section>
+      ) : null}
+
+      {setupLinkNotice ? (
+        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <p className="font-semibold">
+                {setupLinkNotice.emailSent
+                  ? "Email requested. Manual setup link is ready."
+                  : "Manual setup link generated."}
+              </p>
+              <p className="mt-1 text-amber-900">
+                Send this link to {setupLinkNotice.email} if the email still does
+                not arrive.
+              </p>
+              <input
+                className="mt-3 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-slate-900"
+                readOnly
+                value={setupLinkNotice.link}
+              />
+            </div>
+            <Button
+              onClick={() => void copySetupLink(setupLinkNotice.link)}
+              variant="secondary"
+            >
+              Copy link
+            </Button>
+          </div>
         </section>
       ) : null}
 
@@ -529,6 +589,15 @@ function StatusBadge({ value }: { value: string | null | undefined }) {
   const tone = value === "active" ? "green" : value === "inactive" ? "red" : "amber";
 
   return <Badge tone={tone}>{labelize(value)}</Badge>;
+}
+
+function hasSetupLink(
+  result: PlatformCompanyActionResult,
+): result is PlatformCompanyActionResult & { setup_link: string } {
+  return (
+    typeof result.setup_link === "string" &&
+    result.setup_link.trim().length > 0
+  );
 }
 
 function Metric({ label, value }: { label: string; value: ReactNode }) {
