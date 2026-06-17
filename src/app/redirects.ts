@@ -2,7 +2,7 @@ type RedirectProfile = {
   is_super_admin: boolean | null;
 };
 
-const platformHomePath = "/companies";
+const platformHomePath = "/dashboard";
 const tenantHomePath = "/dashboard";
 
 export function authenticatedHomePath(profile: RedirectProfile | null) {
@@ -21,5 +21,10 @@ export function safeAuthenticatedRedirect(
 }
 
 export function isPlatformPath(pathname: string) {
-  return pathname === platformHomePath;
+  return (
+    pathname === "/dashboard" ||
+    pathname === "/companies" ||
+    pathname.startsWith("/companies/") ||
+    pathname === "/settings"
+  );
 }

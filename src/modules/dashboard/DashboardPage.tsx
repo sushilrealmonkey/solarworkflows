@@ -20,6 +20,10 @@ import type { PaymentWithRelations } from "../payments/types";
 import { getSurveyContact } from "../site-surveys/surveyUtils";
 import type { SiteSurveyWithRelations } from "../site-surveys/types";
 import {
+  fetchPlatformDashboardSnapshot,
+} from "../companies/companyApi";
+import type { PlatformDashboardSnapshot } from "../companies/types";
+import {
   aggregateDashboardSummary,
   emptyDashboardSummary,
   fetchDashboardFollowups,
@@ -33,6 +37,16 @@ import {
 } from "./dashboardApi";
 
 export function DashboardPage() {
+  const { profile } = useAuth();
+
+  if (profile?.is_super_admin) {
+    return <PlatformDashboard />;
+  }
+
+  return <TenantDashboard />;
+}
+
+function TenantDashboard() {
   const { profile, permissions, organization } = useAuth();
   const [summaryRows, setSummaryRows] = useState<DashboardSummaryRow[]>([]);
   const [summaryLoading, setSummaryLoading] = useState(true);
@@ -288,6 +302,141 @@ export function DashboardPage() {
           loading={operationalLoading}
           locked={!canViewDocuments}
         />
+      </section>
+    </div>
+  );
+}
+
+function PlatformDashboard() {
+  const [snapshot, setSnapshot] = useState<PlatformDashboardSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSnapshot() {
+      try {
+        setLoading(true);
+        setError(null);
+        const nextSnapshot = await fetchPlatformDashboardSnapshot();
+        if (isMounted) {
+          setSnapshot(nextSnapshot);
+        }
+      } catch (nextError) {
+        if (isMounted) {
+          setError(
+            nextError instanceof Error
+              ? nextError.message
+              : "Unable to load platform dashboard.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadSnapshot();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const metrics = [
+    ["Total EPC Companies", snapshot?.totalCompanies ?? 0],
+    ["Active Companies", snapshot?.activeCompanies ?? 0],
+    ["Inactive Companies", snapshot?.inactiveCompanies ?? 0],
+    ["Pending Admin Setup", snapshot?.pendingAdminSetup ?? 0],
+    ["Active EPC Admins", snapshot?.activeAdmins ?? 0],
+    ["Total Users", snapshot?.totalUsers ?? 0],
+    ["Customers", snapshot?.totalCustomers ?? 0],
+    ["Leads", snapshot?.totalLeads ?? 0],
+    ["Active Projects", snapshot?.activeProjects ?? 0],
+    ["Completed Projects", snapshot?.completedProjects ?? 0],
+    ["Pending Surveys", snapshot?.pendingSiteSurveys ?? 0],
+    ["Pending Documents", snapshot?.pendingDocuments ?? 0],
+  ] satisfies Array<[string, number]>;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Super Admin Dashboard"
+        description="Platform-level snapshot across EPC company workspaces, admins, setup status, and activity."
+      />
+
+      {error ? <ErrorPanel message={error} /> : null}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map(([label, value]) => (
+          <MetricCard key={label} label={label} loading={loading} value={value} />
+        ))}
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
+        <WidgetFrame
+          title="EPC Companies"
+          locked={false}
+          action={
+            <Link className="text-sm font-semibold text-brand-700" to="/companies">
+              Open
+            </Link>
+          }
+        >
+          {loading ? <LoadingRows count={5} /> : null}
+          {!loading && snapshot?.companies.length === 0 ? (
+            <EmptyState>No EPC companies invited yet.</EmptyState>
+          ) : null}
+          {!loading && snapshot && snapshot.companies.length > 0 ? (
+            <div className="mt-4 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-100">
+              {snapshot.companies.slice(0, 8).map((company) => (
+                <Link
+                  className="grid gap-3 bg-stone-50 p-3 hover:bg-brand-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  key={company.id}
+                  to={`/companies/${company.id}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-slate-950">
+                      {company.name}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-slate-500">
+                      {company.slug} / {company.admin?.email ?? "No admin email"}
+                    </span>
+                  </span>
+                  <span className="text-sm font-semibold text-slate-700">
+                    {labelize(company.status)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : null}
+        </WidgetFrame>
+
+        <WidgetFrame title="Recent Activity" locked={false}>
+          {loading ? <LoadingRows count={5} /> : null}
+          {!loading && (snapshot?.recentActivity.length ?? 0) === 0 ? (
+            <EmptyState>No platform activity yet.</EmptyState>
+          ) : null}
+          {!loading && snapshot && snapshot.recentActivity.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              {snapshot.recentActivity.map((activity) => (
+                <article
+                  className="rounded-lg border border-stone-100 bg-stone-50 p-3"
+                  key={activity.id}
+                >
+                  <p className="text-sm font-semibold text-slate-950">
+                    {labelize(activity.module)} / {labelize(activity.action)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {formatDateTime(activity.created_at)}
+                  </p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </WidgetFrame>
       </section>
     </div>
   );

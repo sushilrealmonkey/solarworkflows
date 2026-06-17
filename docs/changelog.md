@@ -3,6 +3,23 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-06-17
+
+- Added a Super Admin dashboard with EPC-level platform metrics, company setup
+  status, and recent activity.
+- Changed super-admin navigation to Dashboard, EPC Companies, and Settings, with
+  `/dashboard` as the super-admin landing route.
+- Added a route-backed EPC company detail page with company profile fields,
+  primary admin setup state, workspace access summary, activity snapshot, edit
+  actions, and Phase 2 subscription/financial placeholders.
+- Added trusted Edge Function actions for EPC company profile updates and
+  guarded delete; guarded delete blocks companies with operational records and
+  directs admins to mark them inactive instead.
+- Added platform-level Super Admin Settings placeholders for onboarding defaults
+  and future subscription controls.
+- Added a shared dashboard-shell logout button backed by Supabase
+  `auth.signOut()` for every authenticated user.
+
 ## 2026-06-16
 
 - Restricted super-admin navigation and redirects to the platform EPC Companies

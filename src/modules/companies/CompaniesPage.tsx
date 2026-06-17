@@ -5,6 +5,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -34,6 +35,7 @@ const emptyFormValues: CreatePlatformCompanyFormValues = {
 export function CompaniesPage() {
   const { profile } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [companies, setCompanies] = useState<PlatformCompany[]>([]);
   const [values, setValues] =
     useState<CreatePlatformCompanyFormValues>(emptyFormValues);
@@ -171,6 +173,7 @@ export function CompaniesPage() {
       setSelectedCompanyId(result.organization_id);
       setViewMode("companies");
       showToast("EPC company invite email sent.", "success");
+      navigate(`/companies/${result.organization_id}`);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -309,7 +312,7 @@ export function CompaniesPage() {
                   }}
                   onSelect={() => {
                     setSelectedCompanyId(company.id);
-                    setViewMode("companies");
+                    navigate(`/companies/${company.id}`);
                   }}
                 />
               ))}
@@ -365,7 +368,7 @@ export function CompaniesPage() {
                     company={company}
                     isSelected={selectedCompany?.id === company.id}
                     key={company.id}
-                    onSelect={() => setSelectedCompanyId(company.id)}
+                    onSelect={() => navigate(`/companies/${company.id}`)}
                   />
                 ))}
               </div>

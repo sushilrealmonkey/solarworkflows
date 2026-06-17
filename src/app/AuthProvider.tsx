@@ -54,6 +54,7 @@ type AuthContextValue = {
   organization: OrganizationBranding;
   errorMessage: string | null;
   refresh: () => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 type UserRoleNameRow = {
@@ -287,6 +288,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadUserContext(data.session);
   }, [loadUserContext]);
 
+  const signOut = useCallback(async () => {
+    if (!supabase) {
+      resetUserState();
+      setSession(null);
+      setStatus("unauthenticated");
+      return;
+    }
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    resetUserState();
+    setSession(null);
+    setStatus("unauthenticated");
+  }, [resetUserState]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -325,6 +345,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       organization,
       errorMessage,
       refresh,
+      signOut,
     }),
     [
       status,
@@ -335,6 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       organization,
       errorMessage,
       refresh,
+      signOut,
     ],
   );
 

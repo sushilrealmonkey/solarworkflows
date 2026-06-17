@@ -26,13 +26,8 @@ function navigationRoute(path: string): NavigationItem {
 }
 
 export const navigationItems: NavigationItem[] = [
-  {
-    label: "Platform",
-    path: "/platform",
-    superAdminOnly: true,
-    children: [navigationRoute("/companies")],
-  },
   navigationRoute("/dashboard"),
+  navigationRoute("/companies"),
   {
     label: "Sales",
     path: "/sales",
@@ -77,6 +72,8 @@ export const navigationItems: NavigationItem[] = [
   navigationRoute("/settings"),
 ];
 
-export const platformNavigationItems = navigationItems.filter(
-  (item) => item.superAdminOnly,
-);
+export const platformNavigationItems = [
+  navigationRoute("/dashboard"),
+  navigationRoute("/companies"),
+  navigationRoute("/settings"),
+];

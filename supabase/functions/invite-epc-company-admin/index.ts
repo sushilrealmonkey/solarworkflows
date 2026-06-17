@@ -5,14 +5,26 @@ type InviteRequestBody = {
     | "create_company"
     | "send_admin_setup_link"
     | "update_company_status"
-    | "update_admin_status";
+    | "update_admin_status"
+    | "update_company_profile"
+    | "guarded_delete_company";
   admin_profile_id?: string;
   organization_id?: string;
   organization_name?: string;
   organization_slug?: string;
+  subdomain?: string | null;
+  custom_domain?: string | null;
   admin_full_name?: string;
   admin_email?: string;
   admin_phone?: string | null;
+  company_logo_url?: string | null;
+  address?: string | null;
+  contact_person?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  gst_number?: string | null;
+  timezone?: string | null;
+  currency?: string | null;
   status?: string;
 };
 
@@ -96,6 +108,14 @@ Deno.serve(async (request) => {
 
     if (action === "update_admin_status") {
       return await updateAdminStatus(serviceClient, body);
+    }
+
+    if (action === "update_company_profile") {
+      return await updateCompanyProfile(serviceClient, body);
+    }
+
+    if (action === "guarded_delete_company") {
+      return await guardedDeleteCompany(serviceClient, body);
     }
 
     if (action !== "create_company") {
@@ -318,6 +338,224 @@ async function updateAdminStatus(
   return jsonResponse({
     ok: true,
     message: `Admin marked ${status}`,
+  });
+}
+
+async function updateCompanyProfile(
+  serviceClient: ReturnType<typeof createClient>,
+  body: InviteRequestBody,
+) {
+  const organizationId = normalizeText(body.organization_id);
+  const organizationName = normalizeText(body.organization_name);
+  const organizationSlug = slugify(normalizeText(body.organization_slug));
+  const adminFullName = normalizeText(body.admin_full_name);
+  const adminEmail = normalizeEmail(body.admin_email ?? "");
+  const adminPhone = normalizeNullableText(body.admin_phone ?? null);
+  const subdomain = normalizeNullableText(body.subdomain ?? null);
+  const customDomain = normalizeNullableText(body.custom_domain ?? null);
+
+  if (!organizationId) {
+    return jsonResponse({ error: "Organization is required" }, 400);
+  }
+
+  if (!organizationName) {
+    return jsonResponse({ error: "Company name is required" }, 400);
+  }
+
+  if (!organizationSlug) {
+    return jsonResponse({ error: "Workspace slug is required" }, 400);
+  }
+
+  if (!adminFullName) {
+    return jsonResponse({ error: "Primary admin name is required" }, 400);
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+    return jsonResponse({ error: "Enter a valid primary admin email" }, 400);
+  }
+
+  const { data: adminProfileData, error: profileError } = await serviceClient
+    .from("users_profile")
+    .select("id, auth_user_id, email")
+    .eq("organization_id", organizationId)
+    .eq("is_super_admin", false)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (profileError) {
+    return jsonResponse({ error: profileError.message }, 400);
+  }
+
+  const { error: organizationError } = await serviceClient
+    .from("organizations")
+    .update({
+      name: organizationName,
+      slug: organizationSlug,
+      subdomain: subdomain ?? organizationSlug,
+      custom_domain: customDomain,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", organizationId);
+
+  if (organizationError) {
+    return jsonResponse({ error: organizationError.message }, 400);
+  }
+
+  const { error: settingsError } = await serviceClient
+    .from("organization_settings")
+    .upsert(
+      {
+        organization_id: organizationId,
+        company_name: organizationName,
+        company_logo_url: normalizeNullableText(body.company_logo_url ?? null),
+        address: normalizeNullableText(body.address ?? null),
+        contact_person: normalizeNullableText(body.contact_person ?? null),
+        contact_email: normalizeNullableText(body.contact_email ?? null),
+        contact_phone: normalizeNullableText(body.contact_phone ?? null),
+        gst_number: normalizeNullableText(body.gst_number ?? null),
+        timezone: normalizeNullableText(body.timezone ?? null),
+        currency: normalizeNullableText(body.currency ?? null),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "organization_id" },
+    );
+
+  if (settingsError) {
+    return jsonResponse({ error: settingsError.message }, 400);
+  }
+
+  if (adminProfileData) {
+    const adminProfile = adminProfileData as AdminProfileRow;
+
+    if (
+      adminProfile.auth_user_id &&
+      adminProfile.email &&
+      normalizeEmail(adminProfile.email) !== adminEmail
+    ) {
+      const { error: authUpdateError } =
+        await serviceClient.auth.admin.updateUserById(adminProfile.auth_user_id, {
+          email: adminEmail,
+        });
+
+      if (authUpdateError) {
+        return jsonResponse({ error: authUpdateError.message }, 400);
+      }
+    }
+
+    const { error: adminUpdateError } = await serviceClient
+      .from("users_profile")
+      .update({
+        full_name: adminFullName,
+        email: adminEmail,
+        phone: adminPhone,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", adminProfile.id)
+      .eq("is_super_admin", false);
+
+    if (adminUpdateError) {
+      return jsonResponse({ error: adminUpdateError.message }, 400);
+    }
+  }
+
+  return jsonResponse({
+    ok: true,
+    message: "EPC company updated",
+  });
+}
+
+async function guardedDeleteCompany(
+  serviceClient: ReturnType<typeof createClient>,
+  body: InviteRequestBody,
+) {
+  const organizationId = normalizeText(body.organization_id);
+
+  if (!organizationId) {
+    return jsonResponse({ error: "Organization is required" }, 400);
+  }
+
+  const operationalTables = [
+    "customers",
+    "leads",
+    "site_surveys",
+    "projects",
+    "quotations",
+    "payments",
+    "inventory_items",
+    "vendors",
+    "purchase_orders",
+    "documents",
+    "proforma_invoices",
+    "invoices",
+    "b2b_sales",
+  ];
+  const blockers: string[] = [];
+
+  for (const tableName of operationalTables) {
+    const { count, error } = await serviceClient
+      .from(tableName)
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", organizationId);
+
+    if (error) {
+      return jsonResponse({ error: error.message }, 400);
+    }
+
+    if ((count ?? 0) > 0) {
+      blockers.push(`${tableName}: ${count}`);
+    }
+  }
+
+  const { data: profilesData, error: profilesError } = await serviceClient
+    .from("users_profile")
+    .select("id, auth_user_id, organization_id, full_name, email, status, onboarded_at")
+    .eq("organization_id", organizationId)
+    .eq("is_super_admin", false);
+
+  if (profilesError) {
+    return jsonResponse({ error: profilesError.message }, 400);
+  }
+
+  const profiles = (profilesData ?? []) as AdminProfileRow[];
+
+  if (profiles.length > 1) {
+    blockers.push(`users_profile: ${profiles.length}`);
+  }
+
+  if (blockers.length > 0) {
+    return jsonResponse(
+      {
+        error:
+          `This EPC company has operational data (${blockers.join(", ")}). Mark it inactive instead of deleting it.`,
+      },
+      409,
+    );
+  }
+
+  for (const profile of profiles) {
+    if (profile.auth_user_id) {
+      const { error: deleteAuthError } =
+        await serviceClient.auth.admin.deleteUser(profile.auth_user_id);
+
+      if (deleteAuthError) {
+        return jsonResponse({ error: deleteAuthError.message }, 400);
+      }
+    }
+  }
+
+  const { error: deleteOrganizationError } = await serviceClient
+    .from("organizations")
+    .delete()
+    .eq("id", organizationId);
+
+  if (deleteOrganizationError) {
+    return jsonResponse({ error: deleteOrganizationError.message }, 400);
+  }
+
+  return jsonResponse({
+    ok: true,
+    message: "EPC company deleted",
   });
 }
 

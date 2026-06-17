@@ -39,6 +39,7 @@ import { ProformaInvoicesPage } from "../modules/proforma-invoices/ProformaInvoi
 import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/ProformaInvoiceDetailPage";
 import { ReportsPage } from "../modules/reports/ReportsPage";
 import { CompaniesPage } from "../modules/companies/CompaniesPage";
+import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
 import {
   OrganizationSettingsPage,
   RolesPage,
@@ -56,6 +57,7 @@ export default function App() {
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<DefaultWorkspaceRedirect />} />
           <Route path="/companies" element={<CompaniesPage />} />
+          <Route path="/companies/:id" element={<CompanyDetailPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route
             path="/customers"
@@ -136,6 +138,7 @@ export default function App() {
                 ![
                   "/dashboard",
                   "/companies",
+                  "/companies/:id",
                   "/customers/project-based",
                   "/customers/b2b-direct",
                   "/leads",

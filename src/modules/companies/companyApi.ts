@@ -3,10 +3,14 @@ import { supabase } from "../../services/supabaseClient";
 import type {
   CreatePlatformCompanyFormValues,
   CreatePlatformCompanyResult,
+  PlatformActivityLog,
   PlatformCompany,
   PlatformCompanyActionResult,
+  PlatformCompanyActivitySummary,
   PlatformCompanyAdmin,
+  PlatformDashboardSnapshot,
   PlatformCompanySettings,
+  UpdatePlatformCompanyFormValues,
 } from "./types";
 
 type OrganizationRow = {
@@ -30,6 +34,10 @@ type OrganizationSettingsRow = PlatformCompanySettings & {
 
 type OrganizationOwnedRow = {
   organization_id: string | null;
+};
+
+type DashboardSummaryRow = PlatformCompanyActivitySummary & {
+  organization_id: string;
 };
 
 function requireSupabase() {
@@ -113,7 +121,7 @@ export async function fetchPlatformCompanies() {
     client
       .from("organization_settings")
       .select(
-        "organization_id, contact_email, contact_phone, gst_number, address, company_logo_url",
+        "organization_id, company_name, company_details, contact_email, contact_phone, contact_person, gst_number, address, company_logo_url, timezone, currency",
       )
       .in("organization_id", organizationIds),
     client
@@ -137,11 +145,16 @@ export async function fetchPlatformCompanies() {
     }
 
     settingsByOrganizationId.set(settings.organization_id, {
+      company_name: settings.company_name,
+      company_details: settings.company_details,
       contact_email: settings.contact_email,
       contact_phone: settings.contact_phone,
+      contact_person: settings.contact_person,
       gst_number: settings.gst_number,
       address: settings.address,
       company_logo_url: settings.company_logo_url,
+      timezone: settings.timezone,
+      currency: settings.currency,
     });
   }
 
@@ -164,6 +177,91 @@ export async function fetchPlatformCompanies() {
     role_count: roleCountByOrganizationId.get(organization.id) ?? 0,
     user_count: userCountByOrganizationId.get(organization.id) ?? 0,
   })) satisfies PlatformCompany[];
+}
+
+export async function fetchPlatformCompany(organizationId: string) {
+  const companies = await fetchPlatformCompanies();
+  const company = companies.find((item) => item.id === organizationId);
+
+  if (!company) {
+    throw new Error("EPC company not found.");
+  }
+
+  const [summaryByOrganizationId, recentActivity] = await Promise.all([
+    fetchDashboardSummaryByOrganizationId(),
+    fetchPlatformActivityLogs(organizationId, 8),
+  ]);
+
+  return {
+    ...company,
+    activity_summary:
+      summaryByOrganizationId.get(organizationId) ?? emptyActivitySummary(),
+    recent_activity: recentActivity,
+  } satisfies PlatformCompany;
+}
+
+export async function fetchPlatformDashboardSnapshot() {
+  const [companies, summaryByOrganizationId, recentActivity] = await Promise.all([
+    fetchPlatformCompanies(),
+    fetchDashboardSummaryByOrganizationId(),
+    fetchPlatformActivityLogs(null, 10),
+  ]);
+
+  const summary = Array.from(summaryByOrganizationId.values()).reduce(
+    (total, row) => ({
+      total_customers: total.total_customers + Number(row.total_customers ?? 0),
+      total_leads: total.total_leads + Number(row.total_leads ?? 0),
+      active_projects: total.active_projects + Number(row.active_projects ?? 0),
+      completed_projects:
+        total.completed_projects + Number(row.completed_projects ?? 0),
+      pending_site_surveys:
+        total.pending_site_surveys + Number(row.pending_site_surveys ?? 0),
+      quotations_sent: total.quotations_sent + Number(row.quotations_sent ?? 0),
+      quotations_accepted:
+        total.quotations_accepted + Number(row.quotations_accepted ?? 0),
+      total_project_value:
+        total.total_project_value + Number(row.total_project_value ?? 0),
+      total_received_amount:
+        total.total_received_amount + Number(row.total_received_amount ?? 0),
+      total_balance_due:
+        total.total_balance_due + Number(row.total_balance_due ?? 0),
+      low_stock_items: total.low_stock_items + Number(row.low_stock_items ?? 0),
+      pending_documents:
+        total.pending_documents + Number(row.pending_documents ?? 0),
+    }),
+    emptyActivitySummary(),
+  );
+
+  return {
+    totalCompanies: companies.length,
+    activeCompanies: companies.filter((company) => company.status === "active")
+      .length,
+    inactiveCompanies: companies.filter(
+      (company) => company.status === "inactive",
+    ).length,
+    pendingAdminSetup: companies.filter(isAdminSetupPending).length,
+    activeAdmins: companies.filter((company) => company.admin?.status === "active")
+      .length,
+    totalUsers: companies.reduce(
+      (total, company) => total + Number(company.user_count ?? 0),
+      0,
+    ),
+    totalCustomers: summary.total_customers,
+    totalLeads: summary.total_leads,
+    activeProjects: summary.active_projects,
+    completedProjects: summary.completed_projects,
+    pendingSiteSurveys: summary.pending_site_surveys,
+    quotationsSent: summary.quotations_sent,
+    quotationsAccepted: summary.quotations_accepted,
+    lowStockItems: summary.low_stock_items,
+    pendingDocuments: summary.pending_documents,
+    recentActivity,
+    companies: companies.map((company) => ({
+      ...company,
+      activity_summary:
+        summaryByOrganizationId.get(company.id) ?? emptyActivitySummary(),
+    })),
+  } satisfies PlatformDashboardSnapshot;
 }
 
 export async function createPlatformCompany(
@@ -219,6 +317,38 @@ export async function updatePlatformAdminStatus(
   });
 }
 
+export async function updatePlatformCompanyProfile(
+  organizationId: string,
+  values: UpdatePlatformCompanyFormValues,
+) {
+  return invokeCompanyAction({
+    action: "update_company_profile",
+    organization_id: organizationId,
+    organization_name: values.organization_name.trim(),
+    organization_slug: values.organization_slug.trim(),
+    subdomain: nullable(values.subdomain),
+    custom_domain: nullable(values.custom_domain),
+    company_logo_url: nullable(values.company_logo_url),
+    address: nullable(values.address),
+    contact_person: nullable(values.contact_person),
+    contact_email: nullable(values.contact_email),
+    contact_phone: nullable(values.contact_phone),
+    gst_number: nullable(values.gst_number),
+    timezone: nullable(values.timezone),
+    currency: nullable(values.currency),
+    admin_full_name: values.admin_full_name.trim(),
+    admin_email: nullable(values.admin_email),
+    admin_phone: nullable(values.admin_phone),
+  });
+}
+
+export async function guardedDeletePlatformCompany(organizationId: string) {
+  return invokeCompanyAction({
+    action: "guarded_delete_company",
+    organization_id: organizationId,
+  });
+}
+
 async function invokeCompanyAction(body: Record<string, unknown>) {
   const client = requireSupabase();
   const { data, error } = await client.functions.invoke(
@@ -231,6 +361,93 @@ async function invokeCompanyAction(body: Record<string, unknown>) {
   }
 
   return data as PlatformCompanyActionResult;
+}
+
+async function fetchDashboardSummaryByOrganizationId() {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("dashboard_summary");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const summaryByOrganizationId = new Map<string, PlatformCompanyActivitySummary>();
+
+  for (const row of (data ?? []) as DashboardSummaryRow[]) {
+    summaryByOrganizationId.set(row.organization_id, {
+      total_customers: Number(row.total_customers ?? 0),
+      total_leads: Number(row.total_leads ?? 0),
+      active_projects: Number(row.active_projects ?? 0),
+      completed_projects: Number(row.completed_projects ?? 0),
+      pending_site_surveys: Number(row.pending_site_surveys ?? 0),
+      quotations_sent: Number(row.quotations_sent ?? 0),
+      quotations_accepted: Number(row.quotations_accepted ?? 0),
+      total_project_value: Number(row.total_project_value ?? 0),
+      total_received_amount: Number(row.total_received_amount ?? 0),
+      total_balance_due: Number(row.total_balance_due ?? 0),
+      low_stock_items: Number(row.low_stock_items ?? 0),
+      pending_documents: Number(row.pending_documents ?? 0),
+    });
+  }
+
+  return summaryByOrganizationId;
+}
+
+async function fetchPlatformActivityLogs(
+  organizationId: string | null,
+  limit: number,
+) {
+  const client = requireSupabase();
+  let query = client
+    .from("activity_logs")
+    .select("id, module, action, description, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (organizationId) {
+    query = query.eq("organization_id", organizationId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as PlatformActivityLog[];
+}
+
+function emptyActivitySummary(): PlatformCompanyActivitySummary {
+  return {
+    total_customers: 0,
+    total_leads: 0,
+    active_projects: 0,
+    completed_projects: 0,
+    pending_site_surveys: 0,
+    quotations_sent: 0,
+    quotations_accepted: 0,
+    total_project_value: 0,
+    total_received_amount: 0,
+    total_balance_due: 0,
+    low_stock_items: 0,
+    pending_documents: 0,
+  };
+}
+
+function isAdminSetupPending(company: PlatformCompany) {
+  if (!company.admin) {
+    return true;
+  }
+
+  if (company.admin.status === "inactive") {
+    return false;
+  }
+
+  return (
+    company.admin.status === "invited" ||
+    !company.admin.auth_user_id ||
+    !company.admin.onboarded_at
+  );
 }
 
 async function getFunctionErrorMessage(error: unknown) {

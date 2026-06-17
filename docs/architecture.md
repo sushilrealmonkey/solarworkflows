@@ -41,11 +41,22 @@ When adding a module route:
 - Keep descriptions factual.
 - Mark platform-only routes with `superAdminOnly`.
 
+Super-admin routes are intentionally narrow. Super admins land on `/dashboard`
+and can access `/dashboard`, `/companies`, `/companies/:id`, and `/settings`.
+Tenant operational routes redirect super admins back to the platform area.
+Tenant users continue to use permission-filtered navigation and dashboard
+routes.
+
 ## Backend Boundary
 
 Supabase is the backend. Frontend modules should call module API helpers, and
 those helpers should use the shared Supabase client. Security must remain in
 Supabase RLS, not in the React component tree.
+
+Privileged platform actions, including EPC admin invitations, setup-link resend,
+workspace/admin status changes, EPC profile edits, and guarded EPC company
+delete, run through Supabase Edge Functions instead of exposing service-role
+capabilities to the browser.
 
 ## Data Boundary
 

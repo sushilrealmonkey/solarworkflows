@@ -7,7 +7,7 @@ the repository. It does not approve new business logic by itself.
 
 | Area | Current intent |
 | --- | --- |
-| Dashboard | Tenant-aware overview and operational widgets. |
+| Dashboard | Tenant-aware overview and operational widgets; super admins see EPC-level platform metrics and recent activity. |
 | CRM | Nested Project Based and B2B/Direct customer lists, leads, lead details, customer details, and follow-ups. |
 | Site Surveys | Site survey list/detail workflows and survey records. |
 | Quotations | Quotation list/detail/create workflows, proposal fields, payment terms, warranties, PDFs, BOM-related data, and accepted-quotation inventory reservations. |
@@ -23,9 +23,9 @@ the repository. It does not approve new business logic by itself.
 | Payments | Payment list/detail foundations, project payment summary support, proforma invoice receipts, and B2B invoice payment receipts. |
 | Documents | Document metadata, generated PDF support, and storage-aware document handling. |
 | Reports | Reporting page and report API foundation. |
-| Settings | Organization settings, branding, and access-related settings foundation. |
+| Settings | Tenant organization settings, branding, and access settings; super admins see platform-level onboarding/default placeholders. |
 | Users, Permissions, Companies, Domains | Tenant/platform administration foundations. |
-| EPC Companies | Super-admin company management console for creating tenant workspaces, inviting first admins, tracking setup, and managing workspace/admin status. |
+| EPC Companies | Super-admin company management console for creating tenant workspaces, inviting first admins, tracking setup, managing workspace/admin status, editing company profile fields, reviewing a route-backed detail page, and guarded setup-only deletion. |
 | EPC Admin Invite Activation | Supabase invite email activation for EPC company admins, linked through Supabase Auth and `users_profile`. |
 
 ## Access And Permissions
@@ -35,17 +35,26 @@ the repository. It does not approve new business logic by itself.
 - UI navigation can hide unavailable modules, but backend policies must still
   prevent unauthorized reads and writes.
 - Platform-only areas must remain clearly separated from tenant user workflows.
-- Super admins land on `/companies` and only see platform navigation. Tenant
-  operational routes redirect super admins back to the platform area.
+- Super admins land on `/dashboard` and only see platform navigation:
+  Dashboard, EPC Companies, and Settings. Tenant operational routes redirect
+  super admins back to the platform area.
 - Super admins can add EPC company workspaces through the platform Companies
   page. That workflow creates the organization, settings row, default Admin
   role, role permissions, and first admin profile.
 - Super admins can resend admin setup links and mark EPC workspaces or primary
   admin profiles active/inactive from the EPC Companies page.
+- Super admins can open `/companies/:id` to review full EPC company details,
+  edit company/admin profile fields, review activity metrics, see Phase 2
+  subscription placeholders, and perform guarded delete. Guarded delete only
+  succeeds for setup-only companies; companies with operational records should
+  be marked inactive instead.
 - EPC company admins activate their own accounts from the Supabase invite email
   sent during platform onboarding. The invite opens `/create-password`, where
   the admin sets a password and `sync_auth_user_profile` links the Auth user to
   the invited profile.
+- Every authenticated dashboard user has a shared Logout button in the shell
+  header. Logout calls Supabase `auth.signOut()` and returns the user to
+  `/login`.
 
 ## Documentation Boundary
 

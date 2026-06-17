@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { Navigate, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   navigationItems,
   platformNavigationItems,
@@ -12,9 +12,12 @@ const linkBase =
   "flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
 
 export function DashboardLayout() {
-  const { profile, roleNames, permissions, organization } = useAuth();
+  const { profile, roleNames, permissions, organization, signOut } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
 
   const visibleNavigationItems = useMemo<NavigationItem[]>(() => {
     if (profile?.is_super_admin) {
@@ -59,7 +62,7 @@ export function DashboardLayout() {
   }, [permissions, profile?.is_super_admin]);
 
   if (profile?.is_super_admin && !isPlatformPath(location.pathname)) {
-    return <Navigate to="/companies" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const shellStyle = {
@@ -67,6 +70,21 @@ export function DashboardLayout() {
     "--org-secondary": organization.secondaryColor,
     "--org-accent": organization.accentColor,
   } as CSSProperties;
+
+  async function handleSignOut() {
+    try {
+      setIsSigningOut(true);
+      setLogoutError(null);
+      await signOut();
+      navigate("/login", { replace: true });
+    } catch (error) {
+      setLogoutError(
+        error instanceof Error ? error.message : "Unable to sign out.",
+      );
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
 
   return (
     <div
@@ -116,15 +134,30 @@ export function DashboardLayout() {
                 </p>
               </div>
             </div>
-            <div className="min-w-0 text-right">
-              <p className="truncate text-sm font-semibold text-slate-950">
-                {profile?.full_name ?? "Workspace user"}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-slate-500">
-                {profile?.is_super_admin
-                  ? "Super Admin"
-                  : roleNames.join(", ") || "No role assigned"}
-              </p>
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="min-w-0 text-right">
+                <p className="truncate text-sm font-semibold text-slate-950">
+                  {profile?.full_name ?? "Workspace user"}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-slate-500">
+                  {profile?.is_super_admin
+                    ? "Super Admin"
+                    : roleNames.join(", ") || "No role assigned"}
+                </p>
+                {logoutError ? (
+                  <p className="mt-0.5 max-w-48 truncate text-xs text-rose-700">
+                    {logoutError}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                className="shrink-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={isSigningOut}
+                onClick={() => void handleSignOut()}
+                type="button"
+              >
+                {isSigningOut ? "Signing out" : "Logout"}
+              </button>
             </div>
           </div>
         </header>
