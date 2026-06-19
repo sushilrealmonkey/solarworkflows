@@ -9,7 +9,7 @@ type PortalLogoProps = {
 export function PortalLogo({ className, tone = "light" }: PortalLogoProps) {
   return (
     <img
-      alt="SolarOS"
+      alt="Bizlee"
       className={className}
       src={tone === "dark" ? solarOsLogoOnDarkUrl : solarOsLogoUrl}
     />
