@@ -61,16 +61,40 @@ APP_BASE_URL=
 ```
 
 `APP_BASE_URL` should be the deployed frontend origin, without a trailing slash.
-If it is not configured, the Edge Function falls back to the browser request
-origin. Supabase Auth URL configuration must include each deployed app origin
-and the `/create-password` redirect URL, for example:
+For production it should be:
 
 ```text
-http://localhost:3002/create-password
-https://<production-domain>/create-password
+APP_BASE_URL=https://app.getbizlee.com
 ```
 
+If it is not configured, the Edge Function falls back to the browser request
+origin. Supabase Auth URL configuration must use the deployed app origin as the
+Site URL and include the exact `/create-password` redirect URL. For production:
+
+```text
+Site URL: https://app.getbizlee.com
+Redirect URL: https://app.getbizlee.com/create-password
+```
+
+Keep local development redirect URLs in the allowlist as needed, such as
+`http://localhost:3000/create-password` or
+`http://127.0.0.1:3000/create-password`.
+
 The current Supabase project files live under `supabase/`.
+
+## Railway URL Setup
+
+The frontend custom domain should be configured in Railway as
+`https://app.getbizlee.com`. After adding or changing a domain:
+
+- Confirm the domain responds over HTTPS.
+- Confirm `/create-password` serves the frontend app shell.
+- Confirm Railway frontend environment variables point to the intended Supabase
+  project.
+- Confirm the Supabase Edge Function secret `APP_BASE_URL` matches the deployed
+  frontend origin.
+- Confirm Supabase Auth URL Configuration has the production Site URL and
+  exact create-password redirect URL above.
 
 ## Migrations
 

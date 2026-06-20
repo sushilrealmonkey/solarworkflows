@@ -114,8 +114,17 @@ Super admins invite EPC company admins through the platform Companies page. That
 flow calls the `invite-epc-company-admin` Supabase Edge Function, which requires
 the server-only Supabase environment variables above. `APP_BASE_URL` controls
 the invite redirect target and should point to the frontend origin that serves
-`/create-password`; if omitted, the function falls back to the browser request
-origin.
+`/create-password`; for production use `https://app.getbizlee.com`. If omitted,
+the function falls back to the browser request origin.
+
+For production Supabase Auth URL Configuration, set:
+
+```text
+Site URL: https://app.getbizlee.com
+Redirect URL: https://app.getbizlee.com/create-password
+```
+
+Keep local development redirect URLs in the allowlist as needed.
 
 The same Edge Function also handles trusted setup-link resend, workspace status,
 and primary-admin status actions after checking the caller with

@@ -127,6 +127,7 @@ Deno.serve(async (request) => {
     const { data: inviteData, error: inviteError } =
       await sendInviteEmail(serviceClient, payload.admin_email, appBaseUrl, {
         full_name: payload.admin_full_name,
+        organization_name: payload.organization_name,
         organization_slug: payload.organization_slug,
       });
 
