@@ -66,7 +66,7 @@ export function CreatePasswordPage() {
     setInviteVerificationStatus("verifying");
 
     try {
-      await verifyInvitedAdminToken(inviteLink.tokenHash);
+      await verifyInvitedAdminToken(inviteLink.tokenHash, inviteLink.type);
       await refresh();
       setInviteVerificationStatus("complete");
     } catch (error) {
@@ -345,16 +345,21 @@ function getErrorMessage(error: unknown) {
 }
 
 type InviteLinkState =
-  | { kind: "token"; tokenHash: string }
+  | {
+      kind: "token";
+      tokenHash: string;
+      type: "invite" | "recovery";
+    }
   | { kind: "error" }
   | { kind: "none" };
 
 function readInviteLink(): InviteLinkState {
   const query = new URLSearchParams(window.location.search);
   const tokenHash = query.get("token_hash")?.trim();
+  const type = query.get("type");
 
-  if (tokenHash && query.get("type") === "invite") {
-    return { kind: "token", tokenHash };
+  if (tokenHash && (type === "invite" || type === "recovery")) {
+    return { kind: "token", tokenHash, type };
   }
 
   const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));

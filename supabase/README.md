@@ -8,9 +8,10 @@ Functions for SolarWorkflows.
 - `invite-epc-company-admin` sends Supabase Auth invite/setup emails for EPC
   company admins and handles super-admin workspace/admin status actions from a
   trusted service-role environment.
-- `templates/invite.html` is the source-controlled Supabase Auth invite email
-  template. Copy it into the hosted project's **Authentication > Email
-  Templates > Invite user** editor when the template changes.
+- `templates/invite.html` and `templates/recovery.html` are the
+  source-controlled Supabase Auth emails for initial invitations and resent
+  password setup links. Publish them to the hosted Auth configuration whenever
+  either template changes.
 
 Deploy function secrets with server-only values. Do not expose the
 `SUPABASE_SERVICE_ROLE_KEY` through frontend `VITE_` variables.
@@ -22,11 +23,11 @@ Resend directly. Configure the hosted Supabase project under **Authentication >
 SMTP Settings** with Resend's SMTP credentials and the verified sender email.
 The current production sender is `team@getbizlee.com`.
 
-The invite template sends `TokenHash` to the app's `/create-password` route,
-where the frontend exchanges it with Supabase Auth. Do not replace this with
-`ConfirmationURL`: email security scanners can prefetch that one-time URL and
-consume the invitation before the recipient clicks it. Keep link tracking
-disabled in the external email provider.
+The invite and recovery templates send `TokenHash` to the app's
+`/create-password` route, where the frontend exchanges it with Supabase Auth.
+Do not replace this with `ConfirmationURL`: email security scanners can prefetch
+that one-time URL and consume the setup token before the recipient clicks it.
+Keep link tracking disabled in the external email provider.
 
 Use these Resend SMTP values:
 

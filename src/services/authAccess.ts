@@ -17,7 +17,11 @@ export type LoginAccessResult =
   | { status: "inactive"; profile: SyncedProfile; message: string };
 
 let inviteVerification:
-  | { tokenHash: string; promise: Promise<void> }
+  | {
+      tokenHash: string;
+      type: "invite" | "recovery";
+      promise: Promise<void>;
+    }
   | null = null;
 
 export function normalizeEmail(email: string) {
@@ -36,7 +40,10 @@ export function isValidNewPassword(password: string) {
   return password.length >= 8;
 }
 
-export function verifyInvitedAdminToken(tokenHash: string) {
+export function verifyInvitedAdminToken(
+  tokenHash: string,
+  type: "invite" | "recovery",
+) {
   if (!supabase) {
     return Promise.reject(
       new Error("Supabase environment variables are not configured."),
@@ -49,14 +56,17 @@ export function verifyInvitedAdminToken(tokenHash: string) {
     return Promise.reject(new Error("The invite token is missing."));
   }
 
-  if (inviteVerification?.tokenHash === normalizedTokenHash) {
+  if (
+    inviteVerification?.tokenHash === normalizedTokenHash &&
+    inviteVerification.type === type
+  ) {
     return inviteVerification.promise;
   }
 
   const promise = (async () => {
     const { error } = await supabase.auth.verifyOtp({
       token_hash: normalizedTokenHash,
-      type: "invite",
+      type,
     });
 
     if (error) {
@@ -72,6 +82,7 @@ export function verifyInvitedAdminToken(tokenHash: string) {
 
   inviteVerification = {
     tokenHash: normalizedTokenHash,
+    type,
     promise,
   };
 
