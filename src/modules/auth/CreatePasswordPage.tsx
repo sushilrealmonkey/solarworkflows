@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { authenticatedHomePath } from "../../app/redirects";
@@ -6,6 +6,7 @@ import { PortalLogo } from "../../components/PortalBrand";
 import {
   completeInvitedAdminPassword,
   isValidNewPassword,
+  verifyInvitedAdminToken,
 } from "../../services/authAccess";
 
 type InviteNotice = {
@@ -17,17 +18,66 @@ type InviteNotice = {
 export function CreatePasswordPage() {
   const { session, status, profile, refresh } = useAuth();
   const navigate = useNavigate();
+  const [inviteLink] = useState(readInviteLink);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inviteVerificationStatus, setInviteVerificationStatus] = useState<
+    "pending" | "verifying" | "complete"
+  >(
+    inviteLink.kind === "token" ? "pending" : "complete",
+  );
   const [notice, setNotice] = useState<InviteNotice | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (inviteLink.kind !== "none") {
+      clearInviteLinkFromAddressBar();
+    }
+  }, [inviteLink]);
+
+  const isVerifyingInvite = inviteVerificationStatus === "verifying";
+  const isAwaitingInviteConfirmation =
+    inviteLink.kind === "token" &&
+    inviteVerificationStatus === "pending" &&
+    !session;
 
   if (status === "ready") {
     return <Navigate to={authenticatedHomePath(profile)} replace />;
   }
 
-  const hasInviteSession = Boolean(session);
+  const hasInviteSession = Boolean(session) && !isVerifyingInvite;
+  const linkNotice =
+    inviteLink.kind === "error"
+      ? {
+          title: "Invite link expired",
+          description:
+            "This invitation is invalid, expired, or already used. Ask your administrator to send a new setup email.",
+          tone: "error" as const,
+        }
+      : null;
+
+  async function handleVerifyInvite() {
+    if (inviteLink.kind !== "token") {
+      return;
+    }
+
+    setNotice(null);
+    setInviteVerificationStatus("verifying");
+
+    try {
+      await verifyInvitedAdminToken(inviteLink.tokenHash);
+      await refresh();
+      setInviteVerificationStatus("complete");
+    } catch (error) {
+      setNotice({
+        title: "Invitation could not be verified",
+        description: getErrorMessage(error),
+        tone: "error",
+      });
+      setInviteVerificationStatus("pending");
+    }
+  }
 
   async function handleCreatePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -146,7 +196,19 @@ export function CreatePasswordPage() {
                 This page works only from the Supabase invite email.
               </p>
 
-              {!hasInviteSession && status !== "loading" ? (
+              {isAwaitingInviteConfirmation || isVerifyingInvite ? (
+                <InviteVerificationCard
+                  isVerifying={isVerifyingInvite}
+                  onConfirm={handleVerifyInvite}
+                />
+              ) : null}
+
+              {!hasInviteSession &&
+              !isVerifyingInvite &&
+              !isAwaitingInviteConfirmation &&
+              status !== "loading" &&
+              !notice &&
+              !linkNotice ? (
                 <NoticeCard
                   notice={{
                     title: "Invite link required",
@@ -157,6 +219,7 @@ export function CreatePasswordPage() {
                 />
               ) : null}
 
+              {linkNotice ? <NoticeCard notice={linkNotice} /> : null}
               {notice ? <NoticeCard notice={notice} /> : null}
 
               <form className="mt-6 space-y-4" onSubmit={handleCreatePassword}>
@@ -235,6 +298,32 @@ function NoticeCard({ notice }: { notice: InviteNotice }) {
   );
 }
 
+function InviteVerificationCard({
+  isVerifying,
+  onConfirm,
+}: {
+  isVerifying: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-900">
+      <p className="text-sm font-semibold">Confirm your invitation</p>
+      <p className="mt-1 text-sm leading-6 text-emerald-800">
+        This extra confirmation protects your one-time invite from automated
+        email link scanners.
+      </p>
+      <button
+        className="mt-3 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isVerifying}
+        onClick={onConfirm}
+        type="button"
+      >
+        {isVerifying ? "Verifying invitation" : "Confirm invitation"}
+      </button>
+    </div>
+  );
+}
+
 function FormError({ message }: { message: string | null }) {
   if (!message) {
     return null;
@@ -253,4 +342,30 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Password setup failed. Please try again.";
+}
+
+type InviteLinkState =
+  | { kind: "token"; tokenHash: string }
+  | { kind: "error" }
+  | { kind: "none" };
+
+function readInviteLink(): InviteLinkState {
+  const query = new URLSearchParams(window.location.search);
+  const tokenHash = query.get("token_hash")?.trim();
+
+  if (tokenHash && query.get("type") === "invite") {
+    return { kind: "token", tokenHash };
+  }
+
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+  if (hash.get("error") || hash.get("error_code")) {
+    return { kind: "error" };
+  }
+
+  return { kind: "none" };
+}
+
+function clearInviteLinkFromAddressBar() {
+  window.history.replaceState(null, document.title, window.location.pathname);
 }

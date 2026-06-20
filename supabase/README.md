@@ -22,6 +22,12 @@ Resend directly. Configure the hosted Supabase project under **Authentication >
 SMTP Settings** with Resend's SMTP credentials and the verified sender email.
 The current production sender is `team@getbizlee.com`.
 
+The invite template sends `TokenHash` to the app's `/create-password` route,
+where the frontend exchanges it with Supabase Auth. Do not replace this with
+`ConfirmationURL`: email security scanners can prefetch that one-time URL and
+consume the invitation before the recipient clicks it. Keep link tracking
+disabled in the external email provider.
+
 Use these Resend SMTP values:
 
 ```text

@@ -16,6 +16,10 @@ export type LoginAccessResult =
   | { status: "unassigned"; message: string }
   | { status: "inactive"; profile: SyncedProfile; message: string };
 
+let inviteVerification:
+  | { tokenHash: string; promise: Promise<void> }
+  | null = null;
+
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -30,6 +34,48 @@ export function isValidPassword(password: string) {
 
 export function isValidNewPassword(password: string) {
   return password.length >= 8;
+}
+
+export function verifyInvitedAdminToken(tokenHash: string) {
+  if (!supabase) {
+    return Promise.reject(
+      new Error("Supabase environment variables are not configured."),
+    );
+  }
+
+  const normalizedTokenHash = tokenHash.trim();
+
+  if (!normalizedTokenHash) {
+    return Promise.reject(new Error("The invite token is missing."));
+  }
+
+  if (inviteVerification?.tokenHash === normalizedTokenHash) {
+    return inviteVerification.promise;
+  }
+
+  const promise = (async () => {
+    const { error } = await supabase.auth.verifyOtp({
+      token_hash: normalizedTokenHash,
+      type: "invite",
+    });
+
+    if (error) {
+      throw new Error(mapInviteError(error.message));
+    }
+  })().catch((error: unknown) => {
+    if (inviteVerification?.tokenHash === normalizedTokenHash) {
+      inviteVerification = null;
+    }
+
+    throw error;
+  });
+
+  inviteVerification = {
+    tokenHash: normalizedTokenHash,
+    promise,
+  };
+
+  return promise;
 }
 
 export async function syncCurrentAuthUserProfile(): Promise<LoginAccessResult> {
@@ -145,4 +191,17 @@ function mapPasswordError(message: string) {
   }
 
   return message || "Supabase auth error. Please try again.";
+}
+
+function mapInviteError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("expired") ||
+    normalizedMessage.includes("invalid")
+  ) {
+    return "This invite link is invalid or has already been used. Ask your administrator to send a new setup email.";
+  }
+
+  return message || "The invitation could not be verified. Please request a new setup email.";
 }
