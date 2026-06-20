@@ -40,3 +40,10 @@ Sender email: team@getbizlee.com
 
 Store the Resend API key only in the Supabase SMTP password field. Never add it
 to this repository or expose it through a `VITE_` environment variable.
+
+The hosted Auth email rate limit is set to 30 messages per hour. Invite,
+recovery, signup, and email-change messages share this project-wide quota.
+
+Setup-link delivery must create exactly one Auth token. Do not generate a
+second recovery link after calling `resetPasswordForEmail`, because issuing a
+new recovery token can invalidate the token that was just emailed.

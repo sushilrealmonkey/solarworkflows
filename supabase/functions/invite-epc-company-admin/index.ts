@@ -256,17 +256,10 @@ async function sendAdminSetupLink(
     return jsonResponse({ error: updateError.message }, 400);
   }
 
-  const setupDelivery = await createRecoverySetupLink(
-    serviceClient,
-    adminEmail,
-    appBaseUrl,
-  );
-
   return jsonResponse({
     ok: true,
     email_sent: true,
     message: "Admin invite sent",
-    setup_link: setupDelivery.setup_link,
   });
 }
 
@@ -293,12 +286,15 @@ async function createPasswordSetupDelivery(
       redirectTo: `${appBaseUrl}/create-password`,
     },
   );
-  const setupLink = await createRecoverySetupLink(serviceClient, email, appBaseUrl);
 
-  if (emailError && setupLink.error) {
+  if (emailError) {
+    console.error("Admin password setup email delivery failed", {
+      message: emailError.message,
+    });
+
     return {
       email_sent: false,
-      error: `${emailError.message}. ${setupLink.error}`,
+      error: emailError.message,
       setup_link: null,
     };
   }
@@ -306,33 +302,7 @@ async function createPasswordSetupDelivery(
   return {
     email_sent: !emailError,
     error: null,
-    setup_link: setupLink.setup_link,
-  };
-}
-
-async function createRecoverySetupLink(
-  serviceClient: ReturnType<typeof createClient>,
-  email: string,
-  appBaseUrl: string,
-) {
-  const { data, error } = await serviceClient.auth.admin.generateLink({
-    type: "recovery",
-    email,
-    options: {
-      redirectTo: `${appBaseUrl}/create-password`,
-    },
-  });
-
-  if (error) {
-    return {
-      error: error.message,
-      setup_link: null,
-    };
-  }
-
-  return {
-    error: null,
-    setup_link: data.properties?.action_link ?? null,
+    setup_link: null,
   };
 }
 
