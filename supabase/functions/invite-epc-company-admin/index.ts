@@ -690,12 +690,12 @@ function requireEnv(name: string) {
 }
 
 function resolveAppBaseUrl(request: Request) {
-  const configuredBaseUrl = Deno.env.get("APP_BASE_URL");
   const originBaseUrl = request.headers.get("Origin");
-  const appBaseUrl = configuredBaseUrl || originBaseUrl;
+  const configuredBaseUrl = Deno.env.get("APP_BASE_URL");
+  const appBaseUrl = originBaseUrl || configuredBaseUrl;
 
   if (!appBaseUrl) {
-    throw new Error("APP_BASE_URL is not configured and request origin is unavailable");
+    throw new Error("Request origin is unavailable and APP_BASE_URL is not configured");
   }
 
   return appBaseUrl.replace(/\/+$/, "");

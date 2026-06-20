@@ -67,9 +67,10 @@ For production it should be:
 APP_BASE_URL=https://app.getbizlee.com
 ```
 
-If it is not configured, the Edge Function falls back to the browser request
-origin. Supabase Auth URL configuration must use the deployed app origin as the
-Site URL and include the exact `/create-password` redirect URL. For production:
+The Edge Function uses the browser request origin first. `APP_BASE_URL` is the
+fallback for trusted server-to-server calls that do not include an origin.
+Supabase Auth URL configuration must use the deployed app origin as the Site URL
+and include the exact `/create-password` redirect URL. For production:
 
 ```text
 Site URL: https://app.getbizlee.com
