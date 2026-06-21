@@ -1,4 +1,5 @@
-import { useMemo, useState, type CSSProperties } from "react";
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V4 */
+import { useMemo, useState, type CSSProperties, type FocusEvent } from "react";
 import { Navigate, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   navigationItems,
@@ -19,6 +20,7 @@ export function DashboardLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const visibleNavigationItems = useMemo<NavigationItem[]>(() => {
     if (profile?.is_super_admin) {
@@ -77,6 +79,7 @@ export function DashboardLayout() {
       setIsSigningOut(true);
       setLogoutError(null);
       await signOut();
+      setUserMenuOpen(false);
       navigate("/login", { replace: true });
     } catch (error) {
       setLogoutError(
@@ -84,6 +87,12 @@ export function DashboardLayout() {
       );
     } finally {
       setIsSigningOut(false);
+    }
+  }
+
+  function handleUserMenuBlur(event: FocusEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setUserMenuOpen(false);
     }
   }
 
@@ -127,38 +136,69 @@ export function DashboardLayout() {
                 Menu
               </button>
               <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-950">
+                <p className="truncate text-base font-semibold text-slate-950 sm:text-lg">
                   {organization.name}
-                </p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {organization.timezone} / {organization.currency}
                 </p>
               </div>
             </div>
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="min-w-0 text-right">
-                <p className="truncate text-sm font-semibold text-slate-950">
-                  {profile?.full_name ?? "Workspace user"}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-slate-500">
-                  {profile?.is_super_admin
-                    ? "Super Admin"
-                    : roleNames.join(", ") || "No role assigned"}
-                </p>
-                {logoutError ? (
-                  <p className="mt-0.5 max-w-48 truncate text-xs text-rose-700">
-                    {logoutError}
-                  </p>
-                ) : null}
-              </div>
+            <div
+              className="relative min-w-0"
+              onBlur={handleUserMenuBlur}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setUserMenuOpen(false);
+                  event.currentTarget.querySelector("button")?.focus();
+                }
+              }}
+            >
               <button
-                className="shrink-0 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={isSigningOut}
-                onClick={() => void handleSignOut()}
+                aria-expanded={userMenuOpen}
+                aria-haspopup="menu"
+                className="flex max-w-56 items-center gap-2 rounded-lg px-2 py-1.5 text-right transition-colors hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600 focus-visible:ring-offset-2 active:bg-stone-200 sm:max-w-72"
+                onClick={() => setUserMenuOpen((isOpen) => !isOpen)}
                 type="button"
               >
-                {isSigningOut ? "Signing out" : "Logout"}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold text-slate-950">
+                    {profile?.full_name ?? "Workspace user"}
+                  </span>
+                  <span className="mt-0.5 block truncate text-xs text-slate-500">
+                    {profile?.is_super_admin
+                      ? "Super Admin"
+                      : roleNames.join(", ") || "No role assigned"}
+                  </span>
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={`shrink-0 text-xs text-slate-500 transition-transform ${
+                    userMenuOpen ? "rotate-180" : ""
+                  }`}
+                >
+                  ▾
+                </span>
               </button>
+              {userMenuOpen ? (
+                <div
+                  aria-label="User menu"
+                  className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-lg border border-stone-200 bg-white p-1.5 shadow-lg"
+                  role="menu"
+                >
+                  <button
+                    className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 transition-colors hover:bg-stone-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-600 active:bg-stone-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={isSigningOut}
+                    onClick={() => void handleSignOut()}
+                    role="menuitem"
+                    type="button"
+                  >
+                    {isSigningOut ? "Signing out…" : "Logout"}
+                  </button>
+                  {logoutError ? (
+                    <p className="px-3 py-2 text-xs leading-5 text-rose-700" role="alert">
+                      {logoutError}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </header>

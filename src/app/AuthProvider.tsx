@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -103,6 +104,7 @@ const permissionModuleKeys = [
 const permissionActionKeys = ["view", "create", "update", "delete"];
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const activeUserIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -122,6 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadUserContext = useCallback(
     async (activeSession: Session | null) => {
+      activeUserIdRef.current = activeSession?.user.id ?? null;
+
       if (!activeSession || !supabase) {
         setSession(activeSession);
         resetUserState();
@@ -315,17 +319,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return undefined;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (isMounted) {
-        void loadUserContext(data.session);
-      }
-    });
-
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (isMounted) {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (event === "INITIAL_SESSION" || event === "SIGNED_OUT") {
         void loadUserContext(nextSession);
+        return;
+      }
+
+      if (event === "SIGNED_IN") {
+        const nextUserId = nextSession?.user.id ?? null;
+
+        // Supabase also emits SIGNED_IN when an existing session is confirmed
+        // after a tab regains focus. Only rebuild access state for a new user.
+        if (nextUserId !== activeUserIdRef.current) {
+          void loadUserContext(nextSession);
+        } else {
+          setSession(nextSession);
+        }
+        return;
+      }
+
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        setSession(nextSession);
       }
     });
 
