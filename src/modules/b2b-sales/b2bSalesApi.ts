@@ -28,6 +28,14 @@ function requireOrganization(profile: UserProfile | null) {
   return profile.organization_id;
 }
 
+function requireCompany(profile: UserProfile | null) {
+  if (!profile?.company_id) {
+    throw new Error("No company is assigned to this user.");
+  }
+
+  return profile.company_id;
+}
+
 function nullable(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
@@ -318,6 +326,7 @@ export async function createB2BSale(
   const { data, error } = await client
     .from("b2b_sales")
     .insert({
+      company_id: requireCompany(profile),
       organization_id: requireOrganization(profile),
       created_by: profile?.id ?? null,
       status: "draft",
