@@ -85,8 +85,8 @@ const customerSelect =
 const b2bSaleSelect = `
   *,
   customer:customers(${customerSelect}),
-  proforma_invoice:proforma_invoices(id, proforma_code, total_amount, amount_paid, balance_due, status),
-  invoice:invoices(id, invoice_code, total_amount, amount_paid, balance_due, status),
+  proforma_invoice:proforma_invoices!b2b_sales_proforma_invoice_id_fkey(id, proforma_code, total_amount, amount_paid, balance_due, status),
+  invoice:invoices!b2b_sales_invoice_id_fkey(id, invoice_code, total_amount, amount_paid, balance_due, status),
   created_by_profile:users_profile!b2b_sales_created_by_fkey(
     id,
     full_name,

@@ -104,8 +104,8 @@ const proformaSelect = `
   customer:customers(${customerSelect}),
   project:projects(${projectOptionSelect}),
   quotation:quotations(${quotationSummarySelect}),
-  b2b_sale:b2b_sales(id, sale_code, total_amount, status),
-  final_invoice:invoices(id, invoice_code, total_amount, balance_due, status),
+  b2b_sale:b2b_sales!proforma_invoices_b2b_sale_id_fkey(id, sale_code, total_amount, status),
+  final_invoice:invoices!proforma_invoices_final_invoice_id_fkey(id, invoice_code, total_amount, balance_due, status),
   created_by_profile:users_profile!proforma_invoices_created_by_fkey(
     id,
     full_name,
