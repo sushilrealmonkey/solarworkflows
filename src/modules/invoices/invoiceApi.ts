@@ -478,6 +478,18 @@ export async function fetchInvoiceLinkOptions(
       inventoryQuery,
     ]);
 
+  if (customersResult.error) {
+    throw new Error(`Unable to load invoice customers: ${customersResult.error.message}`);
+  }
+
+  if (projectsResult.error) {
+    throw new Error(`Unable to load invoice projects: ${projectsResult.error.message}`);
+  }
+
+  if (quotationsResult.error) {
+    throw new Error(`Unable to load invoice quotations: ${quotationsResult.error.message}`);
+  }
+
   return {
     customers: (customersResult.data ?? []) as SurveyCustomerSummary[],
     projects: (projectsResult.data ?? []) as unknown as InvoiceProjectOption[],

@@ -19,6 +19,7 @@ export type ProductUnit =
   | "set"
   | "roll"
   | "meter"
+  | "kg"
   | "watt"
   | "kw"
   | "lot";
@@ -35,29 +36,11 @@ export type ProductCategory = {
   updated_at: string | null;
 };
 
-export type ProductType = {
-  id: string;
-  tenant_id: string;
-  category_id: string;
-  name: string;
-  display_order: number;
-  is_active: boolean | null;
-  created_at: string | null;
-  updated_at: string | null;
-};
-
 export type ProductCategoryFormValues = {
   name: string;
   category_type: ProductCategoryType | "";
   display_order: string;
   description: string;
-};
-
-export type ProductTypeFormValues = {
-  category_id: string;
-  name: string;
-  display_order: string;
-  is_active: boolean;
 };
 
 export type Product = {
@@ -68,7 +51,6 @@ export type Product = {
   category_id: string;
   category_type: ProductCategoryType;
   hsn_code: string | null;
-  product_type_id: string | null;
   brand: string | null;
   model_number: string | null;
   specifications: string | null;
@@ -89,16 +71,11 @@ export type Product = {
     ProductCategory,
     "id" | "name" | "category_type" | "display_order"
   > | null;
-  product_type?: Pick<
-    ProductType,
-    "id" | "name" | "category_id" | "display_order" | "is_active"
-  > | null;
 };
 
 export type ProductFormValues = {
   category_id: string;
   hsn_code: string;
-  product_type_id: string;
   product_name: string;
   brand: string;
   model_number: string;

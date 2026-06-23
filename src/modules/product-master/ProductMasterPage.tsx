@@ -30,7 +30,6 @@ import {
   fetchProductBrandSuggestions,
   fetchProductCategories,
   fetchProductPrices,
-  fetchProductTypes,
   fetchProducts,
   updateProduct,
   updateProductStatus,
@@ -39,7 +38,6 @@ import {
   buildGeneratedProductName,
   emptyProductForm,
   productCategoryName,
-  productTypeName,
   productStatusOptions,
   productToForm,
   productValidationSummary,
@@ -55,7 +53,6 @@ import type {
   ProductFormValues,
   ProductPrice,
   ProductStatus,
-  ProductType,
 } from "./types";
 
 type ProductFilters = {
@@ -84,7 +81,6 @@ export function ProductMasterPage() {
     new Map<string, ProductPrice>(),
   );
   const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [brandOptions, setBrandOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,11 +133,10 @@ export function ProductMasterPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextProducts, nextCategories, nextProductTypes, nextBrandOptions] =
+      const [nextProducts, nextCategories, nextBrandOptions] =
         await Promise.all([
         fetchProducts(profile),
         fetchProductCategories(profile),
-        fetchProductTypes(profile),
         fetchProductBrandSuggestions(profile),
       ]);
       setProducts(nextProducts);
@@ -149,7 +144,6 @@ export function ProductMasterPage() {
         canViewPricing ? await fetchProductPrices(nextProducts) : new Map(),
       );
       setCategories(nextCategories);
-      setProductTypes(nextProductTypes);
       setBrandOptions(nextBrandOptions);
     } catch (nextError) {
       setError(
@@ -179,7 +173,6 @@ export function ProductMasterPage() {
           product.product_name,
           productCategoryName(product),
           product.hsn_code,
-          productTypeName(product),
           product.brand,
           product.model_number,
           product.specifications,
@@ -412,7 +405,6 @@ export function ProductMasterPage() {
                   <th className="px-4 py-3">Display Name</th>
                   <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">HSN Code</th>
-                  <th className="px-4 py-3">Product Type</th>
                   <th className="px-4 py-3">Brand</th>
                   <th className="px-4 py-3">Model Number</th>
                   <th className="px-4 py-3">Specifications</th>
@@ -452,7 +444,6 @@ export function ProductMasterPage() {
                       </td>
                       <td className="px-4 py-3">{productCategoryName(product)}</td>
                       <td className="px-4 py-3">{product.hsn_code ?? "-"}</td>
-                      <td className="px-4 py-3">{productTypeName(product)}</td>
                       <td className="px-4 py-3">{product.brand ?? "-"}</td>
                       <td className="px-4 py-3">{product.model_number ?? "-"}</td>
                       <td className="px-4 py-3">
@@ -524,7 +515,6 @@ export function ProductMasterPage() {
                       {[
                         productCategoryName(product),
                         product.hsn_code,
-                        productTypeName(product),
                         product.brand,
                         product.model_number,
                         product.specifications,
@@ -546,12 +536,6 @@ export function ProductMasterPage() {
                     <dt className="text-xs text-slate-500">HSN Code</dt>
                     <dd className="font-medium text-slate-900">
                       {product.hsn_code ?? "-"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-slate-500">Product Type</dt>
-                    <dd className="font-medium text-slate-900">
-                      {productTypeName(product)}
                     </dd>
                   </div>
                   <div>
@@ -635,7 +619,6 @@ export function ProductMasterPage() {
           values={productForm.values}
           setValues={(values) => setProductForm({ ...productForm, values })}
           categories={categories}
-          productTypes={productTypes}
           brandOptions={brandOptions}
           errors={formErrors}
           onClose={() => setProductForm(null)}

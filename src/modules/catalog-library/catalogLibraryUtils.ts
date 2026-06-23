@@ -4,8 +4,6 @@ import type {
   CatalogLibraryBrandFormValues,
   CatalogLibraryCategory,
   CatalogLibraryCategoryFormValues,
-  CatalogLibraryProductType,
-  CatalogLibraryProductTypeFormValues,
 } from "./types";
 
 export function emptyCatalogCategoryForm(): CatalogLibraryCategoryFormValues {
@@ -27,28 +25,6 @@ export function catalogCategoryToForm(
     display_order: numberToInput(category.display_order),
     description: category.description ?? "",
     is_active: category.is_active !== false,
-  };
-}
-
-export function emptyCatalogProductTypeForm(
-  categoryId = "",
-): CatalogLibraryProductTypeFormValues {
-  return {
-    category_id: categoryId,
-    name: "",
-    display_order: "999",
-    is_active: true,
-  };
-}
-
-export function catalogProductTypeToForm(
-  productType: CatalogLibraryProductType,
-): CatalogLibraryProductTypeFormValues {
-  return {
-    category_id: productType.category_id,
-    name: productType.name ?? "",
-    display_order: numberToInput(productType.display_order),
-    is_active: productType.is_active !== false,
   };
 }
 
@@ -76,16 +52,6 @@ export function validateCatalogCategoryForm(
   return {
     name: requiredError(values.name, "Category name"),
     category_type: requiredError(values.category_type, "Category type"),
-    display_order: positiveIntegerError(values.display_order, "Display order"),
-  };
-}
-
-export function validateCatalogProductTypeForm(
-  values: CatalogLibraryProductTypeFormValues,
-) {
-  return {
-    category_id: requiredError(values.category_id, "Category"),
-    name: requiredError(values.name, "Product type name"),
     display_order: positiveIntegerError(values.display_order, "Display order"),
   };
 }

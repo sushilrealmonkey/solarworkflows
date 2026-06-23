@@ -17,15 +17,12 @@ import type {
   ProductPriceFormValues,
   ProductPriceHistory,
   ProductStatus,
-  ProductType,
-  ProductTypeFormValues,
 } from "./types";
 import {
   buildGeneratedProductName,
   formatProductCurrency,
   productCategoryTypeLabel,
   productCategoryTypeOptions,
-  productTypeName,
   productStatusLabel,
   productStatusOptions,
   productUnitOptions,
@@ -145,74 +142,11 @@ export function ProductCategoryFormModal({
   );
 }
 
-export function ProductTypeFormModal({
-  title,
-  values,
-  setValues,
-  errors,
-  onClose,
-  onSubmit,
-  saving,
-}: {
-  title: string;
-  values: ProductTypeFormValues;
-  setValues: (values: ProductTypeFormValues) => void;
-  errors: Record<string, string>;
-  onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  saving: boolean;
-}) {
-  function update(
-    key: keyof ProductTypeFormValues,
-    value: string | boolean,
-  ) {
-    setValues({ ...values, [key]: value });
-  }
-
-  return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      onSubmit={onSubmit}
-      noValidate
-      submitLabel="Save"
-      submitting={saving}
-      maxWidthClass="sm:max-w-xl"
-    >
-      <TextInput
-        label="Product Type Name"
-        value={values.name}
-        onChange={(value) => update("name", value)}
-        error={errors.name}
-        required
-      />
-      <TextInput
-        label="Display Order"
-        type="number"
-        value={values.display_order}
-        onChange={(value) => update("display_order", value)}
-        error={errors.display_order}
-        required
-      />
-      <label className="flex items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-medium text-slate-700">
-        <input
-          checked={values.is_active}
-          className="h-4 w-4 rounded border-stone-300 text-brand-700 focus:ring-brand-600"
-          onChange={(event) => update("is_active", event.target.checked)}
-          type="checkbox"
-        />
-        Active
-      </label>
-    </Modal>
-  );
-}
-
 export function ProductFormModal({
   title,
   values,
   setValues,
   categories,
-  productTypes,
   brandOptions,
   errors,
   onClose,
@@ -223,7 +157,6 @@ export function ProductFormModal({
   values: ProductFormValues;
   setValues: (values: ProductFormValues) => void;
   categories: ProductCategory[];
-  productTypes: ProductType[];
   brandOptions?: string[];
   errors: Record<string, string>;
   onClose: () => void;
@@ -232,12 +165,6 @@ export function ProductFormModal({
 }) {
   const activeCategories = categories.filter(
     (category) => category.is_active !== false,
-  );
-  const activeProductTypes = productTypes.filter(
-    (productType) =>
-      productType.category_id === values.category_id &&
-      (productType.is_active !== false ||
-        productType.id === values.product_type_id),
   );
   const brandListId = useId();
   const nameSourceFields: Array<keyof ProductFormValues> = [
@@ -251,7 +178,6 @@ export function ProductFormModal({
     const nextValues = {
       ...values,
       [key]: value,
-      ...(key === "category_id" ? { product_type_id: "" } : {}),
     };
 
     if (nameSourceFields.includes(key)) {
@@ -285,18 +211,6 @@ export function ProductFormModal({
       {errors.category_id ? (
         <p className="-mt-3 text-xs text-rose-700">{errors.category_id}</p>
       ) : null}
-      <SelectInput
-        label="Product Type (Optional)"
-        value={values.product_type_id}
-        onChange={(value) => update("product_type_id", value)}
-        options={[
-          { value: "", label: "No product type" },
-          ...activeProductTypes.map((productType) => ({
-            value: productType.id,
-            label: productType.name,
-          })),
-        ]}
-      />
       <TextInput
         label="HSN Code"
         value={values.hsn_code}
@@ -340,7 +254,7 @@ export function ProductFormModal({
           { value: "", label: "Select unit" },
           ...productUnitOptions.map((unit) => ({
             value: unit,
-            label: unit,
+            label: unit === "kg" ? "KG" : unit,
           })),
         ]}
       />
@@ -419,7 +333,6 @@ export function ProductDetailGrid({ product }: { product: Product }) {
       <DetailItem label="Display Name" value={product.product_name} />
       <DetailItem label="Category" value={product.category?.name ?? "-"} />
       <DetailItem label="HSN Code" value={product.hsn_code ?? "-"} />
-      <DetailItem label="Product Type" value={productTypeName(product)} />
       <DetailItem label="Brand" value={product.brand ?? "-"} />
       <DetailItem label="Model Number" value={product.model_number ?? "-"} />
       <DetailItem

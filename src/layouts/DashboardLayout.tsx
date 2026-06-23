@@ -101,7 +101,7 @@ export function DashboardLayout() {
       className="min-h-screen bg-stone-50 text-slate-950"
       style={shellStyle}
     >
-      <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-stone-200 bg-white px-4 py-5 shadow-sm lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col overflow-hidden border-r border-stone-200 bg-white px-4 py-5 shadow-sm lg:flex">
         <ShellBrand />
         <SidebarNavigation items={visibleNavigationItems} />
       </aside>
@@ -114,7 +114,7 @@ export function DashboardLayout() {
             onClick={() => setMobileMenuOpen(false)}
             type="button"
           />
-          <aside className="relative h-full w-[min(20rem,86vw)] border-r border-stone-200 bg-white px-4 py-5 shadow-xl">
+          <aside className="relative flex h-full w-[min(20rem,86vw)] flex-col overflow-hidden border-r border-stone-200 bg-white px-4 py-5 shadow-xl">
             <ShellBrand />
             <SidebarNavigation
               items={visibleNavigationItems}
@@ -215,7 +215,7 @@ function ShellBrand() {
   const { organization } = useAuth();
 
   return (
-    <div className="flex items-center gap-3 px-2">
+    <div className="flex shrink-0 items-center gap-3 px-2">
       {organization.logoUrl ? (
         <>
           <img
@@ -250,7 +250,10 @@ function SidebarNavigation({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
   return (
-    <nav className="mt-8 space-y-1" aria-label="Primary navigation">
+    <nav
+      className="sidebar-scroll mt-8 min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain pb-5 pr-1"
+      aria-label="Primary navigation"
+    >
       {items.length > 0 ? (
         items.map((item) => {
           const hasChildren = Boolean(item.children?.length);

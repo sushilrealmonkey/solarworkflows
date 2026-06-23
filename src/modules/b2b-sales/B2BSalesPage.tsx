@@ -93,6 +93,12 @@ export function B2BSalesPage() {
   const linkedCustomerId = searchParams.get("customerId") ?? "";
   const shouldOpenNewSale = searchParams.get("new") === "1";
 
+  async function refreshOptions() {
+    const nextOptions = await fetchB2BSaleOptions(profile, canViewPricing);
+    setOptions(nextOptions);
+    return nextOptions;
+  }
+
   async function loadData() {
     if (!canView) {
       setLoading(false);
@@ -215,7 +221,7 @@ export function B2BSalesPage() {
     );
   }
 
-  function openCreateForm() {
+  async function openCreateForm() {
     setFormErrors({});
     setFormState({
       mode: "create",
@@ -225,6 +231,17 @@ export function B2BSalesPage() {
         customer_id: filters.customerId,
       },
     });
+
+    try {
+      await refreshOptions();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to refresh B2B/Direct customers.",
+        "error",
+      );
+    }
   }
 
   async function openEditForm(sale: B2BSaleWithRelations) {

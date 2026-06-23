@@ -21,6 +21,7 @@ import type {
 } from "./types";
 import {
   buildQuotationDetailSnapshot,
+  calculateDiscountedTurnkeyTotals,
   calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
   hasTurnkeyGstAmount,
@@ -195,9 +196,10 @@ function quotationPayload(values: QuotationFormValues) {
   const turnkeyGst = hasTurnkeyGstAmount(inclusiveTurnkeyAmount)
     ? calculateTurnkeyGstBreakdown(inclusiveTurnkeyAmount)
     : null;
-  const totalAmount = turnkeyGst
-    ? Math.max(turnkeyGst.inclusiveAmount - discountAmount, 0)
+  const discountedTurnkeyTotals = turnkeyGst
+    ? calculateDiscountedTurnkeyTotals(inclusiveTurnkeyAmount, discountAmount)
     : null;
+  const totalAmount = discountedTurnkeyTotals?.totalAmount ?? null;
   const summaryStructureType =
     values.summary_structure_type ||
     values.structure_type ||
@@ -284,7 +286,7 @@ function quotationPayload(values: QuotationFormValues) {
       nullableNumber(values.estimated_generation_units) ??
       nullableNumber(values.expected_annual_generation_kwh),
     base_amount: turnkeyGst?.taxableAmount,
-    gst_amount: turnkeyGst?.gstAmount,
+    gst_amount: discountedTurnkeyTotals?.gstAmount,
     discount_amount: discountAmount,
     total_amount: totalAmount,
     subsidy_amount: subsidyAmount,
@@ -564,7 +566,7 @@ const customerSelect =
 const leadSelect =
   "id, lead_code, customer_id, converted_customer_id, full_name, phone, alternate_phone, email, address, city, district, state, pincode, lead_source, requirement_type, electricity_bill_amount, offered_price, property_type, roof_type, estimated_load_kw, priority, assigned_to, notes";
 const quotationBomItemSelect =
-  "*, category:product_categories!quotation_bom_items_product_category_id_fkey(id, name, category_type, display_order), product:products!quotation_bom_items_product_id_fkey(id, product_code, product_name, brand, model_number, specifications, unit, category_type, hsn_code, product_type:product_types(id, name))";
+  "*, category:product_categories!quotation_bom_items_product_category_id_fkey(id, name, category_type, display_order), product:products!quotation_bom_items_product_id_fkey(id, product_code, product_name, brand, model_number, specifications, unit, category_type, hsn_code)";
 const quotationReservationSelect =
   "*, inventory_item:inventory_items(id, item_code, item_name, brand, model, unit, current_stock), catalog_product:products(id, product_code, product_name, brand, model_number, unit)";
 

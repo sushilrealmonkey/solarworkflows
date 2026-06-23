@@ -27,6 +27,7 @@ import {
   rejectQuotation,
 } from "./quotationApi";
 import {
+  calculateDiscountedTurnkeyTotals,
   calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
   defaultCommercialTerms,
@@ -516,6 +517,14 @@ export function QuotationDetailPage() {
   const detailGstBreakdown = hasTurnkeyGstAmount(totalTurnkeyCost)
     ? calculateTurnkeyGstBreakdown(totalTurnkeyCost)
     : null;
+  const detailDiscountedTotals = detailGstBreakdown
+    ? calculateDiscountedTurnkeyTotals(
+        totalTurnkeyCost,
+        quotation?.discount_amount ??
+          numberFromFormValue(snapshotValues.discount_amount) ??
+          0,
+      )
+    : null;
   const amountInWords =
     quotation?.summary_amount_in_words ||
     snapshotValues.summary_amount_in_words ||
@@ -949,32 +958,32 @@ export function QuotationDetailPage() {
                 <DetailItem
                   label="Taxable Amount"
                   value={
-                    detailGstBreakdown
-                      ? formatMoneyWithPaise(detailGstBreakdown.taxableAmount)
+                    detailDiscountedTotals
+                      ? formatMoneyWithPaise(detailDiscountedTotals.taxableAmount)
                       : "-"
                   }
                 />
                 <DetailItem
                   label="CGST"
                   value={
-                    detailGstBreakdown
-                      ? formatMoneyWithPaise(detailGstBreakdown.cgstAmount)
+                    detailDiscountedTotals
+                      ? formatMoneyWithPaise(detailDiscountedTotals.cgstAmount)
                       : "-"
                   }
                 />
                 <DetailItem
                   label="SGST"
                   value={
-                    detailGstBreakdown
-                      ? formatMoneyWithPaise(detailGstBreakdown.sgstAmount)
+                    detailDiscountedTotals
+                      ? formatMoneyWithPaise(detailDiscountedTotals.sgstAmount)
                       : "-"
                   }
                 />
                 <DetailItem
                   label="Total GST"
                   value={
-                    detailGstBreakdown
-                      ? formatMoneyWithPaise(detailGstBreakdown.gstAmount)
+                    detailDiscountedTotals
+                      ? formatMoneyWithPaise(detailDiscountedTotals.gstAmount)
                       : "-"
                   }
                 />
@@ -1415,8 +1424,11 @@ function TotalsCard({
       numberFromFormValue(snapshotValues.subsidy_amount) ??
       0,
   );
-  const totalAmount = gstBreakdown
-    ? Math.max(gstBreakdown.inclusiveAmount - discountAmount, 0)
+  const discountedTotals = gstBreakdown
+    ? calculateDiscountedTurnkeyTotals(turnkeyAmount, discountAmount)
+    : null;
+  const totalAmount = discountedTotals
+    ? discountedTotals.totalAmount
     : Number(quotation.total_amount ?? 0);
   return (
     <aside className="xl:sticky xl:top-6 xl:self-start">
@@ -1429,13 +1441,13 @@ function TotalsCard({
           />
           <TotalRow
             label="GST Amount"
-            value={gstBreakdown?.gstAmount ?? quotation.gst_amount}
-            precise={Boolean(gstBreakdown)}
+            value={discountedTotals?.gstAmount ?? quotation.gst_amount}
+            precise={Boolean(discountedTotals)}
           />
-          {gstBreakdown ? (
+          {discountedTotals ? (
             <>
-              <TotalRow label="CGST" value={gstBreakdown.cgstAmount} precise />
-              <TotalRow label="SGST" value={gstBreakdown.sgstAmount} precise />
+              <TotalRow label="CGST" value={discountedTotals.cgstAmount} precise />
+              <TotalRow label="SGST" value={discountedTotals.sgstAmount} precise />
             </>
           ) : null}
           <TotalRow label="Discount" value={discountAmount} />

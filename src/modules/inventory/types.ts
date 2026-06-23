@@ -1,5 +1,5 @@
 import type { Project } from "../projects/types";
-import type { Product, ProductCategory, ProductType } from "../product-master/types";
+import type { Product, ProductCategory } from "../product-master/types";
 
 export type InventoryItemCategory =
   | "solar_panel"
@@ -38,7 +38,6 @@ export type InventoryCatalogProduct = Pick<
   | "category_id"
   | "category_type"
   | "hsn_code"
-  | "product_type_id"
   | "brand"
   | "model_number"
   | "specifications"
@@ -49,10 +48,6 @@ export type InventoryCatalogProduct = Pick<
   category?: Pick<
     ProductCategory,
     "id" | "name" | "category_type" | "display_order"
-  > | null;
-  product_type?: Pick<
-    ProductType,
-    "id" | "name" | "category_id" | "display_order" | "is_active"
   > | null;
 };
 

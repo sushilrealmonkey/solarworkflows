@@ -240,7 +240,6 @@ export async function fetchB2BSaleOptions(
     .from("inventory_items")
     .select(inventorySelect)
     .eq("status", "active")
-    .not("catalog_product_id", "is", null)
     .order("item_name", { ascending: true });
 
   if (organizationId) {

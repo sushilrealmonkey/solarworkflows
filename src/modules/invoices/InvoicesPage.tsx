@@ -192,9 +192,26 @@ export function InvoicesPage() {
   }
 
   async function openCreateForm(project?: InvoiceProjectOption) {
-    const values = emptyInvoiceForm(project, "project");
-    if (project?.quotation_id) {
-      values.items = await prefillItemsFromQuotation(project.quotation);
+    let currentProject = project;
+
+    try {
+      const nextOptions = await fetchInvoiceLinkOptions(profile);
+      setOptions(nextOptions);
+      currentProject = project
+        ? nextOptions.projects.find((option) => option.id === project.id) ?? project
+        : undefined;
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to refresh invoice projects and customers.",
+        "error",
+      );
+    }
+
+    const values = emptyInvoiceForm(currentProject, "project");
+    if (currentProject?.quotation_id) {
+      values.items = await prefillItemsFromQuotation(currentProject.quotation);
     }
 
     setFormErrors({});

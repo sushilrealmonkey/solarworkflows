@@ -364,10 +364,6 @@ export function InventoryDetailPage() {
               label="Category"
               value={item.catalog_product?.category?.name ?? "-"}
             />
-            <DetailItem
-              label="Product Type"
-              value={item.catalog_product?.product_type?.name ?? "-"}
-            />
             <DetailItem label="Brand" value={inventoryBrandName(item) || "-"} />
             <DetailItem
               label="Model / Specifications"

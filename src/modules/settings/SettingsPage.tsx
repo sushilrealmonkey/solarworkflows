@@ -20,23 +20,16 @@ import {
 } from "../crm/CrmComponents";
 import { formatDateTime, hasPermission, labelize } from "../crm/crmUtils";
 import {
-  createRole,
   createStaff,
-  deleteRole,
   fetchOrganizationSettings,
-  fetchPermissionOptions,
   fetchSettingsRoles,
   fetchSettingsStaff,
-  permissionActions,
-  permissionModules,
+  uploadCompanyLogo,
   updateOrganizationSettings,
-  updateRole,
   updateStaff,
 } from "./settingsApi";
 import type {
   OrganizationSettingsFormValues,
-  PermissionOption,
-  RoleFormValues,
   SettingsRole,
   SettingsStaff,
   StaffFormValues,
@@ -44,15 +37,13 @@ import type {
 } from "./types";
 import {
   emptyOrganizationSettingsForm,
-  emptyRoleForm,
   emptyStaffForm,
   organizationSettingsToForm,
-  roleToForm,
   staffStatusOptions,
   staffToForm,
-  validateRoleForm,
   validateStaffForm,
 } from "./settingsUtils";
+import { CompanyLogoUploader } from "./CompanyLogoUploader";
 
 const settingsLinks = [
   { to: "/settings", label: "Overview", end: true },
@@ -65,12 +56,6 @@ type StaffFormState = {
   mode: "create" | "edit";
   staff: SettingsStaff | null;
   values: StaffFormValues;
-};
-
-type RoleFormState = {
-  mode: "create" | "edit";
-  role: SettingsRole | null;
-  values: RoleFormValues;
 };
 
 export function SettingsPage() {
@@ -179,7 +164,7 @@ export function SettingsOverviewPage() {
     <div className="grid gap-4 md:grid-cols-3">
       <SettingsCard
         title="Organization"
-        description="Branding, document prefixes, tax details, and regional defaults."
+        description="Company logo, tax details, banking, and regional defaults."
       />
       <SettingsCard
         title="Staff"
@@ -194,7 +179,7 @@ export function SettingsOverviewPage() {
 }
 
 export function OrganizationSettingsPage() {
-  const { refresh } = useAuth();
+  const { profile, refresh } = useAuth();
   const { showToast } = useToast();
   const [values, setValues] = useState<OrganizationSettingsFormValues>(
     emptyOrganizationSettingsForm(),
@@ -248,6 +233,17 @@ export function OrganizationSettingsPage() {
   const update = (key: keyof OrganizationSettingsFormValues, value: string) =>
     setValues((current) => ({ ...current, [key]: value }));
 
+  async function handleLogoUpload(logo: Blob) {
+    const publicUrl = await uploadCompanyLogo(profile, logo);
+    const updatedSettings = await updateOrganizationSettings({
+      ...values,
+      company_logo_url: publicUrl,
+    });
+    setValues(organizationSettingsToForm(updatedSettings));
+    await refresh();
+    showToast("Company logo updated.", "success");
+  }
+
   if (loading) {
     return <LoadingSkeleton />;
   }
@@ -263,7 +259,7 @@ export function OrganizationSettingsPage() {
     >
       <SectionTitle
         title="Company Profile"
-        description="One-time details used on generated documents for this tenant."
+        description="Company information used on generated documents for this tenant."
       />
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -271,11 +267,6 @@ export function OrganizationSettingsPage() {
           label="Company Name"
           value={values.company_name}
           onChange={(value) => update("company_name", value)}
-        />
-        <TextArea
-          label="Company Details"
-          value={values.company_details}
-          onChange={(value) => update("company_details", value)}
         />
         <TextArea
           label="Address"
@@ -286,35 +277,10 @@ export function OrganizationSettingsPage() {
 
       <SectionTitle title="Branding" />
       <div className="grid gap-4 md:grid-cols-2">
-        <TextInput
-          label="Company Logo URL"
-          value={values.company_logo_url}
-          onChange={(value) => update("company_logo_url", value)}
-        />
-        <TextInput
-          label="Favicon URL"
-          value={values.favicon_url}
-          onChange={(value) => update("favicon_url", value)}
-        />
-        <ColorInput
-          label="Primary Color"
-          value={values.primary_color}
-          onChange={(value) => update("primary_color", value)}
-        />
-        <ColorInput
-          label="Secondary Color"
-          value={values.secondary_color}
-          onChange={(value) => update("secondary_color", value)}
-        />
-        <ColorInput
-          label="Accent Color"
-          value={values.accent_color}
-          onChange={(value) => update("accent_color", value)}
-        />
-        <TextInput
-          label="Font Family"
-          value={values.font_family}
-          onChange={(value) => update("font_family", value)}
+        <CompanyLogoUploader
+          currentUrl={values.company_logo_url}
+          disabled={saving}
+          onUpload={handleLogoUpload}
         />
       </div>
 
@@ -384,35 +350,6 @@ export function OrganizationSettingsPage() {
           label="Account Type"
           value={values.bank_account_type}
           onChange={(value) => update("bank_account_type", value)}
-        />
-      </div>
-
-      <SectionTitle title="Document Prefixes" />
-      <div className="grid gap-4 md:grid-cols-3">
-        <TextInput
-          label="Invoice Prefix"
-          value={values.invoice_prefix}
-          onChange={(value) => update("invoice_prefix", value)}
-        />
-        <TextInput
-          label="Quotation Prefix"
-          value={values.quotation_prefix}
-          onChange={(value) => update("quotation_prefix", value)}
-        />
-        <TextInput
-          label="Customer Prefix"
-          value={values.customer_prefix}
-          onChange={(value) => update("customer_prefix", value)}
-        />
-        <TextInput
-          label="Project Prefix"
-          value={values.project_prefix}
-          onChange={(value) => update("project_prefix", value)}
-        />
-        <TextInput
-          label="Lead Prefix"
-          value={values.lead_prefix}
-          onChange={(value) => update("lead_prefix", value)}
         />
       </div>
 
@@ -706,28 +643,16 @@ export function StaffManagementPage() {
 }
 
 export function RolesPage() {
-  const { profile } = useAuth();
-  const { showToast } = useToast();
   const [roles, setRoles] = useState<SettingsRole[]>([]);
-  const [permissions, setPermissions] = useState<PermissionOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [formState, setFormState] = useState<RoleFormState | null>(null);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<SettingsRole | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   async function loadData() {
     try {
       setLoading(true);
       setError(null);
-      const [nextRoles, nextPermissions] = await Promise.all([
-        fetchSettingsRoles(),
-        fetchPermissionOptions(),
-      ]);
+      const nextRoles = await fetchSettingsRoles();
       setRoles(nextRoles);
-      setPermissions(nextPermissions);
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load roles.",
@@ -741,94 +666,24 @@ export function RolesPage() {
     void loadData();
   }, []);
 
-  function openCreateForm() {
-    setFormErrors({});
-    setFormState({
-      mode: "create",
-      role: null,
-      values: emptyRoleForm(),
-    });
-  }
-
-  function openEditForm(role: SettingsRole) {
-    setFormErrors({});
-    setFormState({
-      mode: "edit",
-      role,
-      values: roleToForm(role),
-    });
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!formState) {
-      return;
-    }
-
-    const nextErrors = validateRoleForm(formState.values);
-    setFormErrors(nextErrors);
-
-    if (Object.values(nextErrors).some(Boolean)) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      if (formState.mode === "create") {
-        await createRole(profile, formState.values);
-        showToast("Role created.", "success");
-      } else if (formState.role) {
-        await updateRole(formState.role.id, formState.values);
-        showToast("Role updated.", "success");
-      }
-      setFormState(null);
-      await loadData();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Role save failed.",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteRole(deleteTarget.id);
-      showToast("Role deleted.", "success");
-      setDeleteTarget(null);
-      await loadData();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Role delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <SectionTitle title="Roles And Permissions" />
-        <Button onClick={openCreateForm}>Create Role</Button>
+        <SectionTitle title="Standard Roles" />
+        <Badge tone="blue">Locked presets</Badge>
       </div>
+      <p className="max-w-3xl text-sm leading-6 text-slate-600">
+        EPC workspaces use locked standard roles. Admins can assign these roles
+        to staff, while permission definitions are managed by the platform so
+        pricing, delete access, and tenant controls stay consistent.
+      </p>
 
       {loading ? <LoadingSkeleton /> : null}
       {error ? <EmptyState title="Could not load roles" description={error} /> : null}
       {!loading && !error && roles.length === 0 ? (
         <EmptyState
-          title="No roles found"
-          description="Create roles to assign access to staff profiles."
-          action={<Button onClick={openCreateForm}>Create Role</Button>}
+          title="No standard roles found"
+          description="The standard roles will be seeded automatically by the platform."
         />
       ) : null}
 
@@ -853,44 +708,12 @@ export function RolesPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge>{role.permission_count} permissions</Badge>
-                  <Button onClick={() => openEditForm(role)} variant="secondary">
-                    Edit
-                  </Button>
-                  {!role.is_system_role ? (
-                    <Button onClick={() => setDeleteTarget(role)} variant="danger">
-                      Delete
-                    </Button>
-                  ) : null}
+                  <Badge tone="green">Assignable</Badge>
                 </div>
               </div>
             </article>
           ))}
         </div>
-      ) : null}
-
-      {formState ? (
-        <RoleFormModal
-          title={formState.mode === "create" ? "Create Role" : "Edit Role"}
-          values={formState.values}
-          setValues={(values) =>
-            setFormState((current) => (current ? { ...current, values } : current))
-          }
-          permissions={permissions}
-          errors={formErrors}
-          onClose={() => setFormState(null)}
-          onSubmit={handleSubmit}
-          saving={saving}
-        />
-      ) : null}
-
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete role?"
-          description={`This will delete ${deleteTarget.role_name}. Staff assigned to this role will lose that role assignment.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
       ) : null}
     </div>
   );
@@ -968,171 +791,6 @@ function StaffFormModal({
         }))}
       />
     </Modal>
-  );
-}
-
-function RoleFormModal({
-  title,
-  values,
-  setValues,
-  permissions,
-  errors,
-  onClose,
-  onSubmit,
-  saving,
-}: {
-  title: string;
-  values: RoleFormValues;
-  setValues: (values: RoleFormValues) => void;
-  permissions: PermissionOption[];
-  errors: Record<string, string>;
-  onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  saving: boolean;
-}) {
-  const update = (key: keyof RoleFormValues, value: string | string[]) =>
-    setValues({ ...values, [key]: value });
-
-  return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      onSubmit={onSubmit}
-      submitLabel="Save Role"
-      submitting={saving}
-    >
-      <TextInput
-        label="Role Name"
-        value={values.role_name}
-        onChange={(value) => update("role_name", value)}
-        error={errors.role_name}
-        required
-      />
-      <TextInput
-        label="Description"
-        value={values.description}
-        onChange={(value) => update("description", value)}
-      />
-      <div className="md:col-span-2">
-        <PermissionMatrix
-          permissions={permissions}
-          selectedPermissionIds={values.permission_ids}
-          onChange={(permissionIds) => update("permission_ids", permissionIds)}
-        />
-      </div>
-    </Modal>
-  );
-}
-
-function PermissionMatrix({
-  permissions,
-  selectedPermissionIds,
-  onChange,
-}: {
-  permissions: PermissionOption[];
-  selectedPermissionIds: string[];
-  onChange: (permissionIds: string[]) => void;
-}) {
-  const selected = useMemo(
-    () => new Set(selectedPermissionIds),
-    [selectedPermissionIds],
-  );
-  const permissionByKey = useMemo(() => {
-    const map = new Map<string, PermissionOption>();
-
-    permissions.forEach((permission) => {
-      map.set(`${permission.module_key}:${permission.action_key}`, permission);
-    });
-
-    return map;
-  }, [permissions]);
-
-  function toggle(permissionId: string) {
-    const nextSelected = new Set(selected);
-
-    if (nextSelected.has(permissionId)) {
-      nextSelected.delete(permissionId);
-    } else {
-      nextSelected.add(permissionId);
-    }
-
-    onChange(Array.from(nextSelected));
-  }
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-stone-200">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[34rem] border-collapse text-left text-sm">
-          <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-3 py-3">Module</th>
-              {permissionActions.map((action) => (
-                <th key={action} className="px-3 py-3 text-center">
-                  {labelize(action)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100 bg-white">
-            {permissionModules.map((moduleKey) => (
-              <tr key={moduleKey}>
-                <td className="px-3 py-3 font-semibold text-slate-900">
-                  {labelize(moduleKey)}
-                </td>
-                {permissionActions.map((action) => {
-                  const permission = permissionByKey.get(`${moduleKey}:${action}`);
-
-                  return (
-                    <td key={action} className="px-3 py-3 text-center">
-                      {permission ? (
-                        <input
-                          aria-label={`${labelize(moduleKey)} ${action}`}
-                          checked={selected.has(permission.id)}
-                          className="h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-600"
-                          onChange={() => toggle(permission.id)}
-                          type="checkbox"
-                        />
-                      ) : (
-                        <span className="text-slate-300">-</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function ColorInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-      <div className="mt-1 flex rounded-lg border border-stone-200 bg-white px-3 py-2.5 focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
-        <input
-          className="h-8 w-10 shrink-0 cursor-pointer border-0 bg-transparent p-0"
-          type="color"
-          value={value || "#166534"}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        <input
-          className="min-w-0 flex-1 border-0 bg-transparent px-3 text-sm text-slate-950 outline-none"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </div>
-    </label>
   );
 }
 

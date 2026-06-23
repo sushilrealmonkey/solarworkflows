@@ -8,8 +8,6 @@ import type {
   ProductPrice,
   ProductPriceFormValues,
   ProductStatus,
-  ProductType,
-  ProductTypeFormValues,
   ProductUnit,
   ProductUsageSummary,
 } from "./types";
@@ -34,6 +32,7 @@ export const productUnitOptions: ProductUnit[] = [
   "set",
   "roll",
   "meter",
+  "kg",
   "watt",
   "kw",
   "lot",
@@ -72,31 +71,10 @@ export function productCategoryToForm(
   };
 }
 
-export function emptyProductTypeForm(categoryId: string): ProductTypeFormValues {
-  return {
-    category_id: categoryId,
-    name: "",
-    display_order: "999",
-    is_active: true,
-  };
-}
-
-export function productTypeToForm(
-  productType: ProductType,
-): ProductTypeFormValues {
-  return {
-    category_id: productType.category_id,
-    name: productType.name ?? "",
-    display_order: numberToInput(productType.display_order),
-    is_active: productType.is_active !== false,
-  };
-}
-
 export function emptyProductForm(): ProductFormValues {
   return {
     category_id: "",
     hsn_code: "",
-    product_type_id: "",
     product_name: "",
     brand: "",
     model_number: "",
@@ -113,7 +91,6 @@ export function productToForm(product: Product): ProductFormValues {
   return {
     category_id: product.category_id,
     hsn_code: product.hsn_code ?? "",
-    product_type_id: product.product_type_id ?? "",
     product_name: product.product_name ?? "",
     brand: product.brand ?? "",
     model_number: product.model_number ?? "",
@@ -128,10 +105,6 @@ export function productToForm(product: Product): ProductFormValues {
 
 export function productCategoryName(product: Product) {
   return product.category?.name ?? "-";
-}
-
-export function productTypeName(product: Product) {
-  return product.product_type?.name ?? "-";
 }
 
 export function productCategoryTypeLabel(
@@ -221,14 +194,6 @@ export function validateProductPriceForm(values: ProductPriceFormValues) {
     ),
     gst_percent: nonNegativeNumberError(values.gst_percent, "GST percent"),
     effective_date: requiredError(values.effective_date, "Effective date"),
-  };
-}
-
-export function validateProductTypeForm(values: ProductTypeFormValues) {
-  return {
-    category_id: requiredError(values.category_id, "Category"),
-    name: requiredError(values.name, "Product type name"),
-    display_order: positiveIntegerError(values.display_order, "Display order"),
   };
 }
 

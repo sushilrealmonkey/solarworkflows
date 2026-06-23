@@ -31,13 +31,7 @@ export type OrganizationSettings = {
 
 export type OrganizationSettingsFormValues = {
   company_name: string;
-  company_details: string;
   company_logo_url: string;
-  favicon_url: string;
-  primary_color: string;
-  secondary_color: string;
-  accent_color: string;
-  font_family: string;
   address: string;
   contact_person: string;
   contact_email: string;
@@ -48,11 +42,6 @@ export type OrganizationSettingsFormValues = {
   bank_ifsc_code: string;
   bank_account_number: string;
   bank_account_type: string;
-  invoice_prefix: string;
-  quotation_prefix: string;
-  customer_prefix: string;
-  project_prefix: string;
-  lead_prefix: string;
   timezone: string;
   currency: string;
   date_format: string;
@@ -83,6 +72,7 @@ export type StaffFormValues = {
 export type SettingsRole = {
   id: string;
   organization_id: string | null;
+  role_key: string | null;
   role_name: string;
   description: string | null;
   is_system_role: boolean;

@@ -9,8 +9,6 @@ import type {
   ProductPriceFormValues,
   ProductPriceHistory,
   ProductStatus,
-  ProductType,
-  ProductTypeFormValues,
   ProductUsageSummary,
 } from "./types";
 import { importCatalogLibraryDefaults } from "../catalog-library/catalogLibraryApi";
@@ -48,7 +46,6 @@ function numberValue(value: string, fallback = 0) {
 function productPayload(values: ProductFormValues) {
   return {
     category_id: values.category_id,
-    product_type_id: nullable(values.product_type_id),
     product_name: values.product_name.trim(),
     hsn_code: nullable(values.hsn_code),
     brand: nullable(values.brand),
@@ -59,15 +56,6 @@ function productPayload(values: ProductFormValues) {
     warranty_description: nullable(values.warranty_description),
     status: values.status,
     notes: nullable(values.notes),
-  };
-}
-
-function productTypePayload(values: ProductTypeFormValues) {
-  return {
-    category_id: values.category_id,
-    name: values.name.trim(),
-    display_order: Number(values.display_order),
-    is_active: values.is_active,
   };
 }
 
@@ -84,10 +72,42 @@ function categoryPayload(
 }
 
 const productSelect = `
-  *,
-  category:product_categories(id, name, category_type, display_order),
-  product_type:product_types(id, name, category_id, display_order, is_active)
+  id,
+  tenant_id,
+  product_code,
+  product_name,
+  category_id,
+  category_type,
+  hsn_code,
+  brand,
+  model_number,
+  specifications,
+  unit,
+  gst_percent,
+  warranty_description,
+  status,
+  notes,
+  created_at,
+  updated_at,
+  category:product_categories(id, name, category_type, display_order)
 `;
+
+type ProductCategoryPublicRow = {
+  category_data: ProductCategory;
+};
+
+type ProductPublicRow = {
+  product_data: Product;
+};
+
+function redactLegacyProductPricing(product: Product): Product {
+  return {
+    ...product,
+    purchase_price: null,
+    selling_price: null,
+    minimum_stock_alert: product.minimum_stock_alert ?? null,
+  };
+}
 
 function isMissingPricingStoreError(error: { code?: string; message?: string }) {
   const message = error.message?.toLowerCase() ?? "";
@@ -124,25 +144,17 @@ function legacyProductPrice(product: Pick<
 
 export async function fetchProductCategories(profile: UserProfile | null) {
   const client = requireSupabase();
-  let query = client
-    .from("product_categories")
-    .select("*")
-    .order("display_order", { ascending: true })
-    .order("name", { ascending: true });
+  void profile;
 
-  if (!profile?.is_super_admin) {
-    query = query.eq("tenant_id", requireTenant(profile));
-  } else if (profile.organization_id) {
-    query = query.eq("tenant_id", profile.organization_id);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await client.rpc("product_category_public_rows");
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data ?? []) as ProductCategory[];
+  return ((data ?? []) as ProductCategoryPublicRow[]).map(
+    (row) => row.category_data,
+  );
 }
 
 export async function createProductCategory(
@@ -186,96 +198,19 @@ export async function updateProductCategory(
   return data as ProductCategory;
 }
 
-export async function fetchProductTypes(
-  profile: UserProfile | null,
-  categoryId?: string,
-) {
-  const client = requireSupabase();
-  let query = client
-    .from("product_types")
-    .select("*")
-    .order("display_order", { ascending: true })
-    .order("name", { ascending: true });
-
-  if (!profile?.is_super_admin) {
-    query = query.eq("tenant_id", requireTenant(profile));
-  } else if (profile.organization_id) {
-    query = query.eq("tenant_id", profile.organization_id);
-  }
-
-  if (categoryId) {
-    query = query.eq("category_id", categoryId);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? []) as ProductType[];
-}
-
-export async function createProductType(
-  profile: UserProfile | null,
-  values: ProductTypeFormValues,
-) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("product_types")
-    .insert({
-      tenant_id: requireTenant(profile),
-      ...productTypePayload(values),
-    })
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as ProductType;
-}
-
-export async function updateProductType(
-  id: string,
-  values: ProductTypeFormValues,
-) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("product_types")
-    .update(productTypePayload(values))
-    .eq("id", id)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as ProductType;
-}
-
 export async function fetchProducts(profile: UserProfile | null) {
   const client = requireSupabase();
-  let query = client
-    .from("products")
-    .select(productSelect)
-    .order("product_name", { ascending: true });
+  void profile;
 
-  if (!profile?.is_super_admin) {
-    query = query.eq("tenant_id", requireTenant(profile));
-  } else if (profile.organization_id) {
-    query = query.eq("tenant_id", profile.organization_id);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await client.rpc("product_catalog_public_rows");
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return (data ?? []) as Product[];
+  return ((data ?? []) as ProductPublicRow[]).map((row) =>
+    redactLegacyProductPricing(row.product_data),
+  );
 }
 
 export async function fetchProductBrandSuggestions(
@@ -325,20 +260,9 @@ export async function importProductCatalogDefaults() {
 }
 
 export async function fetchProduct(profile: UserProfile | null, id: string) {
-  const client = requireSupabase();
-  let query = client.from("products").select(productSelect).eq("id", id);
+  const products = await fetchProducts(profile);
 
-  if (!profile?.is_super_admin) {
-    query = query.eq("tenant_id", requireTenant(profile));
-  }
-
-  const { data, error } = await query.maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as Product | null;
+  return products.find((product) => product.id === id) ?? null;
 }
 
 export async function createProduct(
@@ -359,7 +283,7 @@ export async function createProduct(
     throw new Error(error.message);
   }
 
-  return data as Product;
+  return redactLegacyProductPricing(data as unknown as Product);
 }
 
 export async function updateProduct(
@@ -378,7 +302,7 @@ export async function updateProduct(
     throw new Error(error.message);
   }
 
-  return data as Product;
+  return redactLegacyProductPricing(data as unknown as Product);
 }
 
 export async function updateProductStatus(
@@ -397,7 +321,7 @@ export async function updateProductStatus(
     throw new Error(error.message);
   }
 
-  return data as Product;
+  return redactLegacyProductPricing(data as unknown as Product);
 }
 
 export async function fetchProductPrices(products: Product[]) {
@@ -459,7 +383,11 @@ export async function fetchProductPrice(productId: string) {
         throw new Error(productError.message);
       }
 
-      return productData ? legacyProductPrice(productData as Product) : null;
+      return productData
+        ? legacyProductPrice(
+            redactLegacyProductPricing(productData as unknown as Product),
+          )
+        : null;
     }
 
     throw new Error(error.message);
@@ -479,7 +407,11 @@ export async function fetchProductPrice(productId: string) {
     throw new Error(productError.message);
   }
 
-  return productData ? legacyProductPrice(productData as Product) : null;
+  return productData
+    ? legacyProductPrice(
+        redactLegacyProductPricing(productData as unknown as Product),
+      )
+    : null;
 }
 
 export async function fetchProductPriceHistory(productId: string) {
@@ -532,7 +464,9 @@ export async function saveProductPrice(
         throw new Error(productError.message);
       }
 
-      return legacyProductPrice(productData as Product);
+      return legacyProductPrice(
+        redactLegacyProductPricing(productData as unknown as Product),
+      );
     }
 
     throw new Error(error.message);

@@ -25,7 +25,6 @@ import {
   fetchProductCategories,
   fetchProductPrice,
   fetchProductPriceHistory,
-  fetchProductTypes,
   fetchProductUsageSummary,
   saveProductPrice,
   updateProduct,
@@ -55,7 +54,6 @@ import type {
   ProductPriceFormValues,
   ProductPriceHistory,
   ProductStatus,
-  ProductType,
   ProductUsageSummary,
 } from "./types";
 
@@ -65,7 +63,6 @@ export function ProductDetailPage() {
   const { showToast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [brandOptions, setBrandOptions] = useState<string[]>([]);
   const [usageSummary, setUsageSummary] =
     useState<ProductUsageSummary>(emptyUsageSummary);
@@ -122,7 +119,6 @@ export function ProductDetailPage() {
       const [
         nextProduct,
         nextCategories,
-        nextProductTypes,
         nextBrandOptions,
         nextUsageSummary,
         nextProductPrice,
@@ -130,7 +126,6 @@ export function ProductDetailPage() {
       ] = await Promise.all([
         fetchProduct(profile, id),
         fetchProductCategories(profile),
-        fetchProductTypes(profile),
         fetchProductBrandSuggestions(profile),
         fetchProductUsageSummary(profile, id),
         canViewPricing ? fetchProductPrice(id) : Promise.resolve(null),
@@ -138,7 +133,6 @@ export function ProductDetailPage() {
       ]);
       setProduct(nextProduct);
       setCategories(nextCategories);
-      setProductTypes(nextProductTypes);
       setBrandOptions(nextBrandOptions);
       setUsageSummary(nextUsageSummary);
       setProductPrice(nextProductPrice);
@@ -409,7 +403,6 @@ export function ProductDetailPage() {
           values={editing}
           setValues={setEditing}
           categories={categories}
-          productTypes={productTypes}
           brandOptions={brandOptions}
           errors={formErrors}
           onClose={() => setEditing(null)}

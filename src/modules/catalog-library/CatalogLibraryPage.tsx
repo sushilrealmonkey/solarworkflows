@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -22,47 +22,33 @@ import { productCategoryTypeOptions } from "../product-master/productMasterUtils
 import {
   createCatalogLibraryBrand,
   createCatalogLibraryCategory,
-  createCatalogLibraryProductType,
   fetchCatalogLibraryBrands,
   fetchCatalogLibraryCategories,
-  fetchCatalogLibraryProductTypes,
   updateCatalogLibraryBrand,
   updateCatalogLibraryCategory,
-  updateCatalogLibraryProductType,
 } from "./catalogLibraryApi";
 import {
   catalogBrandToForm,
   catalogCategoryToForm,
-  catalogProductTypeToForm,
   catalogValidationSummary,
   emptyCatalogBrandForm,
   emptyCatalogCategoryForm,
-  emptyCatalogProductTypeForm,
   validateCatalogBrandForm,
   validateCatalogCategoryForm,
-  validateCatalogProductTypeForm,
 } from "./catalogLibraryUtils";
 import type {
   CatalogLibraryBrand,
   CatalogLibraryBrandFormValues,
   CatalogLibraryCategory,
   CatalogLibraryCategoryFormValues,
-  CatalogLibraryProductType,
-  CatalogLibraryProductTypeFormValues,
 } from "./types";
 
-type CatalogTab = "categories" | "product-types" | "brands";
+type CatalogTab = "categories" | "brands";
 
 type CategoryFormState = {
   mode: "create" | "edit";
   category: CatalogLibraryCategory | null;
   values: CatalogLibraryCategoryFormValues;
-};
-
-type ProductTypeFormState = {
-  mode: "create" | "edit";
-  productType: CatalogLibraryProductType | null;
-  values: CatalogLibraryProductTypeFormValues;
 };
 
 type BrandFormState = {
@@ -76,7 +62,6 @@ export function CatalogLibraryPage() {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<CatalogTab>("categories");
   const [categories, setCategories] = useState<CatalogLibraryCategory[]>([]);
-  const [productTypes, setProductTypes] = useState<CatalogLibraryProductType[]>([]);
   const [brands, setBrands] = useState<CatalogLibraryBrand[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -85,15 +70,8 @@ export function CatalogLibraryPage() {
     null,
   );
   const [categoryForm, setCategoryForm] = useState<CategoryFormState | null>(null);
-  const [productTypeForm, setProductTypeForm] =
-    useState<ProductTypeFormState | null>(null);
   const [brandForm, setBrandForm] = useState<BrandFormState | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-
-  const activeCategories = useMemo(
-    () => categories.filter((category) => category.is_active !== false),
-    [categories],
-  );
 
   async function loadData() {
     if (!profile?.is_super_admin) {
@@ -104,13 +82,11 @@ export function CatalogLibraryPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextCategories, nextProductTypes, nextBrands] = await Promise.all([
+      const [nextCategories, nextBrands] = await Promise.all([
         fetchCatalogLibraryCategories(),
-        fetchCatalogLibraryProductTypes(),
         fetchCatalogLibraryBrands(),
       ]);
       setCategories(nextCategories);
-      setProductTypes(nextProductTypes);
       setBrands(nextBrands);
     } catch (nextError) {
       setError(
@@ -153,24 +129,6 @@ export function CatalogLibraryPage() {
       mode: "edit",
       category,
       values: catalogCategoryToForm(category),
-    });
-  }
-
-  function openCreateProductTypeForm(categoryId = "") {
-    setFormErrors({});
-    setProductTypeForm({
-      mode: "create",
-      productType: null,
-      values: emptyCatalogProductTypeForm(categoryId),
-    });
-  }
-
-  function openEditProductTypeForm(productType: CatalogLibraryProductType) {
-    setFormErrors({});
-    setProductTypeForm({
-      mode: "edit",
-      productType,
-      values: catalogProductTypeToForm(productType),
     });
   }
 
@@ -236,50 +194,6 @@ export function CatalogLibraryPage() {
     }
   }
 
-  async function handleProductTypeSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!productTypeForm) {
-      return;
-    }
-
-    const nextErrors = validateCatalogProductTypeForm(productTypeForm.values);
-    setFormErrors(nextErrors);
-
-    if (Object.values(nextErrors).some(Boolean)) {
-      setAlert({
-        title: "Product type details missing",
-        description:
-          catalogValidationSummary(nextErrors) ||
-          "Please complete the required product type details.",
-      });
-      return;
-    }
-
-    try {
-      setSaving(true);
-      if (productTypeForm.mode === "create") {
-        await createCatalogLibraryProductType(productTypeForm.values);
-        showToast("Catalog product type added.", "success");
-      } else if (productTypeForm.productType) {
-        await updateCatalogLibraryProductType(
-          productTypeForm.productType.id,
-          productTypeForm.values,
-        );
-        showToast("Catalog product type updated.", "success");
-      }
-      setProductTypeForm(null);
-      await loadData();
-    } catch (nextError) {
-      const description =
-        nextError instanceof Error ? nextError.message : "Product type save failed.";
-      setAlert({ title: "Product type could not be saved", description });
-      showToast(description, "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleBrandSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -332,11 +246,6 @@ export function CatalogLibraryPage() {
           {activeTab === "categories" ? (
             <Button onClick={openCreateCategoryForm}>Add Category</Button>
           ) : null}
-          {activeTab === "product-types" ? (
-            <Button onClick={() => openCreateProductTypeForm()}>
-              Add Product Type
-            </Button>
-          ) : null}
           {activeTab === "brands" ? (
             <Button onClick={openCreateBrandForm}>Add Brand</Button>
           ) : null}
@@ -349,12 +258,6 @@ export function CatalogLibraryPage() {
           onClick={() => setActiveTab("categories")}
         >
           Categories
-        </TabButton>
-        <TabButton
-          active={activeTab === "product-types"}
-          onClick={() => setActiveTab("product-types")}
-        >
-          Product Types
         </TabButton>
         <TabButton
           active={activeTab === "brands"}
@@ -370,16 +273,7 @@ export function CatalogLibraryPage() {
       {!loading && !error && activeTab === "categories" ? (
         <CategoryLibraryList
           categories={categories}
-          productTypes={productTypes}
-          onAddType={openCreateProductTypeForm}
           onEdit={openEditCategoryForm}
-        />
-      ) : null}
-      {!loading && !error && activeTab === "product-types" ? (
-        <ProductTypeLibraryList
-          categories={categories}
-          productTypes={productTypes}
-          onEdit={openEditProductTypeForm}
         />
       ) : null}
       {!loading && !error && activeTab === "brands" ? (
@@ -402,22 +296,6 @@ export function CatalogLibraryPage() {
         />
       ) : null}
 
-      {productTypeForm ? (
-        <CatalogProductTypeFormModal
-          title={
-            productTypeForm.mode === "create"
-              ? "Add Catalog Product Type"
-              : "Edit Catalog Product Type"
-          }
-          values={productTypeForm.values}
-          setValues={(values) => setProductTypeForm({ ...productTypeForm, values })}
-          categories={activeCategories}
-          errors={formErrors}
-          onClose={() => setProductTypeForm(null)}
-          onSubmit={handleProductTypeSubmit}
-          saving={saving}
-        />
-      ) : null}
 
       {brandForm ? (
         <CatalogBrandFormModal
@@ -476,23 +354,11 @@ function StatusBadge({ active }: { active: boolean | null }) {
 
 function CategoryLibraryList({
   categories,
-  productTypes,
-  onAddType,
   onEdit,
 }: {
   categories: CatalogLibraryCategory[];
-  productTypes: CatalogLibraryProductType[];
-  onAddType: (categoryId: string) => void;
   onEdit: (category: CatalogLibraryCategory) => void;
 }) {
-  const productTypeCounts = productTypes.reduce<Record<string, number>>(
-    (counts, productType) => {
-      counts[productType.category_id] = (counts[productType.category_id] ?? 0) + 1;
-      return counts;
-    },
-    {},
-  );
-
   if (categories.length === 0) {
     return (
       <EmptyState
@@ -511,7 +377,6 @@ function CategoryLibraryList({
               <th className="px-4 py-3">Display Order</th>
               <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Product Types</th>
               <th className="px-4 py-3">Status</th>
               <th className="w-36 px-4 py-3"></th>
             </tr>
@@ -531,15 +396,11 @@ function CategoryLibraryList({
                 <td className="px-4 py-3">
                   <ProductCategoryTypeBadge value={category.category_type} />
                 </td>
-                <td className="px-4 py-3">{productTypeCounts[category.id] ?? 0}</td>
                 <td className="px-4 py-3">
                   <StatusBadge active={category.is_active} />
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex justify-end gap-2">
-                    <Button onClick={() => onAddType(category.id)} variant="secondary">
-                      Add Type
-                    </Button>
                     <Button onClick={() => onEdit(category)} variant="ghost">
                       Edit
                     </Button>
@@ -568,109 +429,12 @@ function CategoryLibraryList({
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">
                   {category.description ?? "No description"}
                 </p>
-                <p className="mt-2 text-xs font-medium text-slate-600">
-                  {productTypeCounts[category.id] ?? 0} product types
-                </p>
               </div>
               <ProductCategoryTypeBadge value={category.category_type} />
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <StatusBadge active={category.is_active} />
-              <Button onClick={() => onAddType(category.id)} variant="secondary">
-                Add Type
-              </Button>
               <Button onClick={() => onEdit(category)} variant="ghost">
-                Edit
-              </Button>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ProductTypeLibraryList({
-  categories,
-  productTypes,
-  onEdit,
-}: {
-  categories: CatalogLibraryCategory[];
-  productTypes: CatalogLibraryProductType[];
-  onEdit: (productType: CatalogLibraryProductType) => void;
-}) {
-  const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
-
-  if (productTypes.length === 0) {
-    return (
-      <EmptyState
-        title="No catalog product types found"
-        description="Add category-specific type defaults such as panel or inverter variants."
-      />
-    );
-  }
-
-  return (
-    <section className="space-y-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
-      <div className="hidden overflow-hidden rounded-lg border border-stone-200 md:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Display Order</th>
-              <th className="px-4 py-3">Product Type</th>
-              <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="w-20 px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100 bg-white">
-            {productTypes.map((productType) => (
-              <tr key={productType.id}>
-                <td className="px-4 py-3 font-semibold text-slate-950">
-                  {productType.display_order}
-                </td>
-                <td className="px-4 py-3 font-medium text-slate-950">
-                  {productType.name}
-                </td>
-                <td className="px-4 py-3">
-                  {productType.category?.name ??
-                    categoryNames.get(productType.category_id) ??
-                    "-"}
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge active={productType.is_active} />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Button onClick={() => onEdit(productType)} variant="ghost">
-                    Edit
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid gap-3 md:hidden">
-        {productTypes.map((productType) => (
-          <article
-            key={productType.id}
-            className="rounded-lg border border-stone-200 bg-stone-50 p-3"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Order {productType.display_order}
-            </p>
-            <h2 className="mt-1 text-sm font-semibold text-slate-950">
-              {productType.name}
-            </h2>
-            <p className="mt-1 text-xs leading-5 text-slate-600">
-              {productType.category?.name ??
-                categoryNames.get(productType.category_id) ??
-                "-"}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <StatusBadge active={productType.is_active} />
-              <Button onClick={() => onEdit(productType)} variant="ghost">
                 Edit
               </Button>
             </div>
@@ -834,85 +598,6 @@ function CatalogCategoryFormModal({
         value={values.description}
         onChange={(value) => update("description", value)}
       />
-    </Modal>
-  );
-}
-
-function CatalogProductTypeFormModal({
-  title,
-  values,
-  setValues,
-  categories,
-  errors,
-  onClose,
-  onSubmit,
-  saving,
-}: {
-  title: string;
-  values: CatalogLibraryProductTypeFormValues;
-  setValues: (values: CatalogLibraryProductTypeFormValues) => void;
-  categories: CatalogLibraryCategory[];
-  errors: Record<string, string>;
-  onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  saving: boolean;
-}) {
-  function update(
-    key: keyof CatalogLibraryProductTypeFormValues,
-    value: string | boolean,
-  ) {
-    setValues({ ...values, [key]: value });
-  }
-
-  return (
-    <Modal
-      title={title}
-      onClose={onClose}
-      onSubmit={onSubmit}
-      noValidate
-      submitLabel="Save"
-      submitting={saving}
-      maxWidthClass="sm:max-w-xl"
-    >
-      <SelectInput
-        label="Category"
-        value={values.category_id}
-        onChange={(value) => update("category_id", value)}
-        options={[
-          { value: "", label: "Select category" },
-          ...categories.map((category) => ({
-            value: category.id,
-            label: category.name,
-          })),
-        ]}
-      />
-      {errors.category_id ? (
-        <p className="-mt-3 text-xs text-rose-700">{errors.category_id}</p>
-      ) : null}
-      <TextInput
-        label="Product Type Name"
-        value={values.name}
-        onChange={(value) => update("name", value)}
-        error={errors.name}
-        required
-      />
-      <TextInput
-        label="Display Order"
-        type="number"
-        value={values.display_order}
-        onChange={(value) => update("display_order", value)}
-        error={errors.display_order}
-        required
-      />
-      <label className="flex items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-medium text-slate-700">
-        <input
-          checked={values.is_active}
-          className="h-4 w-4 rounded border-stone-300 text-brand-700 focus:ring-brand-600"
-          onChange={(event) => update("is_active", event.target.checked)}
-          type="checkbox"
-        />
-        Active
-      </label>
     </Modal>
   );
 }

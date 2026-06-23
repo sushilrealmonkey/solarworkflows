@@ -103,17 +103,12 @@ export function hasPermission(
 export function hasAdminPricingAccess(
   profile: UserProfile | null,
   permissions: UserPermission[],
-  roleNames: string[],
+  _roleNames: string[],
   actionKey: "view" | "create" | "update" | "delete" = "view",
 ) {
-  return (
-    hasPermission(profile, permissions, "product_pricing", actionKey) ||
-    roleNames.some((roleName) => {
-      const normalizedRole = roleName.trim().toLowerCase();
+  void _roleNames;
 
-      return normalizedRole === "admin" || normalizedRole === "administrator";
-    })
-  );
+  return hasPermission(profile, permissions, "product_pricing", actionKey);
 }
 
 export function formatDate(value: string | null) {

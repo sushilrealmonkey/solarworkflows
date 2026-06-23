@@ -18,12 +18,16 @@ export const permissionModules = [
   "site_surveys",
   "quotations",
   "projects",
+  "b2b_sales",
   "payments",
   "documents",
+  "product_master",
+  "product_pricing",
   "inventory",
   "vendors",
   "invoices",
   "reports",
+  "staff",
   "settings",
 ] as const;
 
@@ -93,6 +97,35 @@ export async function updateOrganizationSettings(
   }
 
   return data as OrganizationSettings;
+}
+
+const companyBrandingBucket = "company-branding";
+
+export async function uploadCompanyLogo(
+  profile: UserProfile | null,
+  logo: Blob,
+) {
+  const client = requireSupabase();
+  const organizationId = requireOrganization(profile);
+
+  if (logo.size > 1024 * 1024) {
+    throw new Error("The cropped company logo must be 1 MB or smaller.");
+  }
+
+  const filePath = `${organizationId}/logos/company-logo-${Date.now()}.png`;
+  const { error } = await client.storage
+    .from(companyBrandingBucket)
+    .upload(filePath, logo, {
+      contentType: "image/png",
+      upsert: false,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return client.storage.from(companyBrandingBucket).getPublicUrl(filePath).data
+    .publicUrl;
 }
 
 export async function fetchSettingsStaff() {

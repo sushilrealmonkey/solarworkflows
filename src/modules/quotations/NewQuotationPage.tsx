@@ -49,6 +49,7 @@ import { fetchOrganizationSettings } from "../settings/settingsApi";
 import {
   applySurveyToQuotationForm,
   buildQuotationTitle,
+  calculateDiscountedTurnkeyTotals,
   calculateExpectedAnnualGenerationInput,
   calculateTurnkeyGstBreakdown,
   defaultTechnicalPaymentTerms,
@@ -420,7 +421,6 @@ export function NewQuotationPage() {
       product_id: "",
       inventory_item_id: "",
       hsn_code: "",
-      product_type: "",
       description: "",
       brand: "",
       specification: "",
@@ -854,10 +854,6 @@ export function NewQuotationPage() {
                 label="HSN Code"
                 value={bomDraft.hsn_code ?? ""}
               />
-              <ReadonlyFormValue
-                label="Product Type"
-                value={bomDraft.product_type ?? ""}
-              />
               <ReadonlyFormValue label="Brand" value={bomDraft.brand ?? ""} />
               <ReadonlyFormValue
                 label="Specifications"
@@ -891,7 +887,6 @@ export function NewQuotationPage() {
                     <th className="px-4 py-3">Category</th>
                     <th className="px-4 py-3">Product</th>
                     <th className="px-4 py-3">HSN Code</th>
-                    <th className="px-4 py-3">Product Type</th>
                     <th className="px-4 py-3">Brand</th>
                     <th className="px-4 py-3">Specifications</th>
                     <th className="px-4 py-3">Quantity</th>
@@ -914,7 +909,6 @@ export function NewQuotationPage() {
                           {item.description || "-"}
                         </td>
                         <td className="px-4 py-3">{item.hsn_code || "-"}</td>
-                        <td className="px-4 py-3">{item.product_type || "-"}</td>
                         <td className="px-4 py-3">{item.brand || "-"}</td>
                         <td className="px-4 py-3">
                           {item.specification || item.make_specification || "-"}
@@ -956,7 +950,10 @@ export function NewQuotationPage() {
             onChange={updateTurnkeyCost}
             type="number"
           />
-          <TurnkeyGstBreakup amount={values.summary_total_turnkey_cost} />
+          <TurnkeyGstBreakup
+            amount={values.summary_total_turnkey_cost}
+            discountAmount={values.discount_amount}
+          />
           <TextInput
             label="Discount Amount"
             value={values.discount_amount}
@@ -1223,12 +1220,22 @@ function Section({
   );
 }
 
-function TurnkeyGstBreakup({ amount }: { amount: string }) {
+function TurnkeyGstBreakup({
+  amount,
+  discountAmount,
+}: {
+  amount: string;
+  discountAmount: string;
+}) {
   if (!hasTurnkeyGstAmount(amount)) {
     return null;
   }
 
   const breakdown = calculateTurnkeyGstBreakdown(Number(amount));
+  const totals = calculateDiscountedTurnkeyTotals(
+    Number(amount),
+    Number(discountAmount || 0),
+  );
 
   return (
     <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 md:col-span-2">
@@ -1236,19 +1243,19 @@ function TurnkeyGstBreakup({ amount }: { amount: string }) {
       <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
         <GstBreakupItem
           label="Taxable Amount"
-          value={formatMoneyWithPaise(breakdown.taxableAmount)}
+          value={formatMoneyWithPaise(totals.taxableAmount)}
         />
         <GstBreakupItem
           label="CGST"
-          value={formatMoneyWithPaise(breakdown.cgstAmount)}
+          value={formatMoneyWithPaise(totals.cgstAmount)}
         />
         <GstBreakupItem
           label="SGST"
-          value={formatMoneyWithPaise(breakdown.sgstAmount)}
+          value={formatMoneyWithPaise(totals.sgstAmount)}
         />
         <GstBreakupItem
           label="Total GST"
-          value={formatMoneyWithPaise(breakdown.gstAmount)}
+          value={formatMoneyWithPaise(totals.gstAmount)}
         />
       </dl>
       <div className="mt-4 overflow-x-auto">
@@ -1338,6 +1345,10 @@ function ProposalPreview({
   );
   const turnkeyAmount = values.summary_total_turnkey_cost || values.pricing_total_rate;
   const gstBreakdown = calculateTurnkeyGstBreakdown(Number(turnkeyAmount || 0));
+  const discountedTotals = calculateDiscountedTurnkeyTotals(
+    Number(turnkeyAmount || 0),
+    Number(values.discount_amount || 0),
+  );
 
   return (
     <div className="space-y-5 rounded-lg border border-stone-200 bg-white p-4 text-sm text-slate-800 md:col-span-2">
@@ -1431,11 +1442,12 @@ function ProposalPreview({
             ["Lightning Arrestor", yesNoDisplay(values.summary_lightning_arrestor_included)],
             ["Remote Monitoring", yesNoDisplay(values.summary_remote_monitoring_included)],
             ["Total Turnkey Cost", moneyPreview(turnkeyAmount)],
-            ["Taxable Amount", moneyPreviewFromNumber(gstBreakdown.taxableAmount)],
-            ["CGST", moneyPreviewFromNumber(gstBreakdown.cgstAmount)],
-            ["SGST", moneyPreviewFromNumber(gstBreakdown.sgstAmount)],
-            ["Total GST", moneyPreviewFromNumber(gstBreakdown.gstAmount)],
+            ["Base Amount", moneyPreviewFromNumber(gstBreakdown.taxableAmount)],
             ["Discount", moneyPreview(values.discount_amount)],
+            ["Taxable After Discount", moneyPreviewFromNumber(discountedTotals.taxableAmount)],
+            ["CGST", moneyPreviewFromNumber(discountedTotals.cgstAmount)],
+            ["SGST", moneyPreviewFromNumber(discountedTotals.sgstAmount)],
+            ["Total GST", moneyPreviewFromNumber(discountedTotals.gstAmount)],
             ["Subsidy", moneyPreview(values.subsidy_amount)],
             ["Amount In Words", values.summary_amount_in_words || "-"],
           ]}
@@ -1747,7 +1759,6 @@ function materialItemWithProduct(
       product_id: "",
       inventory_item_id: "",
       hsn_code: "",
-      product_type: "",
       description: "",
       brand: "",
       specification: "",
@@ -1763,7 +1774,6 @@ function materialItemWithProduct(
     product_id: product.id,
     inventory_item_id: "",
     hsn_code: product.hsn_code ?? "",
-    product_type: product.product_type?.name ?? "",
     description: product.product_name,
     brand: product.brand ?? "",
     specification,
@@ -1780,7 +1790,6 @@ function emptyMaterialItem(): QuotationMaterialItem {
     product_category_id: "",
     product_id: "",
     hsn_code: "",
-    product_type: "",
     description: "",
     brand: "",
     specification: "",
@@ -1796,7 +1805,6 @@ function hasSavedBomItem(item: QuotationMaterialItem) {
       (item.description.trim() &&
         [
           item.hsn_code,
-          item.product_type,
           item.brand,
           item.specification,
           item.make_specification,
@@ -1816,7 +1824,6 @@ function productCategoryName(
 function productOptionLabel(product: Product) {
   const metadata = [
     product.hsn_code ? `HSN: ${product.hsn_code}` : "",
-    product.product_type?.name ? `Type: ${product.product_type.name}` : "",
   ].filter(Boolean);
 
   return metadata.length > 0

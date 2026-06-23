@@ -284,6 +284,24 @@ export async function fetchProformaInvoiceLinkOptions(
       inventoryQuery,
     ]);
 
+  if (customersResult.error) {
+    throw new Error(
+      `Unable to load proforma invoice customers: ${customersResult.error.message}`,
+    );
+  }
+
+  if (projectsResult.error) {
+    throw new Error(
+      `Unable to load proforma invoice projects: ${projectsResult.error.message}`,
+    );
+  }
+
+  if (quotationsResult.error) {
+    throw new Error(
+      `Unable to load proforma invoice quotations: ${quotationsResult.error.message}`,
+    );
+  }
+
   return {
     customers: customersResult.data ?? [],
     projects: (projectsResult.data ?? []) as unknown as ProformaInvoiceLinkOptions["projects"],

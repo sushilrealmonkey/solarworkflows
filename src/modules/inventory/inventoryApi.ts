@@ -127,22 +127,54 @@ const inventoryProductSelect = `
   category_id,
   category_type,
   hsn_code,
-  product_type_id,
   brand,
   model_number,
   specifications,
   unit,
   gst_percent,
   status,
-  category:product_categories(id, name, category_type, display_order),
-  product_type:product_types(id, name, category_id, display_order, is_active)
+  category:product_categories(id, name, category_type, display_order)
 `;
 
 const inventoryItemSelect = `
-  *,
+  id,
+  organization_id,
+  catalog_product_id,
+  product_id,
+  brand_id,
+  model_id,
+  vendor_id,
+  item_code,
+  item_name,
+  item_category,
+  brand,
+  model,
+  unit,
+  current_stock,
+  opening_stock,
+  minimum_stock,
+  gst_percent,
+  status,
+  bill_no,
+  inventory_date,
+  notes,
+  created_at,
+  updated_at,
   catalog_product:products(${inventoryProductSelect}),
   vendor_master:vendors_master(id, name)
 `;
+
+type InventoryItemPublicRow = {
+  item_data: InventoryItem;
+};
+
+function redactLegacyInventoryPricing(item: InventoryItem): InventoryItem {
+  return {
+    ...item,
+    purchase_price: null,
+    selling_price: null,
+  };
+}
 
 type InventoryReservationSummaryRow = {
   inventory_item_id: string | null;
@@ -280,25 +312,21 @@ export async function fetchInventoryMasters(profile: UserProfile | null) {
 
 export async function fetchInventoryItems(profile: UserProfile | null) {
   const client = requireSupabase();
-  let query = client
-    .from("inventory_items")
-    .select(inventoryItemSelect)
-    .not("catalog_product_id", "is", null)
-    .order("item_name", { ascending: true });
+  void profile;
 
-  if (!profile?.is_super_admin) {
-    query = query.eq("organization_id", requireOrganization(profile));
-  } else if (profile.organization_id) {
-    query = query.eq("organization_id", profile.organization_id);
-  }
-
-  const { data, error } = await query;
+  const { data, error } = await client.rpc("inventory_item_public_rows", {
+    target_item_id: null,
+  });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return attachReservationTotals((data ?? []) as InventoryItem[]);
+  return attachReservationTotals(
+    ((data ?? []) as InventoryItemPublicRow[]).map((row) =>
+      redactLegacyInventoryPricing(row.item_data),
+    ),
+  );
 }
 
 export async function fetchInventoryItem(
@@ -306,28 +334,24 @@ export async function fetchInventoryItem(
   id: string,
 ) {
   const client = requireSupabase();
-  let query = client
-    .from("inventory_items")
-    .select(inventoryItemSelect)
-    .eq("id", id)
-    .not("catalog_product_id", "is", null);
+  void profile;
 
-  if (!profile?.is_super_admin) {
-    query = query.eq("organization_id", requireOrganization(profile));
-  }
-
-  const { data, error } = await query.maybeSingle();
+  const { data, error } = await client.rpc("inventory_item_public_rows", {
+    target_item_id: id,
+  });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  if (!data) {
+  const item = ((data ?? []) as InventoryItemPublicRow[])[0]?.item_data;
+
+  if (!item) {
     return null;
   }
 
   const [itemWithReservations] = await attachReservationTotals([
-    data as InventoryItem,
+    redactLegacyInventoryPricing(item),
   ]);
   return itemWithReservations ?? null;
 }
@@ -370,9 +394,12 @@ export async function createInventoryItem(
   }
 
   const [itemWithReservations] = await attachReservationTotals([
-    data as InventoryItem,
+    redactLegacyInventoryPricing(data as unknown as InventoryItem),
   ]);
-  return itemWithReservations ?? (data as InventoryItem);
+  return (
+    itemWithReservations ??
+    redactLegacyInventoryPricing(data as unknown as InventoryItem)
+  );
 }
 
 export async function updateInventoryItem(
@@ -404,9 +431,12 @@ export async function updateInventoryItem(
   }
 
   const [itemWithReservations] = await attachReservationTotals([
-    data as InventoryItem,
+    redactLegacyInventoryPricing(data as unknown as InventoryItem),
   ]);
-  return itemWithReservations ?? (data as InventoryItem);
+  return (
+    itemWithReservations ??
+    redactLegacyInventoryPricing(data as unknown as InventoryItem)
+  );
 }
 
 export async function deleteInventoryItem(id: string) {

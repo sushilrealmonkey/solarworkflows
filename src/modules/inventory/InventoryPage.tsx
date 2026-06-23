@@ -191,7 +191,6 @@ export function InventoryPage() {
           inventoryProductName(item),
           item.catalog_product?.product_code,
           item.catalog_product?.category?.name,
-          item.catalog_product?.product_type?.name,
           item.catalog_product?.hsn_code,
           inventoryBrandName(item),
           inventoryModelName(item),
@@ -1250,7 +1249,6 @@ function ProductSnapshot({
 
   const details = [
     ["Category", product.category?.name ?? "-"],
-    ["Product Type", product.product_type?.name ?? "-"],
     ["Brand", product.brand ?? "-"],
     ["Model / Specifications", product.model_number ?? product.specifications ?? "-"],
     ["Unit", product.unit],

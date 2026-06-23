@@ -161,7 +161,19 @@ export function ProformaInvoicesPage() {
     );
   }
 
-  function openCreateForm() {
+  async function openCreateForm() {
+    try {
+      const nextOptions = await fetchProformaInvoiceLinkOptions(profile);
+      setOptions(nextOptions);
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to refresh proforma invoice projects and customers.",
+        "error",
+      );
+    }
+
     setFormErrors({});
     setFormState({
       mode: "create",
@@ -358,7 +370,9 @@ export function ProformaInvoicesPage() {
           title="Proforma Invoices"
           description="Create payment requests before issuing final invoices."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Create Proforma</Button> : null}
+        {canCreate ? (
+          <Button onClick={() => void openCreateForm()}>Create Proforma</Button>
+        ) : null}
       </div>
 
       <Toolbar className="md:grid-cols-3">
@@ -402,7 +416,11 @@ export function ProformaInvoicesPage() {
         <EmptyState
           title="No proforma invoices found"
           description="Create a proforma invoice before collecting payment and issuing the final invoice."
-          action={canCreate ? <Button onClick={openCreateForm}>Create Proforma</Button> : null}
+          action={
+            canCreate ? (
+              <Button onClick={() => void openCreateForm()}>Create Proforma</Button>
+            ) : null
+          }
         />
       ) : null}
 

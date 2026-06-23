@@ -5,8 +5,6 @@ import type {
   CatalogLibraryCategory,
   CatalogLibraryCategoryFormValues,
   CatalogLibraryImportResult,
-  CatalogLibraryProductType,
-  CatalogLibraryProductTypeFormValues,
 } from "./types";
 
 function requireSupabase() {
@@ -37,15 +35,6 @@ function categoryPayload(values: CatalogLibraryCategoryFormValues) {
   };
 }
 
-function productTypePayload(values: CatalogLibraryProductTypeFormValues) {
-  return {
-    category_id: values.category_id,
-    name: values.name.trim(),
-    display_order: orderValue(values.display_order),
-    is_active: values.is_active,
-  };
-}
-
 function brandPayload(values: CatalogLibraryBrandFormValues) {
   return {
     name: values.name.trim(),
@@ -67,23 +56,6 @@ export async function fetchCatalogLibraryCategories() {
   }
 
   return (data ?? []) as CatalogLibraryCategory[];
-}
-
-export async function fetchCatalogLibraryProductTypes() {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("catalog_library_product_types")
-    .select(
-      "*, category:catalog_library_categories(id, name, category_type, display_order, is_active)",
-    )
-    .order("display_order", { ascending: true })
-    .order("name", { ascending: true });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? []) as CatalogLibraryProductType[];
 }
 
 export async function fetchCatalogLibraryBrands() {
@@ -135,46 +107,6 @@ export async function updateCatalogLibraryCategory(
   }
 
   return data as CatalogLibraryCategory;
-}
-
-export async function createCatalogLibraryProductType(
-  values: CatalogLibraryProductTypeFormValues,
-) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("catalog_library_product_types")
-    .insert(productTypePayload(values))
-    .select(
-      "*, category:catalog_library_categories(id, name, category_type, display_order, is_active)",
-    )
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as CatalogLibraryProductType;
-}
-
-export async function updateCatalogLibraryProductType(
-  id: string,
-  values: CatalogLibraryProductTypeFormValues,
-) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("catalog_library_product_types")
-    .update(productTypePayload(values))
-    .eq("id", id)
-    .select(
-      "*, category:catalog_library_categories(id, name, category_type, display_order, is_active)",
-    )
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as CatalogLibraryProductType;
 }
 
 export async function createCatalogLibraryBrand(

@@ -334,7 +334,7 @@ export async function fetchPurchasePriceDefaults(items: InventoryItem[]) {
     if (isMissingPricingStoreError(error)) {
       const { data: productData, error: productError } = await client
         .from("products")
-        .select("id, purchase_price, gst_percent")
+        .select("id, gst_percent")
         .in("id", productIds);
 
       if (productError) {
@@ -345,7 +345,7 @@ export async function fetchPurchasePriceDefaults(items: InventoryItem[]) {
         (productData ?? []).map((product) => [
           product.id as string,
           {
-            current_purchase_price: product.purchase_price as number | null,
+            current_purchase_price: 0,
             gst_percent: product.gst_percent as number | null,
           },
         ]),

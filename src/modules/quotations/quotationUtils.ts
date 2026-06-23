@@ -851,7 +851,6 @@ function normalizeQuotationMaterialItem(
     product_category_id: item.product_category_id ?? "",
     product_id: item.product_id ?? "",
     hsn_code: item.hsn_code ?? "",
-    product_type: item.product_type ?? "",
     description: item.description ?? "",
     brand: item.brand ?? "",
     specification: item.specification ?? item.make_specification ?? "",
@@ -1115,6 +1114,16 @@ export type TurnkeyGstBreakdown = {
   taxableAmount: number;
 };
 
+export type DiscountedTurnkeyTotals = {
+  baseAmount: number;
+  discountAmount: number;
+  taxableAmount: number;
+  gstAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
+  totalAmount: number;
+};
+
 export function calculateTurnkeyGstBreakdown(
   inclusiveAmount: number | null | undefined,
 ): TurnkeyGstBreakdown {
@@ -1137,6 +1146,32 @@ export function calculateTurnkeyGstBreakdown(
     cgstAmount,
     sgstAmount,
     taxableAmount: roundMoney(amount - gstAmount),
+  };
+}
+
+export function calculateDiscountedTurnkeyTotals(
+  inclusiveAmount: number | null | undefined,
+  discountAmount: number | null | undefined,
+): DiscountedTurnkeyTotals {
+  const breakdown = calculateTurnkeyGstBreakdown(inclusiveAmount);
+  const discount = Math.min(
+    Math.max(Number(discountAmount ?? 0), 0),
+    breakdown.taxableAmount,
+  );
+  const taxableAmount = roundMoney(breakdown.taxableAmount - discount);
+  const taxFactor =
+    breakdown.taxableAmount > 0 ? taxableAmount / breakdown.taxableAmount : 0;
+  const gstAmount = roundMoney(breakdown.gstAmount * taxFactor);
+  const cgstAmount = roundMoney(gstAmount / 2);
+
+  return {
+    baseAmount: breakdown.taxableAmount,
+    discountAmount: roundMoney(discount),
+    taxableAmount,
+    gstAmount,
+    cgstAmount,
+    sgstAmount: roundMoney(gstAmount - cgstAmount),
+    totalAmount: roundMoney(taxableAmount + gstAmount),
   };
 }
 

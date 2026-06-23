@@ -18,6 +18,7 @@ import type {
   QuotationWithRelations,
 } from "../quotations/types";
 import {
+  calculateDiscountedTurnkeyTotals,
   calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
   hasTurnkeyGstAmount,
@@ -2323,11 +2324,15 @@ function quotationPdfTotals(quotation: QuotationWithRelations): Totals {
   }
 
   const breakdown = calculateTurnkeyGstBreakdown(turnkeyAmount);
-  const totalAmount = Math.max(breakdown.inclusiveAmount - discountAmount, 0);
+  const discountedTotals = calculateDiscountedTurnkeyTotals(
+    turnkeyAmount,
+    discountAmount,
+  );
+  const totalAmount = discountedTotals.totalAmount;
 
   return {
     baseAmount: breakdown.taxableAmount,
-    gstAmount: breakdown.gstAmount,
+    gstAmount: discountedTotals.gstAmount,
     discountAmount: quotation.discount_amount,
     subsidyAmount: quotation.subsidy_amount,
     totalAmount,

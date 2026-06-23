@@ -29,7 +29,7 @@ specific compatibility exception.
 | Field operations | `site_surveys`, `projects` |
 | B2B sales | `b2b_sales`, `b2b_sale_items` |
 | Quotations | `quotations`, `quotation_items`, payment terms, warranties, BOM items |
-| Products and BOM | `product_categories`, `product_types`, `products`, `bom_templates`, `bom_template_lines` |
+| Products and BOM | `product_categories`, `products`, `bom_templates`, `bom_template_lines` |
 | Inventory and procurement | `inventory_items`, `inventory_transactions`, `inventory_reservations`, `inventory_batches`, vendors, purchase orders, purchase order items |
 | Finance | `payments`, `project_payment_summary`, proforma invoices, invoices, invoice items |
 | Documents and storage metadata | `documents`, generated PDF support for quotations, proforma invoices, invoices, and purchase orders, organization document storage |

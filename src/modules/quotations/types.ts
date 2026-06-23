@@ -123,7 +123,6 @@ export type QuotationMaterialItem = {
   product_category_id?: string;
   product_id?: string;
   hsn_code?: string;
-  product_type?: string;
   description: string;
   brand?: string;
   specification?: string;
@@ -206,10 +205,6 @@ export type QuotationBomItemProduct = {
   unit: string | null;
   category_type?: string | null;
   hsn_code?: string | null;
-  product_type?: {
-    id: string;
-    name: string;
-  } | null;
 };
 
 export type QuotationBomItem = {
