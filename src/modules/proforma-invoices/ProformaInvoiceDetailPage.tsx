@@ -104,7 +104,6 @@ export function ProformaInvoiceDetailPage() {
   const [creatingFinalInvoice, setCreatingFinalInvoice] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [confirmingRegeneratePdf, setConfirmingRegeneratePdf] = useState(false);
 
   const canView = hasPermission(profile, permissions, "invoices", "view");
   const canCreate = hasPermission(profile, permissions, "invoices", "create");
@@ -328,7 +327,7 @@ export function ProformaInvoiceDetailPage() {
     }
   }
 
-  async function handleGeneratePdf(confirmedRegenerate = false) {
+  async function handleGeneratePdf() {
     if (!proformaInvoice) {
       return;
     }
@@ -347,12 +346,6 @@ export function ProformaInvoiceDetailPage() {
         "PI",
         proformaInvoice.id,
       );
-      const existingDocument = await fetchGeneratedDocument(filePath);
-
-      if (existingDocument && !confirmedRegenerate) {
-        setConfirmingRegeneratePdf(true);
-        return;
-      }
 
       const pdfBlob = await buildProformaInvoicePdf(
         proformaInvoice,
@@ -376,7 +369,6 @@ export function ProformaInvoiceDetailPage() {
       );
 
       setPdfPreviewUrl(result.previewUrl);
-      setConfirmingRegeneratePdf(false);
       showToast("Proforma invoice PDF generated.", "success");
     } catch (nextError) {
       showToast(
@@ -470,7 +462,7 @@ export function ProformaInvoiceDetailPage() {
                 </Button>
               ) : null}
               <Button
-                onClick={() => void handleGeneratePdf(false)}
+                onClick={() => void handleGeneratePdf()}
                 disabled={generatingPdf || !canCreateDocuments}
                 variant="secondary"
               >
@@ -605,18 +597,6 @@ export function ProformaInvoiceDetailPage() {
         />
       ) : null}
 
-      {confirmingRegeneratePdf ? (
-        <ConfirmDialog
-          title="Regenerate proforma invoice PDF?"
-          description="A proforma invoice PDF already exists for this PI code. Regenerating will replace the stored PDF file and refresh the document record."
-          confirmLabel="Regenerate"
-          confirmingLabel="Regenerating..."
-          confirmVariant="primary"
-          confirming={generatingPdf}
-          onCancel={() => setConfirmingRegeneratePdf(false)}
-          onConfirm={() => void handleGeneratePdf(true)}
-        />
-      ) : null}
     </div>
   );
 }

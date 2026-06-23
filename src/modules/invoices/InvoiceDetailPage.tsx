@@ -111,7 +111,6 @@ export function InvoiceDetailPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [confirmingRegeneratePdf, setConfirmingRegeneratePdf] = useState(false);
 
   const canView = hasPermission(profile, permissions, "invoices", "view");
   const canCreate = hasPermission(profile, permissions, "invoices", "create");
@@ -352,7 +351,7 @@ export function InvoiceDetailPage() {
     }
   }
 
-  async function handleGeneratePdf(confirmedRegenerate = false) {
+  async function handleGeneratePdf() {
     if (!invoice) {
       return;
     }
@@ -371,12 +370,6 @@ export function InvoiceDetailPage() {
         settings.invoice_prefix ?? "INV",
         invoice.id,
       );
-      const existingDocument = await fetchGeneratedDocument(filePath);
-
-      if (existingDocument && !confirmedRegenerate) {
-        setConfirmingRegeneratePdf(true);
-        return;
-      }
 
       const pdfBlob = await buildInvoicePdf(invoice, items, organization, settings);
       const result = await uploadGeneratedPdf(
@@ -395,7 +388,6 @@ export function InvoiceDetailPage() {
       );
 
       setPdfPreviewUrl(result.previewUrl);
-      setConfirmingRegeneratePdf(false);
       showToast("Invoice PDF generated.", "success");
     } catch (nextError) {
       showToast(
@@ -466,7 +458,7 @@ export function InvoiceDetailPage() {
                 </>
               ) : null}
               <Button
-                onClick={() => void handleGeneratePdf(false)}
+                onClick={() => void handleGeneratePdf()}
                 disabled={generatingPdf || !canCreateDocuments}
                 variant="secondary"
               >
@@ -669,18 +661,6 @@ export function InvoiceDetailPage() {
         />
       ) : null}
 
-      {confirmingRegeneratePdf ? (
-        <ConfirmDialog
-          title="Regenerate invoice PDF?"
-          description="An invoice PDF already exists for this invoice code. Regenerating will replace the stored PDF file and refresh the document record."
-          confirmLabel="Regenerate"
-          confirmingLabel="Regenerating..."
-          confirmVariant="primary"
-          confirming={generatingPdf}
-          onCancel={() => setConfirmingRegeneratePdf(false)}
-          onConfirm={() => void handleGeneratePdf(true)}
-        />
-      ) : null}
     </div>
   );
 }

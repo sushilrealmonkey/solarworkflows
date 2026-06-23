@@ -62,7 +62,6 @@ import { buildQuotationPdf } from "../documents/businessPdf";
 import {
   buildQuotationPdfPath,
   fetchBusinessDocumentSettings,
-  fetchGeneratedDocument,
   uploadGeneratedPdf,
 } from "../documents/generatedPdfApi";
 
@@ -90,7 +89,6 @@ export function QuotationDetailPage() {
   const [localPdfPreviewUrl, setLocalPdfPreviewUrl] = useState<string | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [previewingPdf, setPreviewingPdf] = useState(false);
-  const [confirmingRegeneratePdf, setConfirmingRegeneratePdf] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -351,7 +349,7 @@ export function QuotationDetailPage() {
     }
   }
 
-  async function handleGeneratePdf(confirmedRegenerate = false) {
+  async function handleGeneratePdf() {
     if (!quotation) {
       return;
     }
@@ -371,14 +369,6 @@ export function QuotationDetailPage() {
         settings.quotation_prefix ?? "QUO",
         quotation.id,
       );
-      const existingDocument = canCreateDocuments
-        ? await fetchGeneratedDocument(filePath)
-        : null;
-
-      if (existingDocument && !confirmedRegenerate) {
-        setConfirmingRegeneratePdf(true);
-        return;
-      }
 
       const pdfBlob = await buildQuotationPdf(
         quotation,
@@ -402,7 +392,6 @@ export function QuotationDetailPage() {
       }
 
       downloadBlob(pdfBlob, quotationPdfFileName(quotation));
-      setConfirmingRegeneratePdf(false);
       showToast("Quotation PDF generated and downloaded.", "success");
     } catch (nextError) {
       showToast(
@@ -644,7 +633,7 @@ export function QuotationDetailPage() {
                     </a>
                   ) : null}
                   <Button
-                    onClick={() => void handleGeneratePdf(false)}
+                    onClick={() => void handleGeneratePdf()}
                     disabled={generatingPdf || previewingPdf}
                     variant="secondary"
                   >
@@ -1198,19 +1187,6 @@ export function QuotationDetailPage() {
           confirmVariant={statusTarget === "rejected" ? "danger" : "primary"}
           onCancel={() => setStatusTarget(null)}
           onConfirm={confirmStatusAction}
-        />
-      ) : null}
-
-      {confirmingRegeneratePdf ? (
-        <ConfirmDialog
-          title="Regenerate quotation PDF?"
-          description="A quotation PDF already exists for this quotation code. Regenerating will replace the stored PDF file and refresh the document record."
-          confirmLabel="Regenerate"
-          confirmingLabel="Regenerating..."
-          confirmVariant="primary"
-          confirming={generatingPdf}
-          onCancel={() => setConfirmingRegeneratePdf(false)}
-          onConfirm={() => void handleGeneratePdf(true)}
         />
       ) : null}
 
