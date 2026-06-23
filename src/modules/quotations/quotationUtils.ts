@@ -1156,22 +1156,20 @@ export function calculateDiscountedTurnkeyTotals(
   const breakdown = calculateTurnkeyGstBreakdown(inclusiveAmount);
   const discount = Math.min(
     Math.max(Number(discountAmount ?? 0), 0),
-    breakdown.taxableAmount,
+    breakdown.inclusiveAmount,
   );
-  const taxableAmount = roundMoney(breakdown.taxableAmount - discount);
-  const taxFactor =
-    breakdown.taxableAmount > 0 ? taxableAmount / breakdown.taxableAmount : 0;
-  const gstAmount = roundMoney(breakdown.gstAmount * taxFactor);
-  const cgstAmount = roundMoney(gstAmount / 2);
+  const discountedBreakdown = calculateTurnkeyGstBreakdown(
+    roundMoney(breakdown.inclusiveAmount - discount),
+  );
 
   return {
     baseAmount: breakdown.taxableAmount,
     discountAmount: roundMoney(discount),
-    taxableAmount,
-    gstAmount,
-    cgstAmount,
-    sgstAmount: roundMoney(gstAmount - cgstAmount),
-    totalAmount: roundMoney(taxableAmount + gstAmount),
+    taxableAmount: discountedBreakdown.taxableAmount,
+    gstAmount: discountedBreakdown.gstAmount,
+    cgstAmount: discountedBreakdown.cgstAmount,
+    sgstAmount: discountedBreakdown.sgstAmount,
+    totalAmount: discountedBreakdown.inclusiveAmount,
   };
 }
 

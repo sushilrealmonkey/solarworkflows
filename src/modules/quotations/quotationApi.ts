@@ -285,7 +285,7 @@ function quotationPayload(values: QuotationFormValues) {
     estimated_generation_units:
       nullableNumber(values.estimated_generation_units) ??
       nullableNumber(values.expected_annual_generation_kwh),
-    base_amount: turnkeyGst?.taxableAmount,
+    base_amount: discountedTurnkeyTotals?.taxableAmount ?? turnkeyGst?.taxableAmount,
     gst_amount: discountedTurnkeyTotals?.gstAmount,
     discount_amount: discountAmount,
     total_amount: totalAmount,

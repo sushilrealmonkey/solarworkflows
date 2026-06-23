@@ -2323,7 +2323,6 @@ function quotationPdfTotals(quotation: QuotationWithRelations): Totals {
     };
   }
 
-  const breakdown = calculateTurnkeyGstBreakdown(turnkeyAmount);
   const discountedTotals = calculateDiscountedTurnkeyTotals(
     turnkeyAmount,
     discountAmount,
@@ -2331,7 +2330,7 @@ function quotationPdfTotals(quotation: QuotationWithRelations): Totals {
   const totalAmount = discountedTotals.totalAmount;
 
   return {
-    baseAmount: breakdown.taxableAmount,
+    baseAmount: discountedTotals.taxableAmount,
     gstAmount: discountedTotals.gstAmount,
     discountAmount: quotation.discount_amount,
     subsidyAmount: quotation.subsidy_amount,

@@ -1413,7 +1413,8 @@ function TotalsCard({
         <dl className="mt-4 space-y-3 text-sm">
           <TotalRow
             label="Base Amount"
-            value={gstBreakdown?.taxableAmount ?? quotation.base_amount}
+            value={discountedTotals?.taxableAmount ?? quotation.base_amount}
+            precise={Boolean(discountedTotals)}
           />
           <TotalRow
             label="GST Amount"

@@ -1231,11 +1231,11 @@ function TurnkeyGstBreakup({
     return null;
   }
 
-  const breakdown = calculateTurnkeyGstBreakdown(Number(amount));
   const totals = calculateDiscountedTurnkeyTotals(
     Number(amount),
     Number(discountAmount || 0),
   );
+  const breakdown = calculateTurnkeyGstBreakdown(totals.totalAmount);
 
   return (
     <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 md:col-span-2">
