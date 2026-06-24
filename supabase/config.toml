@@ -160,13 +160,23 @@ additional_redirect_urls = [
   "https://solarworkflows-production.up.railway.app/**",
   "https://solarcrm.realmonkey.ai/**",
   "https://solarcrm.realmonkey.ai/create-password",
+  "https://solarcrm.realmonkey.ai/reset-password",
   "https://app.getbizlee.com",
   "https://app.getbizlee.com/**",
   "https://app.getbizlee.com/create-password",
+  "https://app.getbizlee.com/reset-password",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3000/create-password",
+  "http://127.0.0.1:3000/reset-password",
   "http://localhost:3000",
   "http://localhost:3000/create-password",
+  "http://localhost:3000/reset-password",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5173/create-password",
+  "http://127.0.0.1:5173/reset-password",
+  "http://localhost:5173",
+  "http://localhost:5173/create-password",
+  "http://localhost:5173/reset-password",
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -256,7 +266,7 @@ subject = "You're invited to SolarWorkflows"
 content_path = "./supabase/templates/invite.html"
 
 [auth.email.template.recovery]
-subject = "Set up your SolarWorkflows password"
+subject = "Reset your SolarWorkflows password"
 content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template
@@ -397,6 +407,9 @@ deno_version = 2
 # secret_key = "env(SECRET_VALUE)"
 
 [functions.invite-epc-company-admin]
+verify_jwt = false
+
+[functions.invite-settings-staff]
 verify_jwt = false
 
 [analytics]

@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../../services/supabaseClient";
 import type { UserProfile } from "../../app/AuthProvider";
 import type {
@@ -85,7 +86,7 @@ export async function fetchOrganizationSettings() {
 }
 
 export async function updateOrganizationSettings(
-  values: OrganizationSettingsFormValues,
+  values: Partial<OrganizationSettingsFormValues>,
 ) {
   const client = requireSupabase();
   const { data, error } = await client.rpc("update_organization_settings", {
@@ -141,16 +142,21 @@ export async function fetchSettingsStaff() {
 
 export async function createStaff(values: StaffFormValues) {
   const client = requireSupabase();
-  const { data, error } = await client.rpc("create_settings_staff", {
-    full_name: values.full_name,
-    phone: values.phone,
-    email: values.email,
-    role_id: nullable(values.role_id),
-    status: values.status,
-  });
+  const { data, error } = await client.functions.invoke(
+    "invite-settings-staff",
+    {
+      body: {
+        full_name: values.full_name,
+        phone: nullable(values.phone),
+        email: values.email,
+        role_id: nullable(values.role_id),
+        status: "invited",
+      },
+    },
+  );
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(await getFunctionErrorMessage(error));
   }
 
   return data as SettingsStaff;
@@ -172,6 +178,32 @@ export async function updateStaff(id: string, values: StaffFormValues) {
   }
 
   return data as SettingsStaff;
+}
+
+async function getFunctionErrorMessage(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = (await error.context.json()) as unknown;
+
+      if (isErrorBody(body)) {
+        return body.error;
+      }
+    } catch {
+      return error.message;
+    }
+  }
+
+  return error instanceof Error ? error.message : "Action failed.";
+}
+
+function isErrorBody(value: unknown): value is { error: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "error" in value &&
+    typeof value.error === "string" &&
+    value.error.trim().length > 0
+  );
 }
 
 export async function fetchSettingsRoles() {

@@ -55,6 +55,7 @@ import {
   defaultTechnicalPaymentTerms,
   deriveQuotationMaterialSummary,
   emptyQuotationForm,
+  formatIndianCurrencyInWords,
   formatMoneyWithPaise,
   hasTurnkeyGstAmount,
   leadToQuotationForm,
@@ -82,12 +83,6 @@ const tabs = [
   "Commercial",
   "Warranty & Payment",
   "Review",
-];
-
-const yesNoOptions = [
-  { value: "", label: "Select" },
-  { value: "yes", label: "Yes" },
-  { value: "no", label: "No" },
 ];
 
 const createPanelWattageValue = "__create_panel_wattage__";
@@ -783,36 +778,6 @@ export function NewQuotationPage() {
               "Current inverter brand",
             )}
           />
-          <TextInput
-            label="Number Of Earthing"
-            value={values.summary_earthing_count}
-            onChange={(value) => update("summary_earthing_count", value)}
-            type="number"
-          />
-          <SelectInput
-            label="DCDB Included"
-            value={values.summary_dcdb_included}
-            onChange={(value) => update("summary_dcdb_included", value)}
-            options={yesNoOptions}
-          />
-          <SelectInput
-            label="ACDB Included"
-            value={values.summary_acdb_included}
-            onChange={(value) => update("summary_acdb_included", value)}
-            options={yesNoOptions}
-          />
-          <SelectInput
-            label="Lightning Arrestor Included"
-            value={values.summary_lightning_arrestor_included}
-            onChange={(value) => update("summary_lightning_arrestor_included", value)}
-            options={yesNoOptions}
-          />
-          <SelectInput
-            label="Remote Monitoring"
-            value={values.summary_remote_monitoring_included}
-            onChange={(value) => update("summary_remote_monitoring_included", value)}
-            options={yesNoOptions}
-          />
         </Section>
       ) : null}
 
@@ -1236,6 +1201,7 @@ function TurnkeyGstBreakup({
     Number(discountAmount || 0),
   );
   const breakdown = calculateTurnkeyGstBreakdown(totals.totalAmount);
+  const taxableAmountInWords = formatIndianCurrencyInWords(totals.taxableAmount);
 
   return (
     <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 md:col-span-2">
@@ -1258,6 +1224,12 @@ function TurnkeyGstBreakup({
           value={formatMoneyWithPaise(totals.gstAmount)}
         />
       </dl>
+      <div className="mt-3 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          Final Taxable Amount In Words
+        </p>
+        <p className="mt-1 font-medium text-slate-950">{taxableAmountInWords}</p>
+      </div>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[520px] border-collapse text-left text-xs">
           <thead className="bg-white text-slate-600">
@@ -1433,18 +1405,17 @@ function ProposalPreview({
       <PreviewBlock title="3. Quotation Summary">
         <PreviewGrid
           rows={[
-            ["DCDB Included", yesNoDisplay(values.summary_dcdb_included)],
-            ["ACDB Included", yesNoDisplay(values.summary_acdb_included)],
             ["Panel Brand", values.summary_module_brand || "-"],
             ["Panel Wattage", valueWithUnit(values.summary_module_wattage, "W")],
             ["Inverter Brand", values.summary_inverter_brand || "-"],
-            ["Number Of Earthing", values.summary_earthing_count || "-"],
-            ["Lightning Arrestor", yesNoDisplay(values.summary_lightning_arrestor_included)],
-            ["Remote Monitoring", yesNoDisplay(values.summary_remote_monitoring_included)],
             ["Total Turnkey Cost", moneyPreview(turnkeyAmount)],
             ["Base Amount", moneyPreviewFromNumber(gstBreakdown.taxableAmount)],
             ["Discount", moneyPreview(values.discount_amount)],
             ["Taxable After Discount", moneyPreviewFromNumber(discountedTotals.taxableAmount)],
+            [
+              "Final Taxable Amount In Words",
+              formatIndianCurrencyInWords(discountedTotals.taxableAmount),
+            ],
             ["CGST", moneyPreviewFromNumber(discountedTotals.cgstAmount)],
             ["SGST", moneyPreviewFromNumber(discountedTotals.sgstAmount)],
             ["Total GST", moneyPreviewFromNumber(discountedTotals.gstAmount)],
@@ -1935,18 +1906,6 @@ function optionsWithCurrentValue(
       label: `${currentLabel}: ${currentValue}`,
     },
   ];
-}
-
-function yesNoDisplay(value: string) {
-  if (value === "yes") {
-    return "Yes";
-  }
-
-  if (value === "no") {
-    return "No";
-  }
-
-  return "-";
 }
 
 function valueWithUnit(value: string, unit: string) {

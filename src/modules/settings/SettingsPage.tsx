@@ -236,7 +236,6 @@ export function OrganizationSettingsPage() {
   async function handleLogoUpload(logo: Blob) {
     const publicUrl = await uploadCompanyLogo(profile, logo);
     const updatedSettings = await updateOrganizationSettings({
-      ...values,
       company_logo_url: publicUrl,
     });
     setValues(organizationSettingsToForm(updatedSettings));
@@ -448,7 +447,7 @@ export function StaffManagementPage() {
       setSaving(true);
       if (formState.mode === "create") {
         await createStaff(formState.values);
-        showToast("Staff profile created.", "success");
+        showToast("Staff invite email sent.", "success");
       } else if (formState.staff) {
         await updateStaff(formState.staff.id, formState.values);
         showToast("Staff profile updated.", "success");
@@ -624,6 +623,8 @@ export function StaffManagementPage() {
           onClose={() => setFormState(null)}
           onSubmit={handleSubmit}
           saving={saving}
+          showStatus={formState.mode === "edit"}
+          submitLabel={formState.mode === "create" ? "Send Invite" : "Save Staff"}
         />
       ) : null}
 
@@ -728,6 +729,8 @@ function StaffFormModal({
   onClose,
   onSubmit,
   saving,
+  showStatus,
+  submitLabel,
 }: {
   title: string;
   values: StaffFormValues;
@@ -737,6 +740,8 @@ function StaffFormModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
+  showStatus: boolean;
+  submitLabel: string;
 }) {
   const update = (key: keyof StaffFormValues, value: string) =>
     setValues({ ...values, [key]: value });
@@ -746,7 +751,7 @@ function StaffFormModal({
       title={title}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Save Staff"
+      submitLabel={submitLabel}
       submitting={saving}
     >
       <TextInput
@@ -768,6 +773,7 @@ function StaffFormModal({
         value={values.email}
         onChange={(value) => update("email", value)}
         error={errors.email}
+        required
       />
       <SelectInput
         label="Role"
@@ -781,15 +787,17 @@ function StaffFormModal({
           })),
         ]}
       />
-      <SelectInput
-        label="Status"
-        value={values.status}
-        onChange={(value) => update("status", value)}
-        options={staffStatusOptions.map((status) => ({
-          value: status,
-          label: labelize(status),
-        }))}
-      />
+      {showStatus ? (
+        <SelectInput
+          label="Status"
+          value={values.status}
+          onChange={(value) => update("status", value)}
+          options={staffStatusOptions.map((status) => ({
+            value: status,
+            label: labelize(status),
+          }))}
+        />
+      ) : null}
     </Modal>
   );
 }

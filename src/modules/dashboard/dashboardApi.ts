@@ -207,7 +207,21 @@ export async function fetchDashboardLowStockItems(profile: UserProfile | null) {
   const client = requireSupabase();
   let query = client
     .from("inventory_items")
-    .select("*")
+    .select(
+      `
+      id,
+      organization_id,
+      item_code,
+      item_name,
+      item_category,
+      unit,
+      current_stock,
+      minimum_stock,
+      status,
+      created_at,
+      updated_at
+    `,
+    )
     .eq("status", "active")
     .order("item_name", { ascending: true });
 

@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SolarWorkflows password setup</title>
+    <title>SolarWorkflows password reset</title>
   </head>
   <body style="margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, Helvetica, sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #f8fafc;">
@@ -12,18 +12,18 @@
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 560px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden;">
             <tr>
               <td style="background: #064e3b; padding: 28px 24px; color: #ffffff;">
-                <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #fde68a;">EPC admin setup</p>
-                <h1 style="margin: 12px 0 0; font-size: 26px; line-height: 1.25;">Create your SolarWorkflows password</h1>
+                <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #fde68a;">Password reset</p>
+                <h1 style="margin: 12px 0 0; font-size: 26px; line-height: 1.25;">Reset your SolarWorkflows password</h1>
               </td>
             </tr>
             <tr>
               <td style="padding: 28px 24px;">
                 <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6;">Hello{{ if .Data.full_name }} {{ .Data.full_name }}{{ end }},</p>
-                <p style="margin: 0 0 22px; font-size: 15px; line-height: 1.7; color: #475569;">Use the secure button below to continue your EPC administrator password setup.</p>
+                <p style="margin: 0 0 22px; font-size: 15px; line-height: 1.7; color: #475569;">Use the secure button below to continue to the password reset screen.</p>
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                   <tr>
                     <td style="border-radius: 10px; background: #059669;">
-                      <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery" style="display: inline-block; padding: 13px 20px; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none;">Continue password setup</a>
+                      <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=recovery" style="display: inline-block; padding: 13px 20px; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none;">Reset password</a>
                     </td>
                   </tr>
                 </table>

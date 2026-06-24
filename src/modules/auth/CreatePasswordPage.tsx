@@ -4,9 +4,9 @@ import { useAuth } from "../../app/AuthProvider";
 import { authenticatedHomePath } from "../../app/redirects";
 import { PortalLogo } from "../../components/PortalBrand";
 import {
-  completeInvitedAdminPassword,
+  completeInvitedPassword,
   isValidNewPassword,
-  verifyInvitedAdminToken,
+  verifyInviteToken,
 } from "../../services/authAccess";
 
 type InviteNotice = {
@@ -66,7 +66,7 @@ export function CreatePasswordPage() {
     setInviteVerificationStatus("verifying");
 
     try {
-      await verifyInvitedAdminToken(inviteLink.tokenHash, inviteLink.type);
+      await verifyInviteToken(inviteLink.tokenHash, inviteLink.type);
       await refresh();
       setInviteVerificationStatus("complete");
     } catch (error) {
@@ -88,7 +88,7 @@ export function CreatePasswordPage() {
       setNotice({
         title: "Invite link required",
         description:
-          "Open the Supabase invite email again to create your EPC admin password.",
+          "Open the Supabase invite email again to create your password.",
         tone: "warning",
       });
       return;
@@ -106,13 +106,13 @@ export function CreatePasswordPage() {
 
     try {
       setIsSubmitting(true);
-      const result = await completeInvitedAdminPassword(password);
+      const result = await completeInvitedPassword(password);
 
       if (result.status === "unassigned") {
         setNotice({
           title: "Invite not assigned",
           description:
-            "This invite session does not match an EPC company admin profile.",
+            "This invite session does not match an assigned staff profile.",
           tone: "warning",
         });
         return;
@@ -122,7 +122,7 @@ export function CreatePasswordPage() {
         setNotice({
           title: "Account inactive",
           description:
-            "This EPC company admin profile exists, but it is currently inactive.",
+            "This staff profile exists, but it is currently inactive.",
           tone: "error",
         });
         return;
@@ -147,14 +147,14 @@ export function CreatePasswordPage() {
               tone="dark"
             />
             <span className="mt-6 inline-flex rounded-full border border-amber-200/50 bg-amber-200/15 px-3 py-1 text-sm font-semibold text-amber-100">
-              EPC invite
+              Workspace invite
             </span>
             <h1 className="mt-8 max-w-lg text-4xl font-semibold tracking-normal">
-              Create your admin password
+              Create your password
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-emerald-50">
-              Your invite has already assigned the company workspace and Admin
-              role. Set a password to activate access.
+              Your invite has already assigned your company workspace and role.
+              Set a password to activate access.
             </p>
           </div>
 
@@ -164,7 +164,7 @@ export function CreatePasswordPage() {
             </p>
             <div className="mt-5 grid gap-3">
               <VisualMetric label="Invite email" value="Confirmed" />
-              <VisualMetric label="Admin role" value="Pre-assigned" />
+              <VisualMetric label="Workspace role" value="Pre-assigned" />
               <VisualMetric label="Data access" value="RLS enforced" />
             </div>
           </div>
@@ -175,7 +175,7 @@ export function CreatePasswordPage() {
             <div className="lg:hidden">
               <PortalLogo className="h-20 w-full max-w-xs object-contain object-left" />
               <span className="mt-5 inline-flex rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-800">
-                EPC invite
+                Workspace invite
               </span>
               <h1 className="mt-5 text-3xl font-semibold tracking-normal text-slate-950">
                 Create your password

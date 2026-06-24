@@ -1102,6 +1102,115 @@ export function formatMoneyWithPaise(value: number | null | undefined) {
   }).format(amount);
 }
 
+const smallNumberWords = [
+  "Zero",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+  "Nine",
+  "Ten",
+  "Eleven",
+  "Twelve",
+  "Thirteen",
+  "Fourteen",
+  "Fifteen",
+  "Sixteen",
+  "Seventeen",
+  "Eighteen",
+  "Nineteen",
+];
+
+const tensNumberWords = [
+  "",
+  "",
+  "Twenty",
+  "Thirty",
+  "Forty",
+  "Fifty",
+  "Sixty",
+  "Seventy",
+  "Eighty",
+  "Ninety",
+];
+
+function numberBelowThousandToWords(value: number) {
+  const amount = Math.floor(value);
+  const parts: string[] = [];
+  const hundreds = Math.floor(amount / 100);
+  const remainder = amount % 100;
+
+  if (hundreds > 0) {
+    parts.push(`${smallNumberWords[hundreds]} Hundred`);
+  }
+
+  if (remainder > 0) {
+    if (remainder < 20) {
+      parts.push(smallNumberWords[remainder]);
+    } else {
+      const tens = Math.floor(remainder / 10);
+      const ones = remainder % 10;
+      parts.push(
+        [tensNumberWords[tens], ones > 0 ? smallNumberWords[ones] : ""]
+          .filter(Boolean)
+          .join(" "),
+      );
+    }
+  }
+
+  return parts.join(" ");
+}
+
+function integerToIndianWords(value: number) {
+  if (value === 0) {
+    return smallNumberWords[0];
+  }
+
+  const groups: Array<[number, string]> = [
+    [10000000, "Crore"],
+    [100000, "Lakh"],
+    [1000, "Thousand"],
+    [1, ""],
+  ];
+  let remaining = Math.floor(value);
+  const parts: string[] = [];
+
+  groups.forEach(([size, label]) => {
+    const groupValue = Math.floor(remaining / size);
+
+    if (groupValue > 0) {
+      parts.push(
+        [numberBelowThousandToWords(groupValue), label].filter(Boolean).join(" "),
+      );
+      remaining %= size;
+    }
+  });
+
+  return parts.join(" ");
+}
+
+export function formatIndianCurrencyInWords(
+  value: number | null | undefined,
+) {
+  const numericValue = Number(value ?? 0);
+  const amount = Number.isFinite(numericValue) ? Math.max(numericValue, 0) : 0;
+  const roundedPaise = Math.round(amount * 100);
+  const rupees = Math.floor(roundedPaise / 100);
+  const paise = roundedPaise % 100;
+  const rupeeLabel = rupees === 1 ? "Rupee" : "Rupees";
+  const rupeeWords = `${rupeeLabel} ${integerToIndianWords(rupees)}`;
+
+  if (paise === 0) {
+    return `${rupeeWords} Only`;
+  }
+
+  return `${rupeeWords} and ${integerToIndianWords(paise)} Paise Only`;
+}
+
 export type TurnkeyGstBreakdown = {
   inclusiveAmount: number;
   solarInclusiveAmount: number;

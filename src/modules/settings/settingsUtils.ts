@@ -103,9 +103,10 @@ export function validateStaffForm(values: StaffFormValues) {
     errors.full_name = "Full name is required.";
   }
 
-  if (!values.phone.trim() && !values.email.trim()) {
-    errors.phone = "Phone or email is required.";
-    errors.email = "Phone or email is required.";
+  if (!values.email.trim()) {
+    errors.email = "Email is required to send the invite.";
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
+    errors.email = "Enter a valid staff email.";
   }
 
   return errors;

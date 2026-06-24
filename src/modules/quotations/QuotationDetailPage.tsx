@@ -34,10 +34,10 @@ import {
   defaultProposalScope,
   defaultQuotationWarranties,
   defaultTechnicalPaymentTerms,
+  formatIndianCurrencyInWords,
   formatKw,
   formatMoney,
   formatMoneyWithPaise,
-  formatYesNo,
   getQuotationContact,
   hasTurnkeyGstAmount,
   quotationSnapshotFormValues,
@@ -471,33 +471,6 @@ export function QuotationDetailPage() {
     snapshotValues.summary_inverter_brand ||
     materialSummary?.summary_inverter_brand ||
     "-";
-  const structureType =
-    quotation?.summary_structure_type ||
-    quotation?.structure_type ||
-    snapshotValues.summary_structure_type ||
-    snapshotValues.structure_type ||
-    materialSummary?.summary_structure_type ||
-    "-";
-  const dcdbIncluded =
-    quotation?.summary_dcdb_included ??
-    booleanFromFormValue(snapshotValues.summary_dcdb_included) ??
-    materialSummary?.summary_dcdb_included;
-  const acdbIncluded =
-    quotation?.summary_acdb_included ??
-    booleanFromFormValue(snapshotValues.summary_acdb_included) ??
-    materialSummary?.summary_acdb_included;
-  const earthingCount =
-    quotation?.summary_earthing_count ??
-    numberFromFormValue(snapshotValues.summary_earthing_count) ??
-    materialSummary?.summary_earthing_count;
-  const lightningArrestorIncluded =
-    quotation?.summary_lightning_arrestor_included ??
-    booleanFromFormValue(snapshotValues.summary_lightning_arrestor_included) ??
-    materialSummary?.summary_lightning_arrestor_included;
-  const remoteMonitoringIncluded =
-    quotation?.summary_remote_monitoring_included ??
-    booleanFromFormValue(snapshotValues.summary_remote_monitoring_included) ??
-    materialSummary?.summary_remote_monitoring_included;
   const totalTurnkeyCost =
     quotation?.summary_total_turnkey_cost ??
     numberFromFormValue(snapshotValues.summary_total_turnkey_cost) ??
@@ -518,6 +491,9 @@ export function QuotationDetailPage() {
     quotation?.summary_amount_in_words ||
     snapshotValues.summary_amount_in_words ||
     "-";
+  const finalTaxableAmountInWords = detailDiscountedTotals
+    ? formatIndianCurrencyInWords(detailDiscountedTotals.taxableAmount)
+    : "-";
   const workDescription =
     quotation?.work_description || snapshotValues.work_description || "-";
   const pricingRemarks =
@@ -793,35 +769,6 @@ export function QuotationDetailPage() {
                   label="Inverter Brand"
                   value={inverterBrand}
                 />
-                <DetailItem
-                  label="Structure Type"
-                  value={structureType}
-                />
-                <DetailItem
-                  label="DCDB Included"
-                  value={formatYesNo(dcdbIncluded)}
-                />
-                <DetailItem
-                  label="ACDB Included"
-                  value={formatYesNo(acdbIncluded)}
-                />
-                <DetailItem
-                  label="Number Of Earthing"
-                  value={
-                    earthingCount === null ||
-                    earthingCount === undefined
-                      ? "-"
-                      : String(earthingCount)
-                  }
-                />
-                <DetailItem
-                  label="Lightning Arrestor Included"
-                  value={formatYesNo(lightningArrestorIncluded)}
-                />
-                <DetailItem
-                  label="Remote Monitoring Included"
-                  value={formatYesNo(remoteMonitoringIncluded)}
-                />
               </DetailSection>
 
               <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -983,6 +930,10 @@ export function QuotationDetailPage() {
                 <DetailItem
                   label="Subsidy Amount"
                   value={formatMoney(quotation.subsidy_amount)}
+                />
+                <DetailItem
+                  label="Final Taxable Amount In Words"
+                  value={finalTaxableAmountInWords}
                 />
                 <DetailItem label="Amount In Words" value={amountInWords} />
                 <DetailItem
@@ -1584,22 +1535,6 @@ function numberFromFormValue(value: unknown) {
   const numberValue = Number(value);
 
   return Number.isFinite(numberValue) ? numberValue : null;
-}
-
-function booleanFromFormValue(value: unknown) {
-  if (value === true || value === false) {
-    return value;
-  }
-
-  if (value === "yes") {
-    return true;
-  }
-
-  if (value === "no") {
-    return false;
-  }
-
-  return null;
 }
 
 function formatPaymentTermAmount(

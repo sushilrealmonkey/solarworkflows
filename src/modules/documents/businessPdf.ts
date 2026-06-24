@@ -21,6 +21,7 @@ import {
   calculateDiscountedTurnkeyTotals,
   calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
+  formatIndianCurrencyInWords,
   hasTurnkeyGstAmount,
 } from "../quotations/quotationUtils";
 
@@ -868,6 +869,7 @@ function drawTechnicalQuotationSummary(
   y: number,
 ) {
   const materialSummary = deriveQuotationMaterialSummary(quotation.material_items);
+  const totals = quotationPdfTotals(quotation);
   const moduleWattage =
     quotation.summary_module_wattage ??
     materialSummary.summary_module_wattage;
@@ -883,44 +885,13 @@ function drawTechnicalQuotationSummary(
         materialSummary.summary_inverter_brand ??
         "",
     ],
-    [
-      "Structure Type",
-      displayValue(
-        quotation.summary_structure_type ??
-          quotation.structure_type ??
-          materialSummary.summary_structure_type,
-      ),
-    ],
-    [
-      "DCDB Included",
-      formatYesNo(
-        quotation.summary_dcdb_included ??
-          materialSummary.summary_dcdb_included,
-      ),
-    ],
-    [
-      "ACDB Included",
-      formatYesNo(
-        quotation.summary_acdb_included ??
-          materialSummary.summary_acdb_included,
-      ),
-    ],
-    ["Earthing Count", quotation.summary_earthing_count?.toString() ?? ""],
-    [
-      "Lightning Arrestor Included",
-      formatYesNo(
-        quotation.summary_lightning_arrestor_included ??
-          materialSummary.summary_lightning_arrestor_included,
-      ),
-    ],
-    [
-      "Remote Monitoring Included",
-      formatYesNo(
-        quotation.summary_remote_monitoring_included ??
-          materialSummary.summary_remote_monitoring_included,
-      ),
-    ],
     ["Total Turnkey Cost", quotation.summary_total_turnkey_cost === null || quotation.summary_total_turnkey_cost === undefined ? "" : formatAmount(quotation.summary_total_turnkey_cost, settings.currency)],
+    [
+      "Final Taxable Amount In Words",
+      totals.baseAmount === null || totals.baseAmount === undefined
+        ? ""
+        : formatIndianCurrencyInWords(totals.baseAmount),
+    ],
     ["Amount In Words", quotation.summary_amount_in_words ?? ""],
   ]);
 
@@ -2519,18 +2490,6 @@ function parsePdfDate(value: string) {
 
 function valueWithUnit(value: number | string | null | undefined, unit: string) {
   return value === null || value === undefined ? "-" : `${value} ${unit}`;
-}
-
-function formatYesNo(value: boolean | null | undefined) {
-  if (value === true) {
-    return "Yes";
-  }
-
-  if (value === false) {
-    return "No";
-  }
-
-  return "-";
 }
 
 function labelize(value: string | null | undefined) {

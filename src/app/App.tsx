@@ -5,7 +5,11 @@ import { authenticatedHomePath } from "./redirects";
 import { DashboardLayout } from "../layouts/DashboardLayout";
 import { routes } from "./routes";
 import { LoginPage } from "../modules/auth/LoginPage";
+import { LoginDarkPage, LoginMobilePage } from "../modules/auth/LoginDarkPage";
+import { LoginDesignsPage } from "../modules/auth/LoginDesignsPage";
 import { CreatePasswordPage } from "../modules/auth/CreatePasswordPage";
+import { ForgotPasswordPage } from "../modules/auth/ForgotPasswordPage";
+import { ResetPasswordPage } from "../modules/auth/ResetPasswordPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
 import { DashboardPage } from "../modules/dashboard/DashboardPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
@@ -51,8 +55,14 @@ import {
 export default function App() {
   return (
     <Routes>
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login" element={<LoginDarkPage />} />
+      <Route path="/login-light" element={<LoginPage />} />
+      <Route path="/login-dark" element={<LoginDarkPage />} />
+      <Route path="/login-mobile" element={<LoginMobilePage />} />
+      <Route path="/login-designs" element={<LoginDesignsPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/create-password" element={<CreatePasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<DefaultWorkspaceRedirect />} />

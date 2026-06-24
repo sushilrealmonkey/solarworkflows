@@ -16,7 +16,7 @@ export type LoginAccessResult =
   | { status: "unassigned"; message: string }
   | { status: "inactive"; profile: SyncedProfile; message: string };
 
-let inviteVerification:
+let otpVerification:
   | {
       tokenHash: string;
       type: "invite" | "recovery";
@@ -40,7 +40,7 @@ export function isValidNewPassword(password: string) {
   return password.length >= 8;
 }
 
-export function verifyInvitedAdminToken(
+export function verifyInviteToken(
   tokenHash: string,
   type: "invite" | "recovery",
 ) {
@@ -57,10 +57,10 @@ export function verifyInvitedAdminToken(
   }
 
   if (
-    inviteVerification?.tokenHash === normalizedTokenHash &&
-    inviteVerification.type === type
+    otpVerification?.tokenHash === normalizedTokenHash &&
+    otpVerification.type === type
   ) {
-    return inviteVerification.promise;
+    return otpVerification.promise;
   }
 
   const promise = (async () => {
@@ -73,20 +73,43 @@ export function verifyInvitedAdminToken(
       throw new Error(mapInviteError(error.message));
     }
   })().catch((error: unknown) => {
-    if (inviteVerification?.tokenHash === normalizedTokenHash) {
-      inviteVerification = null;
+    if (otpVerification?.tokenHash === normalizedTokenHash) {
+      otpVerification = null;
     }
 
     throw error;
   });
 
-  inviteVerification = {
+  otpVerification = {
     tokenHash: normalizedTokenHash,
     type,
     promise,
   };
 
   return promise;
+}
+
+export async function sendPasswordResetLink(
+  email: string,
+  redirectTo: string,
+) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!isValidLoginEmail(normalizedEmail)) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+    redirectTo,
+  });
+
+  if (error) {
+    throw new Error(mapPasswordResetError(error.message));
+  }
 }
 
 export async function syncCurrentAuthUserProfile(): Promise<LoginAccessResult> {
@@ -161,7 +184,7 @@ export async function signInWithPasswordAndSyncProfile(
   return syncCurrentAuthUserProfile();
 }
 
-export async function completeInvitedAdminPassword(
+export async function completeInvitedPassword(
   password: string,
 ): Promise<LoginAccessResult> {
   if (!supabase) {
@@ -181,6 +204,26 @@ export async function completeInvitedAdminPassword(
   }
 
   return syncCurrentAuthUserProfile();
+}
+
+export async function completePasswordReset(password: string) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  if (!isValidNewPassword(password)) {
+    throw new Error("Use at least 8 characters for your password.");
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    password,
+  });
+
+  if (error) {
+    throw new Error(mapPasswordError(error.message));
+  }
+
+  await supabase.auth.signOut();
 }
 
 function mapPasswordError(message: string) {
@@ -215,4 +258,14 @@ function mapInviteError(message: string) {
   }
 
   return message || "The invitation could not be verified. Please request a new setup email.";
+}
+
+function mapPasswordResetError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("rate limit")) {
+    return "Please wait a moment before requesting another reset link.";
+  }
+
+  return message || "The password reset email could not be sent. Please try again.";
 }
