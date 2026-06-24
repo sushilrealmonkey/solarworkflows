@@ -189,7 +189,7 @@ function RangeControl({ label, min, max, step, value, onChange }: {
   return (
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
-      <input className="mt-2 w-full accent-brand-600" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input className="mt-2 w-full accent-orange-600" type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
 }

@@ -384,7 +384,7 @@ export function ProformaInvoiceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/proforma-invoices">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/proforma-invoices">
         Back to proforma invoices
       </Link>
 
@@ -703,7 +703,7 @@ function RelatedPaymentsSection({ payments }: { payments: PaymentWithRelations[]
                     {formatDate(payment.payment_date)}
                   </p>
                   <Link
-                    className="mt-1 block font-semibold text-brand-700"
+                    className="mt-1 block font-semibold text-[#06173f]"
                     to={`/payments/${payment.id}`}
                   >
                     {formatMoney(payment.amount)}
@@ -726,7 +726,7 @@ function RelatedPaymentsSection({ payments }: { payments: PaymentWithRelations[]
 function customerLink(proformaInvoice: ProformaInvoiceWithRelations) {
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/customers/${proformaInvoice.customer_id}`}
     >
       {proformaInvoice.customer?.business_name ||
@@ -744,7 +744,7 @@ function projectLink(proformaInvoice: ProformaInvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/projects/${proformaInvoice.project_id}`}
     >
       {proformaInvoice.project?.project_code ??
@@ -761,7 +761,7 @@ function quotationLink(proformaInvoice: ProformaInvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/quotations/${proformaInvoice.quotation_id}`}
     >
       {proformaInvoice.quotation?.quotation_code ?? "Quotation"}
@@ -776,7 +776,7 @@ function b2bSaleLink(proformaInvoice: ProformaInvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/b2b-sales/${proformaInvoice.b2b_sale_id}`}
     >
       {proformaInvoice.b2b_sale?.sale_code ?? "B2B sale"}
@@ -791,7 +791,7 @@ function finalInvoiceLink(proformaInvoice: ProformaInvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/invoices/${proformaInvoice.final_invoice_id}`}
     >
       {proformaInvoice.final_invoice?.invoice_code ?? "Final invoice"}

@@ -55,9 +55,9 @@ export function ForgotPasswordPage() {
           </p>
 
           {isSent ? (
-            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-900">
+            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-[#06173f]">
               <p className="text-sm font-semibold">Check your email</p>
-              <p className="mt-1 text-sm leading-6 text-emerald-800">
+              <p className="mt-1 text-sm leading-6 text-[#06173f]">
                 If this email is registered, a password reset link has been
                 sent. Open it to continue to the reset screen.
               </p>

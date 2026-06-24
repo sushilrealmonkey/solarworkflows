@@ -343,7 +343,7 @@ export function CustomerDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to={customerListPath(customer)}>
+      <Link className="text-sm font-semibold text-[#06173f]" to={customerListPath(customer)}>
         Back to {customerSegmentLabel(customer?.customer_segment)}
       </Link>
 
@@ -367,7 +367,7 @@ export function CustomerDetailPage() {
             <div className="flex flex-wrap gap-2">
               {customer.customer_segment === "b2b_direct" && canCreateB2BSale ? (
                 <Link
-                  className="inline-flex items-center justify-center rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-800"
+                  className="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700"
                   to={`/b2b-sales?customerId=${customer.id}&new=1`}
                 >
                   Create Sale

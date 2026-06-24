@@ -519,7 +519,7 @@ export function PurchaseOrdersSection({
             {orders.map((order) => (
               <tr
                 key={order.id}
-                className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
                 onClick={(event) => handlePurchaseRowClick(event, order.id)}
                 onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
                 role="link"
@@ -527,7 +527,7 @@ export function PurchaseOrdersSection({
               >
                 <td className="px-4 py-3 font-semibold text-slate-950">
                   <Link
-                    className="font-semibold text-brand-700"
+                    className="font-semibold text-[#06173f]"
                     onClick={(event) => event.stopPropagation()}
                     to={`/purchases/${order.id}`}
                   >
@@ -581,7 +581,7 @@ export function PurchaseOrdersSection({
         {orders.map((order) => (
           <article
             key={order.id}
-            className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+            className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
             onClick={(event) => handlePurchaseRowClick(event, order.id)}
             onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
             role="link"
@@ -591,7 +591,7 @@ export function PurchaseOrdersSection({
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <Link
-                    className="text-brand-700"
+                    className="text-[#06173f]"
                     onClick={(event) => event.stopPropagation()}
                     to={`/purchases/${order.id}`}
                   >
@@ -1053,7 +1053,7 @@ export function PurchaseReceiveFormModal({
                   <label className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 md:col-span-5">
                     <input
                       checked={item.update_current_purchase_price}
-                      className="h-4 w-4 rounded border-stone-300 text-brand-700 focus:ring-brand-600"
+                      className="h-4 w-4 rounded border-stone-300 text-[#06173f] focus:ring-orange-600"
                       onChange={(event) =>
                         updateItem(index, {
                           ...item,

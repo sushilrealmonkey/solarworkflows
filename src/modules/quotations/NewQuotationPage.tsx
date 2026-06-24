@@ -534,7 +534,7 @@ export function NewQuotationPage() {
   return (
     <form className="space-y-6" onSubmit={handleSubmit}>
       <Link
-        className="text-sm font-semibold text-brand-700"
+        className="text-sm font-semibold text-[#06173f]"
         to={editQuotationId ? `/quotations/${editQuotationId}` : "/quotations"}
       >
         Back to quotations
@@ -571,7 +571,7 @@ export function NewQuotationPage() {
             <button
               className={`rounded-lg px-3 py-2 text-sm font-semibold ${
                 activeTab === tab
-                  ? "bg-brand-600 text-white"
+                  ? "bg-orange-600 text-white"
                   : "bg-stone-100 text-slate-700 hover:bg-stone-200"
               }`}
               key={tab}

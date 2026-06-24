@@ -18,7 +18,7 @@ export function AccessDenied({
 }) {
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-      <p className="text-sm font-semibold text-brand-600">Permission required</p>
+      <p className="text-sm font-semibold text-[#06173f]">Permission required</p>
       <h1 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
         {title}
       </h1>
@@ -43,7 +43,7 @@ export function Button({
   disabled?: boolean;
 }) {
   const variants = {
-    primary: "border-brand-600 bg-brand-600 text-white hover:bg-brand-900",
+    primary: "border-orange-600 bg-orange-600 text-white hover:bg-orange-700",
     secondary: "border-stone-200 bg-white text-slate-700 hover:bg-stone-50",
     danger: "border-rose-200 bg-rose-50 text-rose-800 hover:bg-rose-100",
     ghost: "border-transparent bg-transparent text-slate-600 hover:bg-stone-100",
@@ -95,7 +95,7 @@ export function TextInput({
         {required ? <span className="text-rose-600"> *</span> : null}
       </span>
       <input
-        className={`mt-1 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100 ${
+        className={`mt-1 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100 ${
           error ? "border-rose-300" : "border-stone-200"
         }`}
         type={type}
@@ -124,7 +124,7 @@ export function SelectInput({
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <select
-        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
@@ -153,7 +153,7 @@ export function TextArea({
     <label className={className}>
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <textarea
-        className="mt-1 min-h-28 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+        className="mt-1 min-h-28 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
@@ -312,7 +312,7 @@ export function Badge({
 }) {
   const tones = {
     neutral: "border-stone-200 bg-stone-50 text-slate-700",
-    green: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    green: "border-emerald-200 bg-emerald-50 text-[#06173f]",
     amber: "border-amber-200 bg-amber-50 text-amber-800",
     red: "border-rose-200 bg-rose-50 text-rose-800",
     blue: "border-sky-200 bg-sky-50 text-sky-800",
@@ -375,7 +375,7 @@ export function SearchInput({
     <label className={className}>
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <input
-        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
         placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}

@@ -15,3 +15,19 @@ export function PortalLogo({ className, tone = "light" }: PortalLogoProps) {
     />
   );
 }
+
+export function PortalLogoIcon({ className, tone = "light" }: PortalLogoProps) {
+  return (
+    <span
+      aria-label="Bizlee"
+      className={`inline-flex shrink-0 overflow-hidden ${className ?? ""}`}
+      role="img"
+    >
+      <img
+        alt=""
+        className="h-full max-w-none object-contain object-left"
+        src={tone === "dark" ? solarOsLogoOnDarkUrl : solarOsLogoUrl}
+      />
+    </span>
+  );
+}

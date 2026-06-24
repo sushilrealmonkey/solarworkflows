@@ -557,7 +557,7 @@ export function QuotationDetailPage() {
   const reservationSummary = summarizeReservations(reservations);
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/quotations">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/quotations">
         Back to quotations
       </Link>
 
@@ -574,7 +574,7 @@ export function QuotationDetailPage() {
         <>
           <div>
             <header className="space-y-3">
-              <p className="text-sm font-medium text-brand-600">SolarOS</p>
+              <p className="text-sm font-medium text-[#06173f]">SolarOS</p>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
                   {quotation.quotation_title ?? quotation.quotation_code ?? "Quotation"}
@@ -1208,7 +1208,7 @@ function ReservationStatusPill({
 }) {
   const tone =
     value === "active" || value === "converted"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-emerald-200 bg-emerald-50 text-[#06173f]"
       : value === "partial"
         ? "border-amber-200 bg-amber-50 text-amber-700"
         : value === "shortage"
@@ -1590,7 +1590,7 @@ function customerLink(quotation: QuotationWithRelations) {
     if (quotation.lead_id) {
       return (
         <Link
-          className="font-semibold text-brand-700"
+          className="font-semibold text-[#06173f]"
           to={`/leads/${quotation.lead_id}`}
         >
           {quotation.lead?.full_name ?? quotation.lead?.lead_code ?? "Open lead"}
@@ -1603,7 +1603,7 @@ function customerLink(quotation: QuotationWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/customers/${quotation.customer_id}`}
     >
       {quotation.customer?.customer_code ??
@@ -1619,7 +1619,7 @@ function leadLink(quotation: QuotationWithRelations) {
   }
 
   return (
-    <Link className="font-semibold text-brand-700" to={`/leads/${quotation.lead_id}`}>
+    <Link className="font-semibold text-[#06173f]" to={`/leads/${quotation.lead_id}`}>
       {quotation.lead?.lead_code ?? quotation.lead?.full_name ?? "Open lead"}
     </Link>
   );
@@ -1632,7 +1632,7 @@ function surveyLink(quotation: QuotationWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/site-surveys/${quotation.site_survey_id}`}
     >
       {quotation.site_survey?.survey_code ?? "Open survey"}

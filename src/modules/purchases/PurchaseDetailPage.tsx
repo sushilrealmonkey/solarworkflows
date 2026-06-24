@@ -287,7 +287,7 @@ export function PurchaseDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/purchases">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/purchases">
         Back to purchases
       </Link>
 
@@ -347,7 +347,7 @@ export function PurchaseDetailPage() {
               value={
                 order.vendor ? (
                   <Link
-                    className="font-semibold text-brand-700"
+                    className="font-semibold text-[#06173f]"
                     to={`/vendors/${order.vendor_id}`}
                   >
                     {order.vendor.vendor_name}

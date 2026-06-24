@@ -403,7 +403,7 @@ export function InvoiceDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/invoices">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/invoices">
         Back to invoices
       </Link>
 
@@ -823,7 +823,7 @@ function RelatedPaymentsSection({
                     {formatDate(payment.payment_date)}
                   </p>
                   <Link
-                    className="mt-1 block font-semibold text-brand-700"
+                    className="mt-1 block font-semibold text-[#06173f]"
                     to={`/payments/${payment.id}`}
                   >
                     {formatMoney(payment.amount)}
@@ -940,7 +940,7 @@ function InvoiceItemModal({
 function customerLink(invoice: InvoiceWithRelations) {
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/customers/${invoice.customer_id}`}
     >
       {invoice.customer?.customer_code ??
@@ -957,7 +957,7 @@ function projectLink(invoice: InvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/projects/${invoice.project_id}`}
     >
       {invoice.project?.project_code ?? invoice.project?.project_name ?? "Project"}
@@ -972,7 +972,7 @@ function quotationLink(invoice: InvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/quotations/${invoice.quotation_id}`}
     >
       {invoice.quotation?.quotation_code ?? "Quotation"}
@@ -987,7 +987,7 @@ function b2bSaleLink(invoice: InvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/b2b-sales/${invoice.b2b_sale_id}`}
     >
       {invoice.b2b_sale?.sale_code ?? "B2B sale"}
@@ -1002,7 +1002,7 @@ function proformaInvoiceLink(invoice: InvoiceWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/proforma-invoices/${invoice.proforma_invoice_id}`}
     >
       {invoice.proforma_invoice?.proforma_code ?? "Proforma invoice"}

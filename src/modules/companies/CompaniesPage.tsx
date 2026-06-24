@@ -264,7 +264,7 @@ export function CompaniesPage() {
           />
         </div>
         <button
-          className="rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-500"
+          className="rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500"
           onClick={() => setViewMode("new")}
           type="button"
         >
@@ -329,7 +329,7 @@ export function CompaniesPage() {
                 <label className="block">
                   <span className="sr-only">Search companies</span>
                   <input
-                    className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                    className="w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search company, slug, admin"
                     type="search"
@@ -337,7 +337,7 @@ export function CompaniesPage() {
                   />
                 </label>
                 <select
-                  className="rounded-lg border border-stone-300 px-3 py-2.5 text-base outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                  className="rounded-lg border border-stone-300 px-3 py-2.5 text-base outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                   onChange={(event) =>
                     setFilter(event.target.value as CompanyFilter)
                   }
@@ -480,7 +480,7 @@ function CreateCompanyForm({
       </div>
 
       <button
-        className="mt-5 w-full rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+        className="mt-5 w-full rounded-lg bg-orange-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
         disabled={isSubmitting}
         type="submit"
       >
@@ -502,7 +502,7 @@ function CompanyRow({
   return (
     <button
       className={`block w-full px-4 py-4 text-left transition ${
-        isSelected ? "bg-brand-50" : "hover:bg-stone-50"
+        isSelected ? "bg-orange-50" : "hover:bg-stone-50"
       }`}
       onClick={onSelect}
       type="button"
@@ -702,7 +702,7 @@ function InviteRow({
             Review
           </button>
           <button
-            className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={Boolean(busyAction) || !company.admin}
             onClick={onSendSetupLink}
             type="button"
@@ -728,7 +728,7 @@ function ModeButton({
     <button
       className={`rounded-lg px-3 py-2 text-sm font-semibold transition ${
         active
-          ? "bg-brand-600 text-white"
+          ? "bg-orange-600 text-white"
           : "bg-stone-100 text-slate-700 hover:bg-stone-200"
       }`}
       onClick={onClick}
@@ -784,7 +784,7 @@ function TextField({
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <input
-        className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-2.5 text-base outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         required={required}
@@ -820,7 +820,7 @@ function Badge({
 }) {
   const className =
     tone === "success"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      ? "border-emerald-200 bg-emerald-50 text-[#06173f]"
       : tone === "warning"
         ? "border-amber-200 bg-amber-50 text-amber-800"
         : "border-stone-200 bg-stone-50 text-slate-600";

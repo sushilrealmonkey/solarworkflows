@@ -380,7 +380,7 @@ function PlatformDashboard() {
           title="EPC Companies"
           locked={false}
           action={
-            <Link className="text-sm font-semibold text-brand-700" to="/companies">
+            <Link className="text-sm font-semibold text-[#06173f]" to="/companies">
               Open
             </Link>
           }
@@ -393,7 +393,7 @@ function PlatformDashboard() {
             <div className="mt-4 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-100">
               {snapshot.companies.slice(0, 8).map((company) => (
                 <Link
-                  className="grid gap-3 bg-stone-50 p-3 hover:bg-brand-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  className="grid gap-3 bg-stone-50 p-3 hover:bg-orange-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
                   key={company.id}
                   to={`/companies/${company.id}`}
                 >
@@ -539,7 +539,7 @@ function FollowupWidget({
           {followups.slice(0, 5).map((followup) => (
             <Link
               key={followup.id}
-              className="block rounded-lg border border-stone-100 bg-stone-50 p-3 hover:border-brand-100"
+              className="block rounded-lg border border-stone-100 bg-stone-50 p-3 hover:border-orange-100"
               to={`/leads/${followup.lead_id}`}
             >
               <p className="text-sm font-semibold text-slate-950">
@@ -571,7 +571,7 @@ function SurveyWidget({
       locked={locked}
       action={
         !locked ? (
-          <Link className="text-sm font-semibold text-brand-700" to="/site-surveys">
+          <Link className="text-sm font-semibold text-[#06173f]" to="/site-surveys">
             Open
           </Link>
         ) : null
@@ -588,7 +588,7 @@ function SurveyWidget({
             return (
               <Link
                 key={survey.id}
-                className="block rounded-lg border border-stone-100 bg-stone-50 p-3 hover:border-brand-100"
+                className="block rounded-lg border border-stone-100 bg-stone-50 p-3 hover:border-orange-100"
                 to={`/site-surveys/${survey.id}`}
               >
                 <p className="text-sm font-semibold text-slate-950">
@@ -622,7 +622,7 @@ function RecentLeadsWidget({
       locked={locked}
       action={
         !locked ? (
-          <Link className="text-sm font-semibold text-brand-700" to="/leads">
+          <Link className="text-sm font-semibold text-[#06173f]" to="/leads">
             Open
           </Link>
         ) : null
@@ -662,7 +662,7 @@ function RecentPaymentsWidget({
       locked={locked}
       action={
         !locked ? (
-          <Link className="text-sm font-semibold text-brand-700" to="/payments">
+          <Link className="text-sm font-semibold text-[#06173f]" to="/payments">
             Open
           </Link>
         ) : null
@@ -707,7 +707,7 @@ function LowStockWidget({
       locked={locked}
       action={
         !locked ? (
-          <Link className="text-sm font-semibold text-brand-700" to="/inventory">
+          <Link className="text-sm font-semibold text-[#06173f]" to="/inventory">
             Open
           </Link>
         ) : null
@@ -750,7 +750,7 @@ function PendingDocumentsWidget({
       locked={locked}
       action={
         !locked ? (
-          <Link className="text-sm font-semibold text-brand-700" to="/projects">
+          <Link className="text-sm font-semibold text-[#06173f]" to="/projects">
             Open
           </Link>
         ) : null
@@ -792,7 +792,7 @@ function ListTable({
         <Link
           key={row.key}
           to={row.to}
-          className="grid gap-2 bg-stone-50 p-3 hover:bg-brand-50 sm:grid-cols-[1fr_auto] sm:items-center"
+          className="grid gap-2 bg-stone-50 p-3 hover:bg-orange-50 sm:grid-cols-[1fr_auto] sm:items-center"
         >
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-slate-950">

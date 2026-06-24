@@ -64,7 +64,7 @@ function AccessStateScreen({
   return (
     <main className="flex min-h-screen items-center justify-center bg-stone-50 px-4 py-10">
       <section className="w-full max-w-lg rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold text-brand-600">{eyebrow}</p>
+        <p className="text-sm font-semibold text-[#06173f]">{eyebrow}</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">
           {title}
         </h1>

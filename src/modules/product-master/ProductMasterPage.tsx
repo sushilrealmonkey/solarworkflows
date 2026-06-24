@@ -426,7 +426,7 @@ export function ProductMasterPage() {
                   return (
                     <tr
                       key={product.id}
-                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
                       onClick={() => openProductDetail(product.id)}
                       onKeyDown={(event) =>
                         handleProductRowKeyDown(event, product.id)
@@ -438,7 +438,7 @@ export function ProductMasterPage() {
                         {product.product_code}
                       </td>
                       <td className="px-4 py-3">
-                        <span className="font-semibold text-brand-700">
+                        <span className="font-semibold text-[#06173f]">
                           {product.product_name}
                         </span>
                       </td>
@@ -506,7 +506,7 @@ export function ProductMasterPage() {
                       {product.product_code}
                     </p>
                     <Link
-                      className="mt-1 block text-base font-semibold text-brand-700"
+                      className="mt-1 block text-base font-semibold text-[#06173f]"
                       to={`/products-materials/products/${product.id}`}
                     >
                       {product.product_name}

@@ -287,7 +287,7 @@ export function B2BSaleDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/b2b-sales">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/b2b-sales">
         Back to B2B/Direct sales
       </Link>
 
@@ -368,7 +368,7 @@ export function B2BSaleDetailPage() {
                   label="Customer"
                   value={
                     <Link
-                      className="font-semibold text-brand-700"
+                      className="font-semibold text-[#06173f]"
                       to={`/customers/${sale.customer_id}`}
                     >
                       {sale.customer?.business_name ||
@@ -615,7 +615,7 @@ function invoiceLink(sale: B2BSaleWithRelations, canViewInvoices: boolean) {
   }
 
   return (
-    <Link className="font-semibold text-brand-700" to={`/invoices/${sale.invoice_id}`}>
+    <Link className="font-semibold text-[#06173f]" to={`/invoices/${sale.invoice_id}`}>
       {sale.invoice?.invoice_code ?? "Open invoice"}
     </Link>
   );
@@ -632,7 +632,7 @@ function proformaInvoiceLink(sale: B2BSaleWithRelations, canViewInvoices: boolea
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/proforma-invoices/${sale.proforma_invoice_id}`}
     >
       {sale.proforma_invoice?.proforma_code ?? "Open proforma"}

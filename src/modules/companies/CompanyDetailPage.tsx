@@ -435,7 +435,7 @@ export function CompanyDetailPage() {
         <DetailItem label="Last Invoice / Payment" value="Coming in Phase 2" />
       </DetailSection>
 
-      <Link className="text-sm font-semibold text-brand-700" to="/companies">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/companies">
         Back to EPC Companies
       </Link>
 

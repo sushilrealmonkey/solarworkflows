@@ -45,7 +45,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={toast.id}
             className={`rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${
               toast.tone === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                ? "border-emerald-200 bg-emerald-50 text-[#06173f]"
                 : toast.tone === "error"
                   ? "border-rose-200 bg-rose-50 text-rose-900"
                   : "border-stone-200 bg-white text-slate-800"

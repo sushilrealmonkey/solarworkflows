@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -45,13 +44,6 @@ import {
 } from "./settingsUtils";
 import { CompanyLogoUploader } from "./CompanyLogoUploader";
 
-const settingsLinks = [
-  { to: "/settings", label: "Overview", end: true },
-  { to: "/settings/organization", label: "Organization", end: false },
-  { to: "/settings/staff", label: "Staff", end: false },
-  { to: "/settings/roles", label: "Roles", end: false },
-];
-
 type StaffFormState = {
   mode: "create" | "edit";
   staff: SettingsStaff | null;
@@ -71,7 +63,7 @@ export function SettingsPage() {
     return (
       <AccessDenied
         title="Settings are not available"
-        description="Your role needs settings:update access to manage organization, staff, and roles."
+        description="Your role needs settings:update access to manage organization and staff."
       />
     );
   }
@@ -80,36 +72,11 @@ export function SettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Settings"
-        description="Manage organization branding, staff access, and role permissions."
+        description="Manage organization branding and staff access."
       />
 
-      <div className="grid gap-5 lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <nav
-          className="flex gap-2 overflow-x-auto rounded-xl border border-stone-200 bg-white p-2 shadow-sm lg:block lg:space-y-1 lg:overflow-visible"
-          aria-label="Settings navigation"
-        >
-          {settingsLinks.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.end}
-              className={({ isActive }) =>
-                `block whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-                  isActive
-                    ? "bg-brand-50 text-brand-900"
-                    : "text-slate-600 hover:bg-stone-100 hover:text-slate-950"
-                }`
-              }
-            >
-              {link.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="min-w-0">
-          <Outlet />
-        </div>
-      </div>
+      <OrganizationSettingsPage />
+      <StaffManagementPage />
     </div>
   );
 }
@@ -373,6 +340,7 @@ export function StaffManagementPage() {
   const [saving, setSaving] = useState(false);
   const [statusTarget, setStatusTarget] = useState<SettingsStaff | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [openStaffMenuId, setOpenStaffMenuId] = useState<string | null>(null);
 
   async function loadData() {
     try {
@@ -511,7 +479,7 @@ export function StaffManagementPage() {
 
       {!loading && !error && filteredStaff.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
+          <div className="hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
@@ -520,8 +488,7 @@ export function StaffManagementPage() {
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Last Login</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -536,28 +503,24 @@ export function StaffManagementPage() {
                     <td className="px-4 py-3">
                       <StaffStatusBadge value={member.status} />
                     </td>
-                    <td className="px-4 py-3">{formatDateTime(member.last_login_at)}</td>
                     <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button onClick={() => openEditForm(member)} variant="secondary">
-                          Edit
-                        </Button>
-                        {member.status === "active" ? (
-                          <Button
-                            onClick={() => setStatusTarget(member)}
-                            variant="danger"
-                          >
-                            Deactivate
-                          </Button>
-                        ) : (
-                          <Button
-                            onClick={() => void setMemberStatus(member, "active")}
-                            variant="secondary"
-                          >
-                            Activate
-                          </Button>
-                        )}
-                      </div>
+                      <StaffRowActions
+                        isMenuOpen={openStaffMenuId === member.id}
+                        lastLogin={formatDateTime(member.last_login_at)}
+                        member={member}
+                        onEdit={() => openEditForm(member)}
+                        onMenuOpenChange={(isOpen) =>
+                          setOpenStaffMenuId(isOpen ? member.id : null)
+                        }
+                        onStatusAction={() => {
+                          setOpenStaffMenuId(null);
+                          if (member.status === "active") {
+                            setStatusTarget(member);
+                            return;
+                          }
+                          void setMemberStatus(member, "active");
+                        }}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -584,26 +547,27 @@ export function StaffManagementPage() {
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <Detail label="Role" value={member.role_name ?? "No role"} />
-                  <Detail label="Last Login" value={formatDateTime(member.last_login_at)} />
                   <Detail label="Phone" value={member.phone ?? "-"} />
                   <Detail label="Email" value={member.email ?? "-"} />
                 </dl>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button onClick={() => openEditForm(member)} variant="secondary">
-                    Edit
-                  </Button>
-                  {member.status === "active" ? (
-                    <Button onClick={() => setStatusTarget(member)} variant="danger">
-                      Deactivate
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={() => void setMemberStatus(member, "active")}
-                      variant="secondary"
-                    >
-                      Activate
-                    </Button>
-                  )}
+                <div className="mt-4 flex justify-end">
+                  <StaffRowActions
+                    isMenuOpen={openStaffMenuId === member.id}
+                    lastLogin={formatDateTime(member.last_login_at)}
+                    member={member}
+                    onEdit={() => openEditForm(member)}
+                    onMenuOpenChange={(isOpen) =>
+                      setOpenStaffMenuId(isOpen ? member.id : null)
+                    }
+                    onStatusAction={() => {
+                      setOpenStaffMenuId(null);
+                      if (member.status === "active") {
+                        setStatusTarget(member);
+                        return;
+                      }
+                      void setMemberStatus(member, "active");
+                    }}
+                  />
                 </div>
               </article>
             ))}
@@ -807,6 +771,112 @@ function StaffStatusBadge({ value }: { value: string | null | undefined }) {
     value === "active" ? "green" : value === "inactive" ? "red" : "amber";
 
   return <Badge tone={tone}>{labelize(value)}</Badge>;
+}
+
+function StaffRowActions({
+  isMenuOpen,
+  lastLogin,
+  member,
+  onEdit,
+  onMenuOpenChange,
+  onStatusAction,
+}: {
+  isMenuOpen: boolean;
+  lastLogin: string;
+  member: SettingsStaff;
+  onEdit: () => void;
+  onMenuOpenChange: (isOpen: boolean) => void;
+  onStatusAction: () => void;
+}) {
+  const statusActionLabel =
+    member.status === "active" ? "Deactivate" : "Activate";
+
+  return (
+    <div
+      className="relative ml-auto flex w-fit items-center justify-end gap-1.5"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          onMenuOpenChange(false);
+        }
+      }}
+    >
+      <button
+        aria-label={`Edit ${member.full_name ?? "staff member"}`}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition hover:bg-orange-50 hover:text-[#06173f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+        onClick={onEdit}
+        type="button"
+      >
+        <PencilIcon />
+      </button>
+      <button
+        aria-expanded={isMenuOpen}
+        aria-haspopup="menu"
+        aria-label={`More actions for ${member.full_name ?? "staff member"}`}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition hover:bg-orange-50 hover:text-[#06173f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+        onClick={() => onMenuOpenChange(!isMenuOpen)}
+        type="button"
+      >
+        <VerticalDotsIcon />
+      </button>
+
+      {isMenuOpen ? (
+        <div
+          aria-label="Staff actions"
+          className="absolute right-0 top-[calc(100%+0.45rem)] z-30 w-56 rounded-lg border border-stone-200 bg-white p-1.5 text-left shadow-xl"
+          role="menu"
+        >
+          <div className="rounded-md px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Last login
+            </p>
+            <p className="mt-1 text-sm font-medium text-slate-900">
+              {lastLogin}
+            </p>
+          </div>
+          <button
+            className={`mt-1 flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 ${
+              member.status === "active" ? "text-rose-700" : "text-[#06173f]"
+            }`}
+            onClick={onStatusAction}
+            role="menuitem"
+            type="button"
+          >
+            {statusActionLabel}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M4.5 19.5h4l10-10a2.1 2.1 0 0 0-3-3l-10 10-1 3Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.9"
+      />
+      <path
+        d="m14 8 2 2"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+function VerticalDotsIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+      <circle cx="12" cy="5.5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="18.5" r="1.6" />
+    </svg>
+  );
 }
 
 function SettingsCard({

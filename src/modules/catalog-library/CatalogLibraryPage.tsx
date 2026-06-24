@@ -337,7 +337,7 @@ function TabButton({
     <button
       className={`min-h-10 rounded-lg px-3 py-2 text-sm font-semibold transition ${
         active
-          ? "bg-brand-600 text-white shadow-sm"
+          ? "bg-orange-600 text-white shadow-sm"
           : "text-slate-600 hover:bg-stone-100"
       }`}
       onClick={onClick}
@@ -587,7 +587,7 @@ function CatalogCategoryFormModal({
       <label className="flex items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-medium text-slate-700">
         <input
           checked={values.is_active}
-          className="h-4 w-4 rounded border-stone-300 text-brand-700 focus:ring-brand-600"
+          className="h-4 w-4 rounded border-stone-300 text-[#06173f] focus:ring-orange-600"
           onChange={(event) => update("is_active", event.target.checked)}
           type="checkbox"
         />
@@ -654,7 +654,7 @@ function CatalogBrandFormModal({
       <label className="flex items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-medium text-slate-700">
         <input
           checked={values.is_active}
-          className="h-4 w-4 rounded border-stone-300 text-brand-700 focus:ring-brand-600"
+          className="h-4 w-4 rounded border-stone-300 text-[#06173f] focus:ring-orange-600"
           onChange={(event) => update("is_active", event.target.checked)}
           type="checkbox"
         />

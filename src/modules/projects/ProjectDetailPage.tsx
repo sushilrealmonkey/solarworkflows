@@ -589,7 +589,7 @@ export function ProjectDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/projects">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/projects">
         Back to projects
       </Link>
 
@@ -613,7 +613,7 @@ export function ProjectDetailPage() {
                 {canUpdate ? (
                   <button
                     aria-label="Edit project"
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
                     onClick={() => {
                       setFormErrors({});
                       setEditing(projectToForm(project));
@@ -1003,7 +1003,7 @@ function ProjectMaterialsSection({
                     </td>
                     <td className="px-4 py-3">
                       <Link
-                        className="font-semibold text-brand-700"
+                        className="font-semibold text-[#06173f]"
                         to={`/inventory/${material.item_id}`}
                       >
                         {material.item?.item_name ?? "Inventory item"}
@@ -1042,7 +1042,7 @@ function ProjectMaterialsSection({
                       {formatDate(material.transaction_date)}
                     </p>
                     <Link
-                      className="mt-1 block text-sm font-semibold text-brand-700"
+                      className="mt-1 block text-sm font-semibold text-[#06173f]"
                       to={`/inventory/${material.item_id}`}
                     >
                       {material.item?.item_name ?? "Inventory item"}
@@ -1177,7 +1177,7 @@ function leadLink(project: ProjectWithRelations) {
   }
 
   return (
-    <Link className="font-semibold text-brand-700" to={`/leads/${project.lead_id}`}>
+    <Link className="font-semibold text-[#06173f]" to={`/leads/${project.lead_id}`}>
       {project.lead?.lead_code ?? project.lead?.full_name ?? "Open lead"}
     </Link>
   );
@@ -1190,7 +1190,7 @@ function quotationLink(project: ProjectWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/quotations/${project.quotation_id}`}
     >
       {project.quotation?.quotation_code ?? "Open quotation"}
@@ -1205,7 +1205,7 @@ function surveyLink(project: ProjectWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/site-surveys/${project.site_survey_id}`}
     >
       {project.site_survey?.survey_code ?? "Open survey"}

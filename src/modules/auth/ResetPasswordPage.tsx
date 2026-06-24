@@ -223,9 +223,9 @@ function ResetVerificationCard({
   onConfirm: () => void;
 }) {
   return (
-    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-900">
+    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-[#06173f]">
       <p className="text-sm font-semibold">Confirm reset link</p>
-      <p className="mt-1 text-sm leading-6 text-emerald-800">
+      <p className="mt-1 text-sm leading-6 text-[#06173f]">
         This extra confirmation protects your one-time reset link from automated
         email link scanners.
       </p>
@@ -244,7 +244,7 @@ function ResetVerificationCard({
 function NoticeCard({ notice }: { notice: ResetNotice }) {
   const toneClass =
     notice.tone === "success"
-      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      ? "border-emerald-200 bg-emerald-50 text-[#06173f]"
       : notice.tone === "error"
         ? "border-red-200 bg-red-50 text-red-700"
         : "border-amber-200 bg-amber-50 text-amber-800";

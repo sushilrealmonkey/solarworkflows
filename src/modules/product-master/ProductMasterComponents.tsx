@@ -104,7 +104,7 @@ export function ProductCategoryFormModal({
             Category Type<span className="text-rose-600"> *</span>
           </span>
           <select
-            className={`mt-1 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100 ${
+            className={`mt-1 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100 ${
               errors.category_type ? "border-rose-300" : "border-stone-200"
             }`}
             value={values.category_type}
@@ -310,7 +310,7 @@ function BrandInput({
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <input
-        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
         list={options.length > 0 ? listId : undefined}
         value={value}
         onChange={(event) => onChange(event.target.value)}

@@ -270,7 +270,7 @@ export function ProductDetailPage() {
   return (
     <div className="space-y-6">
       <Link
-        className="text-sm font-semibold text-brand-700"
+        className="text-sm font-semibold text-[#06173f]"
         to="/products-materials/products"
       >
         Back to Products

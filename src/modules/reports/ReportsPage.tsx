@@ -153,7 +153,7 @@ export function ReportsPage() {
                   key={value}
                   className={`rounded-lg border px-3 py-2 text-sm font-semibold transition ${
                     preset === value
-                      ? "border-brand-500 bg-brand-50 text-brand-900"
+                      ? "border-orange-500 bg-orange-50 text-[#06173f]"
                       : "border-stone-200 bg-white text-slate-700 hover:bg-stone-50"
                   }`}
                   onClick={() => setPreset(value as DatePreset)}
@@ -440,7 +440,7 @@ function BarChart({ rows }: { rows: Array<{ label: string; value: number }> }) {
           <p className="truncate text-sm font-medium text-slate-700">{row.label}</p>
           <div className="h-8 overflow-hidden rounded-lg bg-stone-100">
             <div
-              className="h-full rounded-lg bg-brand-500"
+              className="h-full rounded-lg bg-orange-500"
               style={{ width: `${Math.max((row.value / maxValue) * 100, 8)}%` }}
             />
           </div>
@@ -516,7 +516,7 @@ function DateInput({
         {label}
       </span>
       <input
-        className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-slate-950 shadow-sm focus:border-brand-500 focus:outline-none"
+        className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2 text-sm text-slate-950 shadow-sm focus:border-orange-500 focus:outline-none"
         onChange={(event) => onChange(event.target.value)}
         type="date"
         value={value}

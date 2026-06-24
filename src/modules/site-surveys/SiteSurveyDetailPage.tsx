@@ -261,7 +261,7 @@ export function SiteSurveyDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/site-surveys">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/site-surveys">
         Back to site surveys
       </Link>
 
@@ -304,7 +304,7 @@ export function SiteSurveyDetailPage() {
               ) : null}
               {canCreateQuotation ? (
                 <Link
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-900"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
                   to={`/quotations?new=1&siteSurveyId=${survey.id}`}
                 >
                   Create Quotation
@@ -579,7 +579,7 @@ function leadLink(survey: SiteSurveyWithRelations) {
   }
 
   return (
-    <Link className="font-semibold text-brand-700" to={`/leads/${survey.lead_id}`}>
+    <Link className="font-semibold text-[#06173f]" to={`/leads/${survey.lead_id}`}>
       {survey.lead?.lead_code ?? survey.lead?.full_name ?? "Open lead"}
     </Link>
   );
@@ -592,7 +592,7 @@ function customerLink(survey: SiteSurveyWithRelations) {
 
   return (
     <Link
-      className="font-semibold text-brand-700"
+      className="font-semibold text-[#06173f]"
       to={`/customers/${survey.customer_id}`}
     >
       {survey.customer?.customer_code ?? survey.customer?.full_name ?? "Open customer"}

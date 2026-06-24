@@ -45,11 +45,7 @@ import { ReportsPage } from "../modules/reports/ReportsPage";
 import { CompaniesPage } from "../modules/companies/CompaniesPage";
 import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
 import {
-  OrganizationSettingsPage,
-  RolesPage,
-  SettingsOverviewPage,
   SettingsPage,
-  StaffManagementPage,
 } from "../modules/settings/SettingsPage";
 
 export default function App() {
@@ -136,12 +132,8 @@ export default function App() {
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
           <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/settings" element={<SettingsPage />}>
-            <Route index element={<SettingsOverviewPage />} />
-            <Route path="staff" element={<StaffManagementPage />} />
-            <Route path="roles" element={<RolesPage />} />
-            <Route path="organization" element={<OrganizationSettingsPage />} />
-          </Route>
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings/*" element={<Navigate to="/settings" replace />} />
           {routes
             .filter(
               (route) =>

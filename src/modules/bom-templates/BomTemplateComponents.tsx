@@ -107,7 +107,7 @@ export function BomTemplateFormModal({
       <label className="flex min-h-11 items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
         <input
           checked={values.is_active}
-          className="h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-600"
+          className="h-4 w-4 rounded border-stone-300 text-[#06173f] focus:ring-orange-600"
           onChange={(event) => update("is_active", event.target.checked)}
           type="checkbox"
         />
@@ -188,7 +188,7 @@ export function BomTemplateRuleFormModal({
           Material Category<span className="text-rose-600"> *</span>
         </span>
         <select
-          className={`mt-1 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100 ${
+          className={`mt-1 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100 ${
             errors.product_category_id ? "border-rose-300" : "border-stone-200"
           }`}
           value={values.product_category_id}
@@ -254,7 +254,7 @@ export function BomTemplateRuleFormModal({
       <label className="flex min-h-11 items-center gap-3 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5">
         <input
           checked={values.is_required}
-          className="h-4 w-4 rounded border-stone-300 text-brand-600 focus:ring-brand-600"
+          className="h-4 w-4 rounded border-stone-300 text-[#06173f] focus:ring-orange-600"
           onChange={(event) => update("is_required", event.target.checked)}
           type="checkbox"
         />

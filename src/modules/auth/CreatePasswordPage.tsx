@@ -140,7 +140,7 @@ export function CreatePasswordPage() {
   return (
     <main className="min-h-screen bg-stone-50 px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-3rem)] w-full max-w-6xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm lg:grid-cols-[1.02fr_0.98fr]">
-        <section className="relative hidden bg-brand-900 px-10 py-10 text-white lg:flex lg:flex-col lg:justify-between">
+        <section className="relative hidden bg-[#06173f] px-10 py-10 text-white lg:flex lg:flex-col lg:justify-between">
           <div>
             <PortalLogo
               className="h-28 w-full max-w-md object-contain object-left"
@@ -152,14 +152,14 @@ export function CreatePasswordPage() {
             <h1 className="mt-8 max-w-lg text-4xl font-semibold tracking-normal">
               Create your password
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-7 text-emerald-50">
+            <p className="mt-5 max-w-xl text-base leading-7 text-[#06173f]">
               Your invite has already assigned your company workspace and role.
               Set a password to activate access.
             </p>
           </div>
 
           <div className="rounded-2xl border border-white/15 bg-white/10 p-5 shadow-2xl backdrop-blur">
-            <p className="text-sm font-semibold text-emerald-50">
+            <p className="text-sm font-semibold text-[#06173f]">
               Tenant protected
             </p>
             <div className="mt-5 grid gap-3">
@@ -186,7 +186,7 @@ export function CreatePasswordPage() {
             </div>
 
             <div className="mt-8 rounded-2xl border border-stone-200 bg-white p-5 shadow-sm sm:p-6 lg:mt-0">
-              <p className="text-sm font-semibold text-brand-600">
+              <p className="text-sm font-semibold text-[#06173f]">
                 Invite accepted
               </p>
               <h2 className="mt-2 text-2xl font-semibold tracking-normal">
@@ -229,7 +229,7 @@ export function CreatePasswordPage() {
                   </span>
                   <input
                     autoComplete="new-password"
-                    className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-3 text-base outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-3 text-base outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     disabled={isSubmitting || !hasInviteSession}
                     minLength={8}
                     onChange={(event) => setPassword(event.target.value)}
@@ -246,7 +246,7 @@ export function CreatePasswordPage() {
                   </span>
                   <input
                     autoComplete="new-password"
-                    className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-3 text-base outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+                    className="mt-2 w-full rounded-xl border border-stone-300 px-3 py-3 text-base outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
                     disabled={isSubmitting || !hasInviteSession}
                     minLength={8}
                     onChange={(event) => setConfirmPassword(event.target.value)}
@@ -260,7 +260,7 @@ export function CreatePasswordPage() {
                 <FormError message={errorMessage} />
 
                 <button
-                  className="w-full rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-xl bg-orange-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
                   disabled={isSubmitting || !hasInviteSession}
                   type="submit"
                 >
@@ -278,7 +278,7 @@ export function CreatePasswordPage() {
 function VisualMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between rounded-xl bg-white/10 px-4 py-3">
-      <span className="text-sm text-emerald-50">{label}</span>
+      <span className="text-sm text-[#06173f]">{label}</span>
       <span className="text-sm font-semibold text-amber-100">{value}</span>
     </div>
   );
@@ -306,14 +306,14 @@ function InviteVerificationCard({
   onConfirm: () => void;
 }) {
   return (
-    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-900">
+    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-[#06173f]">
       <p className="text-sm font-semibold">Confirm your invitation</p>
-      <p className="mt-1 text-sm leading-6 text-emerald-800">
+      <p className="mt-1 text-sm leading-6 text-[#06173f]">
         This extra confirmation protects your one-time invite from automated
         email link scanners.
       </p>
       <button
-        className="mt-3 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={isVerifying}
         onClick={onConfirm}
         type="button"

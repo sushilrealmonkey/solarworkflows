@@ -566,7 +566,7 @@ export function InventoryPage() {
                 {filteredItems.map((item) => (
                   <tr
                     key={item.id}
-                    className={`cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
+                    className={`cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${
                       isOutOfStock(item)
                         ? "bg-rose-50/50 hover:bg-rose-50"
                         : isLowStock(item)
@@ -584,7 +584,7 @@ export function InventoryPage() {
                       {item.item_code ?? "-"}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="font-semibold text-brand-700">
+                      <span className="font-semibold text-[#06173f]">
                         {inventoryProductName(item)}
                       </span>
                       <p className="mt-1 text-xs text-slate-500">
@@ -693,7 +693,7 @@ export function InventoryPage() {
             {filteredItems.map((item) => (
               <article
                 key={item.id}
-                className={`cursor-pointer rounded-xl border p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600 ${
+                className={`cursor-pointer rounded-xl border p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${
                   isOutOfStock(item)
                     ? "border-rose-200 bg-rose-50 hover:bg-rose-50"
                     : isLowStock(item)
@@ -1335,7 +1335,7 @@ export function InventoryTransactionsSection({
                     <td className="px-4 py-3">
                       {transaction.project_id ? (
                         <Link
-                          className="font-semibold text-brand-700"
+                          className="font-semibold text-[#06173f]"
                           to={`/projects/${transaction.project_id}`}
                         >
                           {transaction.project?.project_code ??

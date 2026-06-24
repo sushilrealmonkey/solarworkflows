@@ -159,7 +159,7 @@ export function VendorDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/vendors">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/vendors">
         Back to vendors
       </Link>
 

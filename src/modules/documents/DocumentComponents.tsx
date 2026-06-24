@@ -96,7 +96,7 @@ export function DocumentUploadModal({
         <div
           className={`rounded-xl border border-dashed p-5 text-center transition-colors ${
             dragging
-              ? "border-brand-600 bg-brand-50"
+              ? "border-orange-600 bg-orange-50"
               : errors.file
                 ? "border-rose-300 bg-rose-50"
                 : "border-stone-300 bg-stone-50"
@@ -291,7 +291,7 @@ export function RejectDocumentDialog({
         <label className="mt-4 block">
           <span className="text-sm font-medium text-slate-700">Rejection Note</span>
           <textarea
-            className="mt-1 min-h-28 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-brand-600 focus:ring-2 focus:ring-brand-100"
+            className="mt-1 min-h-28 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />

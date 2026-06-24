@@ -317,7 +317,7 @@ export function VendorsPage() {
                 {filteredVendors.map((vendor) => (
                   <tr
                     key={vendor.id}
-                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
                     onClick={() => openVendorDetail(vendor.id)}
                     onKeyDown={(event) => handleVendorRowKeyDown(event, vendor.id)}
                     role="link"
@@ -400,7 +400,7 @@ export function VendorsPage() {
             {filteredVendors.map((vendor) => (
               <article
                 key={vendor.id}
-                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
                 onClick={() => openVendorDetail(vendor.id)}
                 onKeyDown={(event) => handleVendorRowKeyDown(event, vendor.id)}
                 role="link"

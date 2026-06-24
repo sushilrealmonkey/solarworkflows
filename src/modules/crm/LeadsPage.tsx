@@ -290,10 +290,10 @@ export function LeadsPage() {
       </div>
 
       {conversionLink ? (
-        <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-[#06173f] sm:flex-row sm:items-center sm:justify-between">
           <span className="font-medium">Customer profile is ready.</span>
           <Link
-            className="inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"
+            className="inline-flex rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-orange-700"
             to={conversionLink}
           >
             Open Customer
@@ -396,7 +396,7 @@ export function LeadsPage() {
                 {filteredLeads.map((lead) => (
                   <tr
                     key={lead.id}
-                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
                     onClick={() => openLeadDetail(lead.id)}
                     onKeyDown={(event) => handleLeadRowKeyDown(event, lead.id)}
                     role="link"
@@ -405,7 +405,7 @@ export function LeadsPage() {
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {lead.lead_code ?? "-"}
                     </td>
-                    <td className="px-4 py-3 font-medium text-brand-700">
+                    <td className="px-4 py-3 font-medium text-[#06173f]">
                       {lead.full_name}
                     </td>
                     <td className="px-4 py-3">{lead.phone}</td>
@@ -498,7 +498,7 @@ export function LeadsPage() {
             {filteredLeads.map((lead) => (
               <article
                 key={lead.id}
-                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-600"
+                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
                 onClick={() => openLeadDetail(lead.id)}
                 onKeyDown={(event) => handleLeadRowKeyDown(event, lead.id)}
                 role="link"

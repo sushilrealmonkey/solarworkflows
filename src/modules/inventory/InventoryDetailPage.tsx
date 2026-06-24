@@ -279,7 +279,7 @@ export function InventoryDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/inventory">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/inventory">
         Back to inventory
       </Link>
 

@@ -143,7 +143,7 @@ export function PaymentDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/payments">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/payments">
         Back to payments
       </Link>
 
@@ -207,7 +207,7 @@ export function PaymentDetailPage() {
               value={
                 payment.project_id ? (
                 <Link
-                  className="font-semibold text-brand-700"
+                  className="font-semibold text-[#06173f]"
                   to={`/projects/${payment.project_id}`}
                 >
                   {payment.project?.project_code ??
@@ -224,7 +224,7 @@ export function PaymentDetailPage() {
               value={
                 payment.b2b_sale_id ? (
                   <Link
-                    className="font-semibold text-brand-700"
+                    className="font-semibold text-[#06173f]"
                     to={`/b2b-sales/${payment.b2b_sale_id}`}
                   >
                     {payment.b2b_sale?.sale_code ?? "Open B2B sale"}
@@ -239,7 +239,7 @@ export function PaymentDetailPage() {
               value={
                 payment.proforma_invoice_id ? (
                   <Link
-                    className="font-semibold text-brand-700"
+                    className="font-semibold text-[#06173f]"
                     to={`/proforma-invoices/${payment.proforma_invoice_id}`}
                   >
                     {payment.proforma_invoice?.proforma_code ??
@@ -255,7 +255,7 @@ export function PaymentDetailPage() {
               value={
                 payment.invoice_id ? (
                   <Link
-                    className="font-semibold text-brand-700"
+                    className="font-semibold text-[#06173f]"
                     to={`/invoices/${payment.invoice_id}`}
                   >
                     {payment.invoice?.invoice_code ?? "Open invoice"}
@@ -269,7 +269,7 @@ export function PaymentDetailPage() {
               label="Customer"
               value={
                 <Link
-                  className="font-semibold text-brand-700"
+                  className="font-semibold text-[#06173f]"
                   to={`/customers/${payment.customer_id}`}
                 >
                   {payment.customer?.business_name ??
@@ -284,7 +284,7 @@ export function PaymentDetailPage() {
               value={
                 payment.quotation_id ? (
                   <Link
-                    className="font-semibold text-brand-700"
+                    className="font-semibold text-[#06173f]"
                     to={`/quotations/${payment.quotation_id}`}
                   >
                     {payment.quotation?.quotation_code ?? "Open quotation"}
@@ -308,7 +308,7 @@ export function PaymentDetailPage() {
               value={
                 payment.receipt_url ? (
                   <a
-                    className="font-semibold text-brand-700"
+                    className="font-semibold text-[#06173f]"
                     href={payment.receipt_url}
                     rel="noreferrer"
                     target="_blank"

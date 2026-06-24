@@ -79,11 +79,11 @@ export function LeadDetailPage() {
     canViewQuotation && hasPermission(profile, permissions, "quotations", "create");
   const canConvert = canUpdate && canCreateCustomer;
   const primaryActionClass =
-    "inline-flex min-h-10 items-center justify-center rounded-lg border border-brand-600 bg-brand-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-900";
+    "inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700";
   const disabledActionClass =
     "inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-sm font-semibold text-slate-500 opacity-75 shadow-sm";
   const convertActionClass =
-    "inline-flex min-h-10 items-center justify-center rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:border-emerald-200 disabled:bg-emerald-100 disabled:text-emerald-700 disabled:opacity-75";
+    "inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:border-orange-200 disabled:bg-orange-100 disabled:text-orange-700 disabled:opacity-75";
 
   async function loadLead() {
     if (!canView || !id) {
@@ -231,7 +231,7 @@ export function LeadDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-brand-700" to="/leads">
+      <Link className="text-sm font-semibold text-[#06173f]" to="/leads">
         Back to leads
       </Link>
 
@@ -245,7 +245,7 @@ export function LeadDetailPage() {
         <>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <header className="space-y-2">
-              <p className="text-sm font-medium text-brand-600">SolarOS</p>
+              <p className="text-sm font-medium text-[#06173f]">SolarOS</p>
               <div className="flex items-center gap-2">
                 <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
                   {lead.full_name}
@@ -325,10 +325,10 @@ export function LeadDetailPage() {
           </div>
 
           {conversionLink ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-[#06173f] sm:flex-row sm:items-center sm:justify-between">
               <span className="font-medium">This lead has a customer profile.</span>
               <Link
-                className="inline-flex rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white"
+                className="inline-flex rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-orange-700"
                 to={conversionLink}
               >
                 Open Customer

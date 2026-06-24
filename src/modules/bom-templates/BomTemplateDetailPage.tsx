@@ -277,7 +277,7 @@ export function BomTemplateDetailPage() {
   return (
     <div className="space-y-6">
       <button
-        className="text-sm font-semibold text-brand-700 hover:text-brand-900"
+        className="text-sm font-semibold text-[#06173f] hover:text-[#06173f]"
         onClick={() => navigate("/setup/bom-templates")}
         type="button"
       >
