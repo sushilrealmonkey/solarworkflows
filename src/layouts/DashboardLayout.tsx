@@ -80,6 +80,7 @@ export function DashboardLayout() {
       setIsSigningOut(true);
       setLogoutError(null);
       await signOut();
+      setMobileMenuOpen(false);
       setUserMenuOpen(false);
       navigate("/login", { replace: true });
     } catch (error) {
@@ -134,11 +135,25 @@ export function DashboardLayout() {
             type="button"
           />
           <aside className="relative flex h-full w-[min(20rem,86vw)] flex-col overflow-hidden border-r border-white/10 bg-[#06173f] px-4 py-5 text-white shadow-xl">
+            <button
+              aria-label="Close navigation"
+              className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-200"
+              onClick={() => setMobileMenuOpen(false)}
+              type="button"
+            >
+              <CloseIcon />
+            </button>
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
               <ShellBrand />
               <SidebarNavigation
                 items={visibleNavigationItems}
                 onNavigate={() => setMobileMenuOpen(false)}
+              />
+              <MobileSidebarAccount
+                isSigningOut={isSigningOut}
+                logoutError={logoutError}
+                name={profile?.full_name ?? "Workspace user"}
+                onSignOut={() => void handleSignOut()}
               />
             </div>
           </aside>
@@ -150,14 +165,6 @@ export function DashboardLayout() {
           <HeaderWaves />
           <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <button
-                className="flex h-10 w-10 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 shadow-sm lg:hidden"
-                aria-label="Open navigation"
-                onClick={() => setMobileMenuOpen(true)}
-                type="button"
-              >
-                <MenuIcon />
-              </button>
               {organization.logoUrl ? (
                 <img
                   alt=""
@@ -171,8 +178,16 @@ export function DashboardLayout() {
                 </p>
               </div>
             </div>
+            <button
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 shadow-sm lg:hidden"
+              aria-label="Open navigation"
+              onClick={() => setMobileMenuOpen(true)}
+              type="button"
+            >
+              <MenuIcon />
+            </button>
             <div
-              className="relative min-w-0"
+              className="relative hidden min-w-0 lg:block"
               onBlur={handleUserMenuBlur}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
@@ -232,6 +247,39 @@ export function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+    </div>
+  );
+}
+
+function MobileSidebarAccount({
+  isSigningOut,
+  logoutError,
+  name,
+  onSignOut,
+}: {
+  isSigningOut: boolean;
+  logoutError: string | null;
+  name: string;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="mt-4 shrink-0 border-t border-white/10 pt-4">
+      <p className="truncate px-2 text-sm font-semibold text-white">
+        {name}
+      </p>
+      <button
+        className="mt-3 flex w-full items-center justify-center rounded-lg border border-orange-300/40 bg-orange-400 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-200 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={isSigningOut}
+        onClick={onSignOut}
+        type="button"
+      >
+        {isSigningOut ? "Signing out..." : "Logout"}
+      </button>
+      {logoutError ? (
+        <p className="mt-2 rounded-lg border border-rose-200/30 bg-rose-500/15 px-3 py-2 text-xs leading-5 text-rose-100" role="alert">
+          {logoutError}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -628,6 +676,19 @@ function MenuIcon() {
     <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
       <path
         d="M4 7h16M4 12h16M4 17h16"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M6 6l12 12M18 6 6 18"
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth="2"
