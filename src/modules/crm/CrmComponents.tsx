@@ -1,4 +1,5 @@
 import type { FormEvent, ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import type { StaffOption } from "./types";
 import { labelize } from "./crmUtils";
@@ -204,12 +205,17 @@ export function Modal({
   noValidate?: boolean;
   maxWidthClass?: string;
 }) {
-  return (
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.stopPropagation();
+    onSubmit(event);
+  }
+
+  return createPortal(
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/40 p-0 sm:items-center sm:p-4">
       <form
         className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl border border-stone-200 bg-white p-4 shadow-xl sm:rounded-xl sm:p-6 ${maxWidthClass}`}
         noValidate={noValidate}
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit}
       >
         <div className="flex items-start justify-between gap-4">
           <h2 className="text-xl font-semibold tracking-normal text-slate-950">
@@ -229,7 +235,8 @@ export function Modal({
           </Button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
