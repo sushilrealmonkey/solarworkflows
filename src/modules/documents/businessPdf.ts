@@ -193,32 +193,22 @@ async function buildTechnicalCommercialProposalPdf(
   drawPageChrome(doc, colors.primary);
   let y = margin + 2;
 
-  y = drawTechnicalProposalLetter(
-    doc,
-    quotation,
-    {
-      companyName,
-      siteLocation,
-      settings,
-    },
-    colors,
-    y,
-  );
-  doc.addPage();
-  drawPageChrome(doc, colors.primary);
+  y = drawTechnicalProjectSummary(doc, quotation, colors, y);
   y = drawTechnicalQuotationSummary(
     doc,
     quotation,
     settings,
     colors,
-    margin + 2,
+    y + 6,
   );
+  doc.addPage();
+  drawPageChrome(doc, colors.primary);
   y = drawTechnicalInstallationMaterial(
     doc,
     quotation.material_items ?? [],
     items,
     colors,
-    y + 6,
+    margin + 2,
   );
   y = drawTechnicalCommercialSummary(doc, totals, settings, colors, y + 6);
   y = drawTechnicalPaymentTerms(
@@ -742,35 +732,13 @@ function drawTechnicalCoverMetricStrip(
   });
 }
 
-function drawTechnicalProposalLetter(
+function drawTechnicalProjectSummary(
   doc: PdfDoc,
   quotation: QuotationWithRelations,
-  context: {
-    companyName: string;
-    siteLocation: string;
-    settings: OrganizationSettings;
-  },
   colors: Record<string, string>,
   y: number,
 ) {
-  y = ensureSpace(doc, y, 130, colors.primary);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.setTextColor(colors.primary);
-  doc.text("Technical & Commercial Proposal", margin, y + 6);
-  doc.setDrawColor(colors.border);
-  doc.line(margin, y + 9, pageWidth - margin, y + 9);
-
-  const offerLines = doc.splitTextToSize(
-    "Thank you for giving us the opportunity to work with you. Following is our detailed offer for your requirements.",
-    contentWidth,
-  ) as string[];
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.6);
-  doc.setTextColor(colors.text);
-  doc.text(offerLines, margin, y + 22, { lineHeightFactor: 1.22 });
-
-  y += 31 + offerLines.length * 4.2;
+  y = ensureSpace(doc, y, 92, colors.primary);
   y = drawTechnicalSectionHeading(doc, "Project Summary", colors, y);
 
   y = drawTechnicalTable(
@@ -800,17 +768,7 @@ function drawTechnicalProposalLetter(
   doc.text(noteLines, margin + 3, y + 9, { lineHeightFactor: 1.35 });
 
   y += 23 + noteLines.length * 4.4;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text(`For ${context.companyName}`, margin, y);
-  doc.setDrawColor(colors.border);
-  doc.line(margin, y + 18, margin + 52, y + 18);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(colors.muted);
-  doc.text("Authorised Signatory", margin, y + 25);
-
-  return y + 33;
+  return y;
 }
 
 function drawTechnicalInstallationMaterial(
@@ -1089,17 +1047,18 @@ function drawTechnicalSignature(
   colors: Record<string, string>,
   y: number,
 ) {
-  const boxWidth = 82;
+  const boxWidth = 102;
+  const boxHeight = 44;
   const x = pageWidth - margin - boxWidth;
-  y = ensureSpace(doc, y, 34, colors.primary);
-  drawBox(doc, x, y, boxWidth, 30, "Authorized Sign & Seal", colors);
+  y = ensureSpace(doc, y, boxHeight + 4, colors.primary);
+  drawBox(doc, x, y, boxWidth, boxHeight, "Authorized Sign & Seal", colors);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   doc.setTextColor(colors.muted);
   doc.text(`For ${companyName}`, x + 4, y + 15);
   doc.setDrawColor(colors.border);
-  doc.line(x + 4, y + 23, x + boxWidth - 4, y + 23);
-  doc.text("Authorized Signatory", x + boxWidth - 4, y + 27, { align: "right" });
+  doc.line(x + 4, y + 32, x + boxWidth - 4, y + 32);
+  doc.text("Authorized Signatory", x + boxWidth - 4, y + 39, { align: "right" });
 }
 
 function moveToTechnicalSignaturePage(
@@ -1112,7 +1071,7 @@ function moveToTechnicalSignaturePage(
     drawPageChrome(doc, primary);
   }
 
-  return doc.getNumberOfPages() === 5 ? pageHeight - 60 : fallbackY;
+  return doc.getNumberOfPages() === 5 ? pageHeight - 76 : fallbackY;
 }
 
 function drawTechnicalSectionHeading(
@@ -1296,7 +1255,7 @@ async function buildBusinessPdf(input: BusinessPdfInput) {
   y = drawTotals(doc, input, colors, y + 6);
   y = drawPaymentTermTable(doc, input, colors, y + 6);
   y = drawTerms(doc, input, colors, y + 6);
-  y = ensureSpace(doc, y + 6, 40, colors.primary);
+  y = ensureSpace(doc, y + 6, input.kind === "quotation" ? 54 : 40, colors.primary);
   drawSignature(doc, input, colors, y);
 
   return doc.output("blob");
@@ -1965,17 +1924,18 @@ function drawSignature(
   colors: Record<string, string>,
   y: number,
 ) {
-  const width = 74;
+  const width = input.kind === "quotation" ? 94 : 74;
   const x = pageWidth - margin - width;
   if (input.kind === "quotation") {
-    drawBox(doc, x, y, width, 30, "Authorized Sign & Seal", colors);
+    const height = 44;
+    drawBox(doc, x, y, width, height, "Authorized Sign & Seal", colors);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(colors.muted);
     doc.text(`For ${companyDisplayName(input)}`, x + 4, y + 15);
     doc.setDrawColor(colors.border);
-    doc.line(x + 4, y + 23, x + width - 4, y + 23);
-    doc.text("Authorized Signatory", x + width - 4, y + 27, { align: "right" });
+    doc.line(x + 4, y + 32, x + width - 4, y + 32);
+    doc.text("Authorized Signatory", x + width - 4, y + 39, { align: "right" });
     return;
   }
 
