@@ -865,7 +865,7 @@ function leadToCustomerForm(
     lead_source: lead.lead_source ?? "",
     status: "active",
     assigned_to: lead.assigned_to ?? "",
-    notes: lead.notes ?? "",
+    notes: "",
   };
 }
 

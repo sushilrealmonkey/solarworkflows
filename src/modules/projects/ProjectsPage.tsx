@@ -685,7 +685,6 @@ export function ProjectFormModal({
           : nextValues.project_name,
       system_capacity_kw:
         quotationCapacity || surveyCapacity || nextValues.system_capacity_kw,
-      notes: nextValues.notes || customerQuotation?.notes || "",
     });
   }
 
@@ -711,7 +710,6 @@ export function ProjectFormModal({
         quotation?.system_capacity_kw === undefined
           ? ""
           : String(quotation.system_capacity_kw)),
-      notes: nextValues.notes || quotation?.notes || "",
     });
   }
 

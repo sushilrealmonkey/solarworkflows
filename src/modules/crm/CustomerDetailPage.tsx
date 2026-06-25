@@ -30,7 +30,6 @@ import {
   EmptyState,
   LoadingSkeleton,
   Modal,
-  PlaceholderAction,
   SelectInput,
   StaffSelect,
   StatusBadge,
@@ -40,14 +39,11 @@ import {
 import {
   deleteDocument,
   fetchDocuments,
-  rejectDocument,
   uploadDocument,
-  verifyDocument,
 } from "../documents/documentApi";
 import {
   DocumentsCollection,
   DocumentUploadModal,
-  RejectDocumentDialog,
 } from "../documents/DocumentComponents";
 import {
   documentRelatedLabel,
@@ -86,13 +82,6 @@ export function CustomerDetailPage() {
   const [documentDeleteTarget, setDocumentDeleteTarget] =
     useState<OrganizationDocumentWithRelations | null>(null);
   const [deletingDocument, setDeletingDocument] = useState(false);
-  const [documentRejectTarget, setDocumentRejectTarget] =
-    useState<OrganizationDocumentWithRelations | null>(null);
-  const [documentRejectNote, setDocumentRejectNote] = useState("");
-  const [rejectingDocument, setRejectingDocument] = useState(false);
-  const [verifyingDocumentId, setVerifyingDocumentId] = useState<string | null>(
-    null,
-  );
 
   const canView = hasPermission(profile, permissions, "customers", "view");
   const canUpdate = hasPermission(profile, permissions, "customers", "update");
@@ -107,12 +96,6 @@ export function CustomerDetailPage() {
     permissions,
     "documents",
     "create",
-  );
-  const canUpdateDocument = hasPermission(
-    profile,
-    permissions,
-    "documents",
-    "update",
   );
   const canDeleteDocument = hasPermission(
     profile,
@@ -278,46 +261,6 @@ export function CustomerDetailPage() {
     }
   }
 
-  async function handleDocumentVerify(document: OrganizationDocumentWithRelations) {
-    try {
-      setVerifyingDocumentId(document.id);
-      await verifyDocument(document.id);
-      showToast("Document verified.", "success");
-      await loadCustomer();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Document verification failed.",
-        "error",
-      );
-    } finally {
-      setVerifyingDocumentId(null);
-    }
-  }
-
-  async function confirmDocumentReject() {
-    if (!documentRejectTarget) {
-      return;
-    }
-
-    try {
-      setRejectingDocument(true);
-      await rejectDocument(documentRejectTarget.id, documentRejectNote);
-      setDocumentRejectTarget(null);
-      setDocumentRejectNote("");
-      showToast("Document rejected.", "success");
-      await loadCustomer();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Document reject failed.",
-        "error",
-      );
-    } finally {
-      setRejectingDocument(false);
-    }
-  }
-
   async function confirmDocumentDelete() {
     if (!documentDeleteTarget) {
       return;
@@ -443,13 +386,7 @@ export function CustomerDetailPage() {
                   <DocumentsCollection
                     compact
                     documents={documents}
-                    canUpdate={canUpdateDocument && !verifyingDocumentId}
                     canDelete={canDeleteDocument}
-                    onVerify={handleDocumentVerify}
-                    onReject={(document) => {
-                      setDocumentRejectTarget(document);
-                      setDocumentRejectNote("");
-                    }}
                     onDelete={setDocumentDeleteTarget}
                   />
                 </div>
@@ -500,17 +437,7 @@ export function CustomerDetailPage() {
                 ) : null}
               </div>
             </DetailSection>
-          ) : (
-            <DetailSection title="Future Workflow">
-              <DetailItem label="Related Leads" value="Placeholder for linked lead history." />
-              <DetailItem label="Related Projects" value="Placeholder for customer project records." />
-              <div className="flex flex-wrap gap-2 sm:col-span-2">
-                <PlaceholderAction>Schedule Site Survey</PlaceholderAction>
-                <PlaceholderAction>Create Quotation</PlaceholderAction>
-                <PlaceholderAction>Create Project</PlaceholderAction>
-              </div>
-            </DetailSection>
-          )}
+          ) : null}
         </>
       ) : null}
 
@@ -547,17 +474,6 @@ export function CustomerDetailPage() {
           confirming={deletingDocument}
           onCancel={() => setDocumentDeleteTarget(null)}
           onConfirm={confirmDocumentDelete}
-        />
-      ) : null}
-
-      {documentRejectTarget ? (
-        <RejectDocumentDialog
-          document={documentRejectTarget}
-          note={documentRejectNote}
-          setNote={setDocumentRejectNote}
-          confirming={rejectingDocument}
-          onCancel={() => setDocumentRejectTarget(null)}
-          onConfirm={confirmDocumentReject}
         />
       ) : null}
 

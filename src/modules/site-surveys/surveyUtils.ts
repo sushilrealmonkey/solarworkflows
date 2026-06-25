@@ -142,7 +142,6 @@ export function formatLeadSurveyRemarks(
     lead.electricity_bill_amount === undefined
       ? ""
       : `Electricity bill amount: ${lead.electricity_bill_amount}`,
-    lead.notes ? `Lead notes: ${lead.notes}` : "",
   ]
     .filter(Boolean)
     .join("\n");

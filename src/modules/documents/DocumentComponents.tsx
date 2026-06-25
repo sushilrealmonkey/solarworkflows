@@ -1,16 +1,14 @@
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import {
-  Badge,
   Button,
   Modal,
   SelectInput,
   TextArea,
   TextInput,
 } from "../crm/CrmComponents";
-import { formatDate, formatDateTime, labelize } from "../crm/crmUtils";
+import { formatDate, labelize } from "../crm/crmUtils";
 import {
   documentRelatedLabel,
-  documentStatusTone,
   documentTypeOptions,
   fileSizeLabel,
 } from "./documentUtils";
@@ -18,14 +16,6 @@ import type {
   DocumentUploadValues,
   OrganizationDocumentWithRelations,
 } from "./types";
-
-export function DocumentStatusBadge({
-  value,
-}: {
-  value: string | null | undefined;
-}) {
-  return <Badge tone={documentStatusTone(value)}>{labelize(value)}</Badge>;
-}
 
 export function DocumentUploadModal({
   title,
@@ -137,19 +127,13 @@ export function DocumentUploadModal({
 
 export function DocumentsCollection({
   documents,
-  canUpdate,
   canDelete,
   compact = false,
-  onVerify,
-  onReject,
   onDelete,
 }: {
   documents: OrganizationDocumentWithRelations[];
-  canUpdate: boolean;
   canDelete: boolean;
   compact?: boolean;
-  onVerify: (document: OrganizationDocumentWithRelations) => void;
-  onReject: (document: OrganizationDocumentWithRelations) => void;
   onDelete: (document: OrganizationDocumentWithRelations) => void;
 }) {
   if (documents.length === 0) {
@@ -165,10 +149,7 @@ export function DocumentsCollection({
               <th className="px-4 py-3">Document</th>
               <th className="px-4 py-3">Type</th>
               {!compact ? <th className="px-4 py-3">Related</th> : null}
-              <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Uploaded By</th>
-              <th className="px-4 py-3">Verified By</th>
-              <th className="px-4 py-3">Verified At</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3">Actions</th>
             </tr>
@@ -188,20 +169,12 @@ export function DocumentsCollection({
                 {!compact ? (
                   <td className="px-4 py-3">{documentRelatedLabel(document)}</td>
                 ) : null}
-                <td className="px-4 py-3">
-                  <DocumentStatusBadge value={document.status} />
-                </td>
                 <td className="px-4 py-3">{profileName(document.uploaded_by_profile)}</td>
-                <td className="px-4 py-3">{profileName(document.verified_by_profile)}</td>
-                <td className="px-4 py-3">{formatDateTime(document.verified_at)}</td>
                 <td className="px-4 py-3">{formatDate(document.created_at)}</td>
                 <td className="px-4 py-3">
                   <DocumentActions
                     document={document}
-                    canUpdate={canUpdate}
                     canDelete={canDelete}
-                    onVerify={onVerify}
-                    onReject={onReject}
                     onDelete={onDelete}
                   />
                 </td>
@@ -229,20 +202,11 @@ export function DocumentsCollection({
                   {documentRelatedLabel(document)}
                 </p>
               </div>
-              <DocumentStatusBadge value={document.status} />
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
               <DocumentCardItem
                 label="Uploaded By"
                 value={profileName(document.uploaded_by_profile)}
-              />
-              <DocumentCardItem
-                label="Verified By"
-                value={profileName(document.verified_by_profile)}
-              />
-              <DocumentCardItem
-                label="Verified At"
-                value={formatDateTime(document.verified_at)}
               />
               <DocumentCardItem
                 label="Created"
@@ -252,10 +216,7 @@ export function DocumentsCollection({
             <div className="mt-4">
               <DocumentActions
                 document={document}
-                canUpdate={canUpdate}
                 canDelete={canDelete}
-                onVerify={onVerify}
-                onReject={onReject}
                 onDelete={onDelete}
               />
             </div>
@@ -266,62 +227,13 @@ export function DocumentsCollection({
   );
 }
 
-export function RejectDocumentDialog({
-  document,
-  note,
-  setNote,
-  confirming,
-  onCancel,
-  onConfirm,
-}: {
-  document: OrganizationDocumentWithRelations;
-  note: string;
-  setNote: (note: string) => void;
-  confirming: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <section className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-5 shadow-xl">
-        <h2 className="text-lg font-semibold text-slate-950">Reject document?</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">
-          Add the rejection note for {document.document_name}.
-        </p>
-        <label className="mt-4 block">
-          <span className="text-sm font-medium text-slate-700">Rejection Note</span>
-          <textarea
-            className="mt-1 min-h-28 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
-            value={note}
-            onChange={(event) => setNote(event.target.value)}
-          />
-        </label>
-        <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button onClick={onCancel} variant="secondary" disabled={confirming}>
-            Cancel
-          </Button>
-          <Button onClick={onConfirm} variant="danger" disabled={confirming}>
-            {confirming ? "Rejecting..." : "Reject Document"}
-          </Button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function DocumentActions({
   document,
-  canUpdate,
   canDelete,
-  onVerify,
-  onReject,
   onDelete,
 }: {
   document: OrganizationDocumentWithRelations;
-  canUpdate: boolean;
   canDelete: boolean;
-  onVerify: (document: OrganizationDocumentWithRelations) => void;
-  onReject: (document: OrganizationDocumentWithRelations) => void;
   onDelete: (document: OrganizationDocumentWithRelations) => void;
 }) {
   return (
@@ -335,16 +247,6 @@ function DocumentActions({
         >
           Preview File
         </a>
-      ) : null}
-      {canUpdate ? (
-        <>
-          <Button onClick={() => onVerify(document)} variant="secondary">
-            Verify
-          </Button>
-          <Button onClick={() => onReject(document)} variant="danger">
-            Reject
-          </Button>
-        </>
       ) : null}
       {canDelete ? (
         <Button onClick={() => onDelete(document)} variant="danger">
