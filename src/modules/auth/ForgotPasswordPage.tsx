@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { PortalLogo } from "../../components/PortalBrand";
+import { AuthThemeCard, AuthThemeShell } from "./AuthTheme";
 import {
   isValidLoginEmail,
   normalizeEmail,
@@ -39,69 +39,73 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FFF7F0] px-4 py-6 text-slate-950 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-xl items-center justify-center">
-        <section className="w-full rounded-lg border border-stone-200 bg-white px-5 py-7 shadow-sm sm:px-7">
-          <PortalLogo className="h-20 w-full max-w-xs object-contain object-left" />
-          <p className="mt-6 inline-flex rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
-            Password help
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-normal">
-            Forgot password
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
-            Enter your registered email address and we will send a secure reset
-            link.
-          </p>
+    <AuthThemeShell
+      badge="Password help"
+      mobileDescription="Enter your registered email address to receive a secure reset link."
+      title="Recover workspace access"
+    >
+      <AuthThemeCard>
+        <p className="text-sm font-semibold text-orange-300">
+          Password help
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-normal text-white">
+          Forgot password
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          Enter your registered email address and we will send a secure reset
+          link.
+        </p>
 
-          {isSent ? (
-            <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-[#06173f]">
-              <p className="text-sm font-semibold">Check your email</p>
-              <p className="mt-1 text-sm leading-6 text-[#06173f]">
-                If this email is registered, a password reset link has been
-                sent. Open it to continue to the reset screen.
-              </p>
-            </div>
-          ) : null}
+        {isSent ? (
+          <div className="mt-6 rounded-xl border border-emerald-300/25 bg-emerald-400/10 px-4 py-4 text-emerald-50">
+            <p className="text-sm font-semibold">Check your email</p>
+            <p className="mt-1 text-sm leading-6 text-slate-200">
+              If this email is registered, a password reset link has been sent.
+              Open it to continue to the reset screen.
+            </p>
+          </div>
+        ) : null}
 
-          <form className="mt-6 space-y-4" onSubmit={handleSendResetLink}>
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">
-                Email address
-              </span>
-              <input
-                autoComplete="email"
-                className="mt-2 w-full rounded-lg border border-stone-300 px-3 py-3 text-base outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                disabled={isSending}
-                inputMode="email"
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="name@example.com"
-                required
-                type="email"
-                value={email}
-              />
-            </label>
-
-            <FormError message={errorMessage} />
-
-            <button
-              className="w-full rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
+        <form className="mt-6 space-y-4" onSubmit={handleSendResetLink}>
+          <label className="block">
+            <span className="text-sm font-semibold text-white">
+              Email address
+            </span>
+            <input
+              autoComplete="email"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.08] px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white/[0.11] focus:ring-4 focus:ring-orange-400/15 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isSending}
-              type="submit"
-            >
-              {isSending ? "Sending reset link" : "Send reset link"}
-            </button>
-          </form>
+              inputMode="email"
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="name@example.com"
+              required
+              type="email"
+              value={email}
+            />
+          </label>
 
-          <p className="mt-5 text-center text-sm leading-6 text-slate-600">
-            Remembered it?{" "}
-            <Link className="font-semibold text-orange-700 hover:text-orange-800" to="/login">
-              Back to login
-            </Link>
-          </p>
-        </section>
-      </div>
-    </main>
+          <FormError message={errorMessage} />
+
+          <button
+            className="w-full rounded-xl bg-orange-500 px-4 py-3.5 text-sm font-semibold text-white shadow-xl shadow-orange-950/25 transition hover:bg-white hover:text-[#06173f] active:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSending}
+            type="submit"
+          >
+            {isSending ? "Sending reset link" : "Send reset link"}
+          </button>
+        </form>
+
+        <p className="mt-5 text-center text-sm leading-6 text-slate-300">
+          Remembered it?{" "}
+          <Link
+            className="font-semibold text-orange-300 transition hover:text-orange-200"
+            to="/login"
+          >
+            Back to login
+          </Link>
+        </p>
+      </AuthThemeCard>
+    </AuthThemeShell>
   );
 }
 
@@ -111,7 +115,7 @@ function FormError({ message }: { message: string | null }) {
   }
 
   return (
-    <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-700">
+    <p className="rounded-xl border border-red-300/25 bg-red-500/10 px-3 py-2 text-sm leading-6 text-red-100">
       {message}
     </p>
   );
