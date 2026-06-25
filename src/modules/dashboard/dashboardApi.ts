@@ -4,6 +4,10 @@ import type { Lead, LeadFollowupWithLead } from "../crm/types";
 import type { OrganizationDocumentWithRelations } from "../documents/types";
 import type { InventoryItem } from "../inventory/types";
 import type { PaymentWithRelations } from "../payments/types";
+import type { PaymentProjectSummary } from "../payments/types";
+import type { ProjectWithRelations } from "../projects/types";
+import type { PurchaseOrderWithRelations } from "../purchases/types";
+import type { QuotationInventoryReservation, QuotationWithRelations } from "../quotations/types";
 import type { SiteSurveyWithRelations } from "../site-surveys/types";
 
 export type DashboardSummaryRow = {
@@ -29,6 +33,30 @@ export type DashboardOperationalData = {
   recentPayments: PaymentWithRelations[];
   lowStockItems: InventoryItem[];
   pendingDocuments: OrganizationDocumentWithRelations[];
+};
+
+export type DashboardActivityLog = {
+  id: string;
+  module: string | null;
+  action: string | null;
+  record_id: string | null;
+  created_at: string | null;
+  user_profile?: {
+    id: string;
+    full_name: string | null;
+    email: string | null;
+    phone: string | null;
+  } | null;
+};
+
+export type EpcAdminDashboardSnapshot = DashboardOperationalData & {
+  summaryRows: DashboardSummaryRow[];
+  quotations: QuotationWithRelations[];
+  projects: ProjectWithRelations[];
+  paymentSummaries: PaymentProjectSummary[];
+  inventoryReservations: QuotationInventoryReservation[];
+  purchaseOrders: PurchaseOrderWithRelations[];
+  recentActivity: DashboardActivityLog[];
 };
 
 function requireSupabase() {
@@ -67,6 +95,56 @@ export async function fetchDashboardSummary() {
   }
 
   return (data ?? []) as DashboardSummaryRow[];
+}
+
+export async function fetchEpcAdminDashboardSnapshot(
+  profile: UserProfile | null,
+): Promise<EpcAdminDashboardSnapshot> {
+  const [
+    summaryRows,
+    followups,
+    upcomingSurveys,
+    recentLeads,
+    recentPayments,
+    lowStockItems,
+    pendingDocuments,
+    quotations,
+    projects,
+    paymentSummaries,
+    inventoryReservations,
+    purchaseOrders,
+    recentActivity,
+  ] = await Promise.all([
+    fetchDashboardSummary(),
+    fetchDashboardFollowups(profile),
+    fetchDashboardUpcomingSurveys(profile),
+    fetchDashboardRecentLeads(profile, 120),
+    fetchDashboardRecentPayments(profile, 12),
+    fetchDashboardLowStockItems(profile, 12),
+    fetchDashboardPendingDocuments(profile, 12),
+    fetchDashboardQuotations(profile),
+    fetchDashboardProjects(profile),
+    fetchDashboardPaymentSummaries(profile),
+    fetchDashboardInventoryReservations(profile),
+    fetchDashboardPurchaseOrders(profile),
+    fetchDashboardActivity(profile),
+  ]);
+
+  return {
+    summaryRows,
+    followups,
+    upcomingSurveys,
+    recentLeads,
+    recentPayments,
+    lowStockItems,
+    pendingDocuments,
+    quotations,
+    projects,
+    paymentSummaries,
+    inventoryReservations,
+    purchaseOrders,
+    recentActivity,
+  };
 }
 
 export function emptyDashboardSummary(): DashboardSummaryRow {
@@ -158,13 +236,16 @@ export async function fetchDashboardUpcomingSurveys(profile: UserProfile | null)
   return (data ?? []) as unknown as SiteSurveyWithRelations[];
 }
 
-export async function fetchDashboardRecentLeads(profile: UserProfile | null) {
+export async function fetchDashboardRecentLeads(
+  profile: UserProfile | null,
+  limit = 6,
+) {
   const client = requireSupabase();
   let query = client
     .from("leads")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(6);
+    .limit(limit);
 
   query = applyOrganizationScope(query, profile);
 
@@ -177,7 +258,10 @@ export async function fetchDashboardRecentLeads(profile: UserProfile | null) {
   return (data ?? []) as Lead[];
 }
 
-export async function fetchDashboardRecentPayments(profile: UserProfile | null) {
+export async function fetchDashboardRecentPayments(
+  profile: UserProfile | null,
+  limit = 6,
+) {
   const client = requireSupabase();
   let query = client
     .from("payments")
@@ -190,7 +274,7 @@ export async function fetchDashboardRecentPayments(profile: UserProfile | null) 
     )
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false })
-    .limit(6);
+    .limit(limit);
 
   query = applyOrganizationScope(query, profile);
 
@@ -203,7 +287,10 @@ export async function fetchDashboardRecentPayments(profile: UserProfile | null) 
   return (data ?? []) as unknown as PaymentWithRelations[];
 }
 
-export async function fetchDashboardLowStockItems(profile: UserProfile | null) {
+export async function fetchDashboardLowStockItems(
+  profile: UserProfile | null,
+  limit = 6,
+) {
   const client = requireSupabase();
   let query = client
     .from("inventory_items")
@@ -237,10 +324,13 @@ export async function fetchDashboardLowStockItems(profile: UserProfile | null) {
     .filter(
       (item) => Number(item.current_stock ?? 0) <= Number(item.minimum_stock ?? 0),
     )
-    .slice(0, 6);
+    .slice(0, limit);
 }
 
-export async function fetchDashboardPendingDocuments(profile: UserProfile | null) {
+export async function fetchDashboardPendingDocuments(
+  profile: UserProfile | null,
+  limit = 6,
+) {
   const client = requireSupabase();
   let query = client
     .from("documents")
@@ -255,7 +345,7 @@ export async function fetchDashboardPendingDocuments(profile: UserProfile | null
     )
     .in("status", ["pending", "rejected", "expired"])
     .order("created_at", { ascending: false })
-    .limit(6);
+    .limit(limit);
 
   query = applyOrganizationScope(query, profile);
 
@@ -266,4 +356,183 @@ export async function fetchDashboardPendingDocuments(profile: UserProfile | null
   }
 
   return (data ?? []) as unknown as OrganizationDocumentWithRelations[];
+}
+
+export async function fetchDashboardQuotations(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("quotations")
+    .select(
+      `
+      id,
+      organization_id,
+      quotation_code,
+      customer_id,
+      lead_id,
+      site_survey_id,
+      quotation_date,
+      valid_until,
+      system_capacity_kw,
+      total_amount,
+      net_payable_amount,
+      status,
+      sent_at,
+      accepted_at,
+      rejected_at,
+      created_at,
+      customer:customers(id, customer_code, full_name, business_name, phone, city),
+      lead:leads(id, lead_code, full_name, phone, city)
+    `,
+    )
+    .order("created_at", { ascending: false })
+    .limit(160);
+
+  query = applyOrganizationScope(query, profile);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as unknown as QuotationWithRelations[];
+}
+
+export async function fetchDashboardProjects(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("projects")
+    .select(
+      `
+      id,
+      organization_id,
+      project_code,
+      customer_id,
+      lead_id,
+      quotation_id,
+      site_survey_id,
+      project_name,
+      system_capacity_kw,
+      project_type,
+      project_status,
+      priority,
+      start_date,
+      expected_completion_date,
+      completed_at,
+      created_at,
+      customer:customers(id, customer_code, full_name, business_name, phone, city),
+      quotation:quotations(id, quotation_code, total_amount, net_payable_amount, status)
+    `,
+    )
+    .order("created_at", { ascending: false })
+    .limit(160);
+
+  query = applyOrganizationScope(query, profile);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as unknown as ProjectWithRelations[];
+}
+
+export async function fetchDashboardPaymentSummaries(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("project_payment_summary")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(160);
+
+  query = applyOrganizationScope(query, profile);
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as PaymentProjectSummary[];
+}
+
+export async function fetchDashboardInventoryReservations(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("inventory_reservations")
+    .select(
+      `
+      *,
+      project:projects(id, project_code, project_name, system_capacity_kw),
+      inventory_item:inventory_items(id, item_code, item_name, brand, model, unit, current_stock),
+      catalog_product:products(id, product_code, product_name, brand, model_number, unit)
+    `,
+    )
+    .in("status", ["active", "partial", "shortage"])
+    .order("created_at", { ascending: false })
+    .limit(120);
+
+  query = applyOrganizationScope(query, profile);
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [] as QuotationInventoryReservation[];
+  }
+
+  return (data ?? []) as unknown as QuotationInventoryReservation[];
+}
+
+export async function fetchDashboardPurchaseOrders(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("purchase_orders")
+    .select(
+      `
+      *,
+      vendor:vendors(id, vendor_code, vendor_name, contact_person, phone, email)
+    `,
+    )
+    .in("status", ["draft", "ordered", "partially_received"])
+    .order("expected_delivery_date", { ascending: true })
+    .limit(30);
+
+  query = applyOrganizationScope(query, profile);
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [] as PurchaseOrderWithRelations[];
+  }
+
+  return (data ?? []) as unknown as PurchaseOrderWithRelations[];
+}
+
+export async function fetchDashboardActivity(profile: UserProfile | null) {
+  const client = requireSupabase();
+  let query = client
+    .from("activity_logs")
+    .select(
+      `
+      id,
+      module,
+      action,
+      record_id,
+      created_at,
+      user_profile:users_profile!activity_logs_user_profile_id_fkey(id, full_name, email, phone)
+    `,
+    )
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  query = applyOrganizationScope(query, profile);
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [] as DashboardActivityLog[];
+  }
+
+  return (data ?? []) as unknown as DashboardActivityLog[];
 }

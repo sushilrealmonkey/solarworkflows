@@ -165,13 +165,6 @@ export function DashboardLayout() {
           <HeaderWaves />
           <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              {organization.logoUrl ? (
-                <img
-                  alt=""
-                  className="h-10 w-10 shrink-0 rounded-lg border border-orange-100 bg-white object-contain p-1 shadow-sm"
-                  src={organization.logoUrl}
-                />
-              ) : null}
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-slate-950 sm:text-lg">
                   {organization.name}
