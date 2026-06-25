@@ -19,11 +19,14 @@ import type {
 } from "../quotations/types";
 import {
   calculateDiscountedTurnkeyTotals,
-  calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
   formatIndianCurrencyInWords,
   hasTurnkeyGstAmount,
 } from "../quotations/quotationUtils";
+import {
+  isStaleDynamicImportError,
+  reloadOnceForUpdatedAssets,
+} from "../../utils/staleAssetRecovery";
 
 type PdfDocumentKind = "quotation" | "proforma_invoice" | "invoice" | "purchase_order";
 type PdfDoc = InstanceType<typeof import("jspdf").jsPDF>;
@@ -99,6 +102,27 @@ const margin = 14;
 const contentWidth = pageWidth - margin * 2;
 const inrSymbol = "\u20b9";
 const ptToMm = 0.3527777778;
+let jsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
+
+async function loadJsPdf() {
+  jsPdfModulePromise ??= import("jspdf").catch((error: unknown) => {
+    jsPdfModulePromise = null;
+
+    if (isStaleDynamicImportError(error)) {
+      const willReload = reloadOnceForUpdatedAssets();
+
+      throw new Error(
+        willReload
+          ? "PDF generator assets were updated. Refreshing the app, then try the PDF again."
+          : "PDF generator assets were updated. Refresh the app, then try the PDF again.",
+      );
+    }
+
+    throw error;
+  });
+
+  return jsPdfModulePromise;
+}
 
 export async function buildQuotationPdf(
   quotation: QuotationWithRelations,
@@ -120,7 +144,7 @@ async function buildTechnicalCommercialProposalPdf(
   organization: OrganizationBranding,
   settings: OrganizationSettings,
 ) {
-  const { jsPDF } = await import("jspdf");
+  const { jsPDF } = await loadJsPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const colors = {
     primary: normalizeHex(settings.primary_color, organization.primaryColor),
@@ -1190,7 +1214,7 @@ function drawTechnicalTable(
 }
 
 async function buildBusinessPdf(input: BusinessPdfInput) {
-  const { jsPDF } = await import("jspdf");
+  const { jsPDF } = await loadJsPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const colors = {
     primary: normalizeHex(input.settings.primary_color, input.organization.primaryColor),

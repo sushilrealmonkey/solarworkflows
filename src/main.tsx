@@ -5,6 +5,9 @@ import App from "./app/App";
 import { AuthProvider } from "./app/AuthProvider";
 import { ToastProvider } from "./components/ui/ToastProvider";
 import "./index.css";
+import { registerStaleAssetRecovery } from "./utils/staleAssetRecovery";
+
+registerStaleAssetRecovery();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
