@@ -21,6 +21,7 @@ import type {
 } from "./types";
 import {
   buildQuotationDetailSnapshot,
+  amountInWordsFromTurnkeyCost,
   calculateDiscountedTurnkeyTotals,
   calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
@@ -278,7 +279,12 @@ function quotationPayload(values: QuotationFormValues) {
     summary_lightning_arrestor_included: summaryLightningArrestorIncluded,
     summary_remote_monitoring_included: summaryRemoteMonitoringIncluded,
     summary_total_turnkey_cost: nullableNumber(values.summary_total_turnkey_cost),
-    summary_amount_in_words: nullable(values.summary_amount_in_words),
+    summary_amount_in_words: nullable(
+      amountInWordsFromTurnkeyCost(
+        inclusiveTurnkeyAmount,
+        values.summary_amount_in_words,
+      ),
+    ),
     panel_type: nullable(values.panel_type),
     inverter_type: nullable(values.inverter_type),
     structure_type: nullable(values.structure_type || summaryStructureType),

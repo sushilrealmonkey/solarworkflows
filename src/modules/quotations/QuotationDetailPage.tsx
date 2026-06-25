@@ -27,6 +27,7 @@ import {
   rejectQuotation,
 } from "./quotationApi";
 import {
+  amountInWordsFromTurnkeyCost,
   calculateDiscountedTurnkeyTotals,
   calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
@@ -488,9 +489,12 @@ export function QuotationDetailPage() {
       )
     : null;
   const amountInWords =
-    quotation?.summary_amount_in_words ||
-    snapshotValues.summary_amount_in_words ||
-    "-";
+    amountInWordsFromTurnkeyCost(
+      totalTurnkeyCost,
+      quotation?.summary_amount_in_words ||
+        snapshotValues.summary_amount_in_words ||
+        "-",
+    );
   const finalTaxableAmountInWords = detailDiscountedTotals
     ? formatIndianCurrencyInWords(detailDiscountedTotals.taxableAmount)
     : "-";

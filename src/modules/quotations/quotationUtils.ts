@@ -1211,6 +1211,19 @@ export function formatIndianCurrencyInWords(
   return `${rupeeWords} and ${integerToIndianWords(paise)} Paise Only`;
 }
 
+export function amountInWordsFromTurnkeyCost(
+  totalTurnkeyCost: number | string | null | undefined,
+  fallback = "",
+) {
+  const numericValue = Number(totalTurnkeyCost ?? 0);
+
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return fallback;
+  }
+
+  return formatIndianCurrencyInWords(numericValue);
+}
+
 export type TurnkeyGstBreakdown = {
   inclusiveAmount: number;
   solarInclusiveAmount: number;

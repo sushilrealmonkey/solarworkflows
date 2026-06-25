@@ -18,6 +18,7 @@ import type {
   QuotationWithRelations,
 } from "../quotations/types";
 import {
+  amountInWordsFromTurnkeyCost,
   calculateDiscountedTurnkeyTotals,
   deriveQuotationMaterialSummary,
   formatIndianCurrencyInWords,
@@ -874,7 +875,13 @@ function drawTechnicalQuotationSummary(
         ? ""
         : formatIndianCurrencyInWords(totals.baseAmount),
     ],
-    ["Amount In Words", quotation.summary_amount_in_words ?? ""],
+    [
+      "Amount In Words",
+      amountInWordsFromTurnkeyCost(
+        quotation.summary_total_turnkey_cost ?? quotation.pricing_total_rate,
+        quotation.summary_amount_in_words ?? "",
+      ),
+    ],
   ]);
 
   if (systemRows.length === 0) {

@@ -48,6 +48,7 @@ import type { InventoryItem } from "../inventory/types";
 import { fetchOrganizationSettings } from "../settings/settingsApi";
 import {
   applySurveyToQuotationForm,
+  amountInWordsFromTurnkeyCost,
   buildQuotationTitle,
   calculateDiscountedTurnkeyTotals,
   calculateExpectedAnnualGenerationInput,
@@ -327,6 +328,7 @@ export function NewQuotationPage() {
       ...current,
       summary_total_turnkey_cost: totalTurnkeyCost,
       pricing_total_rate: totalTurnkeyCost,
+      summary_amount_in_words: amountInWordsFromTurnkeyCost(totalTurnkeyCost),
       payment_term_rows: autoCalculatePaymentTermRows(
         current.payment_term_rows,
         totalTurnkeyCost,
@@ -931,10 +933,12 @@ export function NewQuotationPage() {
             onChange={(value) => update("subsidy_amount", value)}
             type="number"
           />
-          <TextArea
+          <ReadOnlyField
             label="Amount In Words"
-            value={values.summary_amount_in_words}
-            onChange={(value) => update("summary_amount_in_words", value)}
+            value={amountInWordsFromTurnkeyCost(
+              values.summary_total_turnkey_cost || values.pricing_total_rate,
+              values.summary_amount_in_words,
+            )}
           />
           <TextArea
             label="Price Basis"
@@ -1420,7 +1424,13 @@ function ProposalPreview({
             ["SGST", moneyPreviewFromNumber(discountedTotals.sgstAmount)],
             ["Total GST", moneyPreviewFromNumber(discountedTotals.gstAmount)],
             ["Subsidy", moneyPreview(values.subsidy_amount)],
-            ["Amount In Words", values.summary_amount_in_words || "-"],
+            [
+              "Amount In Words",
+              amountInWordsFromTurnkeyCost(
+                turnkeyAmount,
+                values.summary_amount_in_words || "-",
+              ),
+            ],
           ]}
         />
       </PreviewBlock>
@@ -1598,6 +1608,10 @@ function newQuotationDefaults(values: QuotationFormValues): QuotationFormValues 
       values.summary_total_turnkey_cost || values.pricing_total_rate,
     pricing_total_rate:
       values.pricing_total_rate || values.summary_total_turnkey_cost,
+    summary_amount_in_words: amountInWordsFromTurnkeyCost(
+      totalTurnkeyCost,
+      values.summary_amount_in_words,
+    ),
     work_description:
       values.work_description ||
       "Supply, installation, testing and commissioning of the proposed solar PV power plant.",
