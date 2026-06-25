@@ -218,7 +218,12 @@ export function QuotationDetailPage() {
       } else {
         await rejectQuotation(quotation.id);
       }
-      showToast("Quotation status updated.", "success");
+      showToast(
+        statusTarget === "accepted"
+          ? "Quotation accepted. Customer and project created."
+          : "Quotation status updated.",
+        "success",
+      );
       setStatusTarget(null);
       await loadQuotation();
     } catch (nextError) {
@@ -678,7 +683,9 @@ export function QuotationDetailPage() {
                             Open Project
                           </Link>
                         ) : null}
-                        {!existingProject && canCreateProject ? (
+                        {!existingProject &&
+                        canCreateProject &&
+                        quotation.status === "accepted" ? (
                           <ActionMenuButton
                             disabled={creatingProject}
                             onClick={() => {
