@@ -1167,10 +1167,10 @@ function SolarOperationsBrandGraphic({
 }) {
   if (logoUrl) {
     return (
-      <div className={`h-16 w-28 shrink-0 items-center justify-center rounded-lg border border-orange-100 bg-white p-2 shadow-sm sm:h-20 sm:w-36 sm:p-3 ${className}`}>
+      <div className={`h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-orange-100 bg-white shadow-sm sm:h-20 sm:w-36 ${className}`}>
         <img
           alt={`${organizationName} logo`}
-          className="max-h-full max-w-full object-contain"
+          className="h-full w-full object-cover"
           src={logoUrl}
         />
       </div>
