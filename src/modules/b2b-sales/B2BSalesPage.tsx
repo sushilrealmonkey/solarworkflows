@@ -1,19 +1,24 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   SearchInput,
   SelectInput,
   TextInput,
   Toolbar,
-  ViewLink,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -24,17 +29,13 @@ import {
 import { formatMoney } from "../quotations/quotationUtils";
 import {
   createB2BSale,
-  deleteB2BSale,
-  fetchB2BSaleItems,
   fetchB2BSaleOptions,
   fetchB2BSales,
-  updateB2BSale,
 } from "./b2bSalesApi";
 import { B2BSaleFormModal, B2BSaleStatusBadge } from "./B2BSalesComponents";
 import {
   b2bSaleStatusOptions,
   emptyB2BSaleForm,
-  saleToForm,
   validateB2BSaleForm,
 } from "./b2bSalesUtils";
 import type {
@@ -53,6 +54,7 @@ type B2BSaleFilters = {
 export function B2BSalesPage() {
   const { profile, permissions, roleNames } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const handledCreateParamRef = useRef("");
   const [sales, setSales] = useState<B2BSaleWithRelations[]>([]);
@@ -69,21 +71,13 @@ export function B2BSalesPage() {
     saleDate: "",
   });
   const [formState, setFormState] = useState<{
-    mode: "create" | "edit";
-    sale: B2BSaleWithRelations | null;
     values: B2BSaleFormValues;
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<B2BSaleWithRelations | null>(
-    null,
-  );
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "b2b_sales", "view");
   const canCreate = hasPermission(profile, permissions, "b2b_sales", "create");
-  const canUpdate = hasPermission(profile, permissions, "b2b_sales", "update");
-  const canDelete = hasPermission(profile, permissions, "b2b_sales", "delete");
   const canViewPricing = hasAdminPricingAccess(
     profile,
     permissions,
@@ -165,8 +159,6 @@ export function B2BSalesPage() {
     handledCreateParamRef.current = createKey;
     setFormErrors({});
     setFormState({
-      mode: "create",
-      sale: null,
       values: {
         ...emptyB2BSaleForm(),
         customer_id: linkedCustomerId,
@@ -224,8 +216,6 @@ export function B2BSalesPage() {
   async function openCreateForm() {
     setFormErrors({});
     setFormState({
-      mode: "create",
-      sale: null,
       values: {
         ...emptyB2BSaleForm(),
         customer_id: filters.customerId,
@@ -244,22 +234,17 @@ export function B2BSalesPage() {
     }
   }
 
-  async function openEditForm(sale: B2BSaleWithRelations) {
-    try {
-      const items = await fetchB2BSaleItems(profile, sale.id);
-      setFormErrors({});
-      setFormState({
-        mode: "edit",
-        sale,
-        values: saleToForm(sale, items),
-      });
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load sale items.",
-        "error",
-      );
+  function openSaleDetail(saleId: string) {
+    navigate(`/b2b-sales/${saleId}`);
+  }
+
+  function handleSaleRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    saleId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openSaleDetail(saleId);
     }
   }
 
@@ -279,16 +264,8 @@ export function B2BSalesPage() {
 
     try {
       setSaving(true);
-      if (formState.mode === "create") {
-        await createB2BSale(profile, formState.values);
-        showToast("Sales order created.", "success");
-      } else if (formState.sale) {
-        await updateB2BSale(formState.sale.id, formState.values, {
-          deleteMissingItems: canDelete,
-        });
-        showToast("Sales order updated.", "success");
-      }
-
+      await createB2BSale(profile, formState.values);
+      showToast("Sales order created.", "success");
       setFormState(null);
       await loadData();
     } catch (nextError) {
@@ -298,27 +275,6 @@ export function B2BSalesPage() {
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteB2BSale(deleteTarget.id);
-      setSales((current) => current.filter((sale) => sale.id !== deleteTarget.id));
-      showToast("Sales order deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Sales order delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -400,12 +356,18 @@ export function B2BSalesPage() {
                   <th className="px-4 py-3">Final Invoice</th>
                   <th className="px-4 py-3">Total</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filteredSales.map((sale) => (
-                  <tr key={sale.id}>
+                  <tr
+                    key={sale.id}
+                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                    onClick={() => openSaleDetail(sale.id)}
+                    onKeyDown={(event) => handleSaleRowKeyDown(event, sale.id)}
+                    role="link"
+                    tabIndex={0}
+                  >
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {sale.sale_code ?? "Sales Order"}
                     </td>
@@ -432,27 +394,6 @@ export function B2BSalesPage() {
                     <td className="px-4 py-3">
                       <B2BSaleStatusBadge value={sale.status} />
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <ViewLink to={`/b2b-sales/${sale.id}`}>View</ViewLink>
-                        {canUpdate && sale.status !== "dispatched" ? (
-                          <Button
-                            onClick={() => void openEditForm(sale)}
-                            variant="secondary"
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canDelete && sale.status !== "dispatched" ? (
-                          <Button
-                            onClick={() => setDeleteTarget(sale)}
-                            variant="danger"
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -463,7 +404,11 @@ export function B2BSalesPage() {
             {filteredSales.map((sale) => (
               <article
                 key={sale.id}
-                className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                onClick={() => openSaleDetail(sale.id)}
+                onKeyDown={(event) => handleSaleRowKeyDown(event, sale.id)}
+                role="link"
+                tabIndex={0}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -497,22 +442,6 @@ export function B2BSalesPage() {
                     value={formatDate(sale.dispatch_date)}
                   />
                 </dl>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <ViewLink to={`/b2b-sales/${sale.id}`}>View</ViewLink>
-                  {canUpdate && sale.status !== "dispatched" ? (
-                    <Button
-                      onClick={() => void openEditForm(sale)}
-                      variant="secondary"
-                    >
-                      Edit
-                    </Button>
-                  ) : null}
-                  {canDelete && sale.status !== "dispatched" ? (
-                    <Button onClick={() => setDeleteTarget(sale)} variant="danger">
-                      Delete
-                    </Button>
-                  ) : null}
-                </div>
               </article>
             ))}
           </div>
@@ -521,27 +450,17 @@ export function B2BSalesPage() {
 
       {formState ? (
         <B2BSaleFormModal
-          title={formState.mode === "create" ? "Create Sales Order" : "Edit Sales Order"}
+          title="Create Sales Order"
           values={formState.values}
           setValues={(values) =>
             setFormState((current) => (current ? { ...current, values } : current))
           }
           errors={formErrors}
           options={options}
-          canRemoveItems={formState.mode === "create" || canDelete}
+          canRemoveItems
           onClose={() => setFormState(null)}
           onSubmit={handleSubmit}
           saving={saving}
-        />
-      ) : null}
-
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete sales order?"
-          description={`This will remove ${deleteTarget.sale_code ?? "this sales order"} and its item rows.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
         />
       ) : null}
     </div>
