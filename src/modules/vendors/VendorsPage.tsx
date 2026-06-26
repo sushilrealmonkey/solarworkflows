@@ -307,7 +307,6 @@ export function VendorsPage() {
                   <th className="px-4 py-3">GST</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="w-44 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -330,36 +329,6 @@ export function VendorsPage() {
                     <td className="px-4 py-3">{labelize(vendor.vendor_type)}</td>
                     <td className="px-4 py-3">
                       <VendorStatusBadge value={vendor.status} />
-                    </td>
-                    <td
-                      className="px-4 py-3"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                    >
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          onClick={() => openVendorDetail(vendor.id)}
-                          variant="secondary"
-                        >
-                          View
-                        </Button>
-                        {canUpdate ? (
-                          <Button
-                            onClick={() => openEditForm(vendor)}
-                            variant="secondary"
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canDelete ? (
-                          <Button
-                            onClick={() => setDeleteTarget(vendor)}
-                            variant="danger"
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
                     </td>
                   </tr>
                 ))}

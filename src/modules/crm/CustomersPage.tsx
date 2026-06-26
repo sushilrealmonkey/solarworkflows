@@ -399,7 +399,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
-                  <th className="w-44 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -430,28 +429,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                       {staffName(staff, customer.assigned_to)}
                     </td>
                     <td className="px-4 py-3">{formatDate(customer.created_at)}</td>
-                    <td
-                      className="px-4 py-3"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                    >
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <ViewLink to={`/customers/${customer.id}`}>View</ViewLink>
-                        {canUpdate ? (
-                          <Button onClick={() => openEditForm(customer)} variant="secondary">
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canDelete ? (
-                          <Button
-                            onClick={() => setDeleteTarget(customer)}
-                            variant="danger"
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
                   </tr>
                 ))}
               </tbody>

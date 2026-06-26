@@ -388,7 +388,6 @@ export function LeadsPage() {
                   <th className="px-4 py-3">Priority</th>
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
-                  <th className="w-56 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -421,34 +420,6 @@ export function LeadsPage() {
                     </td>
                     <td className="px-4 py-3">{staffName(staff, lead.assigned_to)}</td>
                     <td className="px-4 py-3">{formatDate(lead.created_at)}</td>
-                    <td
-                      className="px-4 py-3"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                    >
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <ViewLink to={`/leads/${lead.id}`}>View</ViewLink>
-                        {canUpdate ? (
-                          <Button onClick={() => openEditForm(lead)} variant="secondary">
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canConvert ? (
-                          <Button
-                            onClick={() => handleConvert(lead)}
-                            disabled={convertingId === lead.id}
-                            variant="secondary"
-                          >
-                            {convertingId === lead.id ? "Converting..." : "Convert"}
-                          </Button>
-                        ) : null}
-                        {canDelete ? (
-                          <Button onClick={() => setDeleteTarget(lead)} variant="danger">
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
                   </tr>
                 ))}
               </tbody>

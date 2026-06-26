@@ -558,7 +558,6 @@ export function InventoryPage() {
                   <th className="px-4 py-3">Model / Specifications</th>
                   <th className="px-4 py-3">Stock</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="w-72 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -613,44 +612,6 @@ export function InventoryPage() {
                     </td>
                     <td className="px-4 py-3">
                       <InventoryStatusBadge value={item.status} />
-                    </td>
-                    <td
-                      className="px-4 py-3"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                    >
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          onClick={() => openInventoryDetail(item.id)}
-                          variant="secondary"
-                        >
-                          View
-                        </Button>
-                        {canCreate ? (
-                          <Button
-                            onClick={() => openTransactionForm(item.id)}
-                            variant="secondary"
-                          >
-                            Add Stock
-                          </Button>
-                        ) : null}
-                        {canUpdate ? (
-                          <Button
-                            onClick={() => openEditItemForm(item)}
-                            variant="secondary"
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canUpdate && item.status !== "discontinued" ? (
-                          <Button
-                            onClick={() => setDiscontinueTarget(item)}
-                            variant="danger"
-                          >
-                            Discontinue
-                          </Button>
-                        ) : null}
-                      </div>
                     </td>
                   </tr>
                 ))}
