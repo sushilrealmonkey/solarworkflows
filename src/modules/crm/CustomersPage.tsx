@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -87,9 +87,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [openActionCustomerId, setOpenActionCustomerId] = useState<string | null>(
-    null,
-  );
 
   const canView = hasPermission(profile, permissions, "customers", "view");
   const canCreate = hasPermission(profile, permissions, "customers", "create");
@@ -402,7 +399,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
-                  <th className="w-12 px-4 py-3 text-right"></th>
+                  <th className="w-44 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -434,57 +431,26 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                     </td>
                     <td className="px-4 py-3">{formatDate(customer.created_at)}</td>
                     <td
-                      className="relative px-4 py-3 text-right"
+                      className="px-4 py-3"
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >
-                      <button
-                        aria-label={`Actions for ${customer.full_name}`}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-lg font-semibold leading-none text-slate-600 shadow-sm hover:bg-stone-50"
-                        onClick={() =>
-                          setOpenActionCustomerId((current) =>
-                            current === customer.id ? null : customer.id,
-                          )
-                        }
-                        type="button"
-                      >
-                        &#8942;
-                      </button>
-                      {openActionCustomerId === customer.id ? (
-                        <div className="absolute right-4 z-30 mt-2 w-36 rounded-lg border border-stone-200 bg-white p-1 text-left shadow-lg">
-                          <Link
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => setOpenActionCustomerId(null)}
-                            to={`/customers/${customer.id}`}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <ViewLink to={`/customers/${customer.id}`}>View</ViewLink>
+                        {canUpdate ? (
+                          <Button onClick={() => openEditForm(customer)} variant="secondary">
+                            Edit
+                          </Button>
+                        ) : null}
+                        {canDelete ? (
+                          <Button
+                            onClick={() => setDeleteTarget(customer)}
+                            variant="danger"
                           >
-                            View
-                          </Link>
-                          {canUpdate ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                              onClick={() => {
-                                setOpenActionCustomerId(null);
-                                openEditForm(customer);
-                              }}
-                              type="button"
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                          {canDelete ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                              onClick={() => {
-                                setOpenActionCustomerId(null);
-                                setDeleteTarget(customer);
-                              }}
-                              type="button"
-                            >
-                              Delete
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null}
+                            Delete
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

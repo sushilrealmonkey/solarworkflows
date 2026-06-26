@@ -85,7 +85,6 @@ export function LeadsPage() {
   const [deleting, setDeleting] = useState(false);
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [conversionLink, setConversionLink] = useState<string | null>(null);
-  const [openActionLeadId, setOpenActionLeadId] = useState<string | null>(null);
 
   const canView = hasPermission(profile, permissions, "leads", "view");
   const canCreate = hasPermission(profile, permissions, "leads", "create");
@@ -389,7 +388,7 @@ export function LeadsPage() {
                   <th className="px-4 py-3">Priority</th>
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
-                  <th className="w-12 px-4 py-3"></th>
+                  <th className="w-56 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -423,70 +422,32 @@ export function LeadsPage() {
                     <td className="px-4 py-3">{staffName(staff, lead.assigned_to)}</td>
                     <td className="px-4 py-3">{formatDate(lead.created_at)}</td>
                     <td
-                      className="relative px-4 py-3 text-right"
+                      className="px-4 py-3"
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >
-                      <button
-                        aria-label={`Actions for ${lead.full_name}`}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-lg font-semibold leading-none text-slate-600 shadow-sm hover:bg-stone-50"
-                        onClick={() =>
-                          setOpenActionLeadId((current) =>
-                            current === lead.id ? null : lead.id,
-                          )
-                        }
-                        type="button"
-                      >
-                        &#8942;
-                      </button>
-                      {openActionLeadId === lead.id ? (
-                        <div className="absolute right-4 z-30 mt-2 w-36 rounded-lg border border-stone-200 bg-white p-1 text-left shadow-lg">
-                          <Link
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => setOpenActionLeadId(null)}
-                            to={`/leads/${lead.id}`}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <ViewLink to={`/leads/${lead.id}`}>View</ViewLink>
+                        {canUpdate ? (
+                          <Button onClick={() => openEditForm(lead)} variant="secondary">
+                            Edit
+                          </Button>
+                        ) : null}
+                        {canConvert ? (
+                          <Button
+                            onClick={() => handleConvert(lead)}
+                            disabled={convertingId === lead.id}
+                            variant="secondary"
                           >
-                            View
-                          </Link>
-                          {canUpdate ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                              onClick={() => {
-                                setOpenActionLeadId(null);
-                                openEditForm(lead);
-                              }}
-                              type="button"
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                          {canConvert ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-                              disabled={convertingId === lead.id}
-                              onClick={() => {
-                                setOpenActionLeadId(null);
-                                void handleConvert(lead);
-                              }}
-                              type="button"
-                            >
-                              {convertingId === lead.id ? "Converting..." : "Convert"}
-                            </button>
-                          ) : null}
-                          {canDelete ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                              onClick={() => {
-                                setOpenActionLeadId(null);
-                                setDeleteTarget(lead);
-                              }}
-                              type="button"
-                            >
-                              Delete
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null}
+                            {convertingId === lead.id ? "Converting..." : "Convert"}
+                          </Button>
+                        ) : null}
+                        {canDelete ? (
+                          <Button onClick={() => setDeleteTarget(lead)} variant="danger">
+                            Delete
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}

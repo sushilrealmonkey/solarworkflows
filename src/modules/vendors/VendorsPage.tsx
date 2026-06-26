@@ -67,9 +67,6 @@ export function VendorsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [openActionVendorId, setOpenActionVendorId] = useState<string | null>(
-    null,
-  );
 
   const canView = hasPermission(profile, permissions, "vendors", "view");
   const canCreate = hasPermission(profile, permissions, "vendors", "create");
@@ -310,7 +307,7 @@ export function VendorsPage() {
                   <th className="px-4 py-3">GST</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="w-12 px-4 py-3"></th>
+                  <th className="w-44 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -335,60 +332,34 @@ export function VendorsPage() {
                       <VendorStatusBadge value={vendor.status} />
                     </td>
                     <td
-                      className="relative px-4 py-3 text-right"
+                      className="px-4 py-3"
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >
-                      <button
-                        aria-label={`Actions for ${vendor.vendor_name}`}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-lg font-semibold leading-none text-slate-600 shadow-sm hover:bg-stone-50"
-                        onClick={() =>
-                          setOpenActionVendorId((current) =>
-                            current === vendor.id ? null : vendor.id,
-                          )
-                        }
-                        type="button"
-                      >
-                        ⋮
-                      </button>
-                      {openActionVendorId === vendor.id ? (
-                        <div className="absolute right-4 z-30 mt-2 w-36 rounded-lg border border-stone-200 bg-white p-1 text-left shadow-lg">
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => {
-                              setOpenActionVendorId(null);
-                              openVendorDetail(vendor.id);
-                            }}
-                            type="button"
-                          >
-                            View
-                          </button>
-                          {canUpdate ? (
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => {
-                              setOpenActionVendorId(null);
-                              openEditForm(vendor);
-                            }}
-                            type="button"
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          onClick={() => openVendorDetail(vendor.id)}
+                          variant="secondary"
+                        >
+                          View
+                        </Button>
+                        {canUpdate ? (
+                          <Button
+                            onClick={() => openEditForm(vendor)}
+                            variant="secondary"
                           >
                             Edit
-                          </button>
+                          </Button>
                         ) : null}
-                          {canDelete ? (
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                            onClick={() => {
-                              setOpenActionVendorId(null);
-                              setDeleteTarget(vendor);
-                            }}
-                            type="button"
+                        {canDelete ? (
+                          <Button
+                            onClick={() => setDeleteTarget(vendor)}
+                            variant="danger"
                           >
                             Delete
-                          </button>
+                          </Button>
                         ) : null}
-                        </div>
-                      ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -417,62 +388,6 @@ export function VendorsPage() {
                     <p className="mt-1 text-sm text-slate-600">
                       {vendor.contact_person ?? "No contact"} / {vendor.phone ?? "-"}
                     </p>
-                  </div>
-                  <div
-                    className="relative shrink-0"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <button
-                      aria-label={`Actions for ${vendor.vendor_name}`}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-lg font-semibold leading-none text-slate-600 shadow-sm hover:bg-stone-50"
-                      onClick={() =>
-                        setOpenActionVendorId((current) =>
-                          current === vendor.id ? null : vendor.id,
-                        )
-                      }
-                      type="button"
-                    >
-                      ⋮
-                    </button>
-                    {openActionVendorId === vendor.id ? (
-                      <div className="absolute right-0 z-30 mt-2 w-36 rounded-lg border border-stone-200 bg-white p-1 text-left shadow-lg">
-                        <button
-                          className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                          onClick={() => {
-                            setOpenActionVendorId(null);
-                            openVendorDetail(vendor.id);
-                          }}
-                          type="button"
-                        >
-                          View
-                        </button>
-                        {canUpdate ? (
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => {
-                              setOpenActionVendorId(null);
-                              openEditForm(vendor);
-                            }}
-                            type="button"
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                        {canDelete ? (
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                            onClick={() => {
-                              setOpenActionVendorId(null);
-                              setDeleteTarget(vendor);
-                            }}
-                            type="button"
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -505,6 +420,28 @@ export function VendorsPage() {
                     </dd>
                   </div>
                 </dl>
+                <div
+                  className="mt-4 flex flex-wrap gap-2"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <Button
+                    onClick={() => openVendorDetail(vendor.id)}
+                    variant="secondary"
+                  >
+                    View
+                  </Button>
+                  {canUpdate ? (
+                    <Button onClick={() => openEditForm(vendor)} variant="secondary">
+                      Edit
+                    </Button>
+                  ) : null}
+                  {canDelete ? (
+                    <Button onClick={() => setDeleteTarget(vendor)} variant="danger">
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
               </article>
             ))}
           </div>

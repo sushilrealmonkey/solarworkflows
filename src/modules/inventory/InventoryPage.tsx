@@ -124,7 +124,6 @@ export function InventoryPage() {
   const [discontinueTarget, setDiscontinueTarget] =
     useState<InventoryItem | null>(null);
   const [discontinuing, setDiscontinuing] = useState(false);
-  const [openActionItemId, setOpenActionItemId] = useState<string | null>(null);
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
   const canCreate = hasPermission(profile, permissions, "inventory", "create");
@@ -559,7 +558,7 @@ export function InventoryPage() {
                   <th className="px-4 py-3">Model / Specifications</th>
                   <th className="px-4 py-3">Stock</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="w-12 px-4 py-3"></th>
+                  <th className="w-72 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -616,72 +615,42 @@ export function InventoryPage() {
                       <InventoryStatusBadge value={item.status} />
                     </td>
                     <td
-                      className="relative px-4 py-3 text-right"
+                      className="px-4 py-3"
                       onClick={(event) => event.stopPropagation()}
                       onKeyDown={(event) => event.stopPropagation()}
                     >
-                      <button
-                        aria-label={`Actions for ${inventoryProductName(item)}`}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-lg font-semibold leading-none text-slate-600 shadow-sm hover:bg-stone-50"
-                        onClick={() =>
-                          setOpenActionItemId((current) =>
-                            current === item.id ? null : item.id,
-                          )
-                        }
-                        type="button"
-                      >
-                        ⋮
-                      </button>
-                      {openActionItemId === item.id ? (
-                        <div className="absolute right-4 z-30 mt-2 w-36 rounded-lg border border-stone-200 bg-white p-1 text-left shadow-lg">
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => {
-                              setOpenActionItemId(null);
-                              openInventoryDetail(item.id);
-                            }}
-                            type="button"
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button
+                          onClick={() => openInventoryDetail(item.id)}
+                          variant="secondary"
+                        >
+                          View
+                        </Button>
+                        {canCreate ? (
+                          <Button
+                            onClick={() => openTransactionForm(item.id)}
+                            variant="secondary"
                           >
-                            View
-                          </button>
-                          {canCreate ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                              onClick={() => {
-                                setOpenActionItemId(null);
-                                openTransactionForm(item.id);
-                              }}
-                              type="button"
-                            >
-                              Add Stock
-                            </button>
-                          ) : null}
-                          {canUpdate ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                              onClick={() => {
-                                setOpenActionItemId(null);
-                                openEditItemForm(item);
-                              }}
-                              type="button"
-                            >
-                              Edit
-                            </button>
-                          ) : null}
-                          {canUpdate && item.status !== "discontinued" ? (
-                            <button
-                              className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                              onClick={() => {
-                                setOpenActionItemId(null);
-                                setDiscontinueTarget(item);
-                              }}
-                              type="button"
-                            >
-                              Discontinue
-                            </button>
-                          ) : null}
-                        </div>
-                      ) : null}
+                            Add Stock
+                          </Button>
+                        ) : null}
+                        {canUpdate ? (
+                          <Button
+                            onClick={() => openEditItemForm(item)}
+                            variant="secondary"
+                          >
+                            Edit
+                          </Button>
+                        ) : null}
+                        {canUpdate && item.status !== "discontinued" ? (
+                          <Button
+                            onClick={() => setDiscontinueTarget(item)}
+                            variant="danger"
+                          >
+                            Discontinue
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -731,74 +700,6 @@ export function InventoryPage() {
                         .join(" / ")}
                     </p>
                   </div>
-                  <div
-                    className="relative shrink-0"
-                    onClick={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                  >
-                    <button
-                      aria-label={`Actions for ${inventoryProductName(item)}`}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-lg font-semibold leading-none text-slate-600 shadow-sm hover:bg-stone-50"
-                      onClick={() =>
-                        setOpenActionItemId((current) =>
-                          current === item.id ? null : item.id,
-                        )
-                      }
-                      type="button"
-                    >
-                      ⋮
-                    </button>
-                    {openActionItemId === item.id ? (
-                      <div className="absolute right-0 z-30 mt-2 w-40 rounded-lg border border-stone-200 bg-white p-1 text-left shadow-lg">
-                        <button
-                          className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                          onClick={() => {
-                            setOpenActionItemId(null);
-                            openInventoryDetail(item.id);
-                          }}
-                          type="button"
-                        >
-                          View
-                        </button>
-                        {canCreate ? (
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => {
-                              setOpenActionItemId(null);
-                              openTransactionForm(item.id);
-                            }}
-                            type="button"
-                          >
-                            Add Stock
-                          </button>
-                        ) : null}
-                        {canUpdate ? (
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => {
-                              setOpenActionItemId(null);
-                              openEditItemForm(item);
-                            }}
-                            type="button"
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                        {canUpdate && item.status !== "discontinued" ? (
-                          <button
-                            className="block w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
-                            onClick={() => {
-                              setOpenActionItemId(null);
-                              setDiscontinueTarget(item);
-                            }}
-                            type="button"
-                          >
-                            Discontinue
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
@@ -844,6 +745,39 @@ export function InventoryPage() {
                     </dd>
                   </div>
                 </dl>
+                <div
+                  className="mt-4 flex flex-wrap gap-2"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <Button
+                    onClick={() => openInventoryDetail(item.id)}
+                    variant="secondary"
+                  >
+                    View
+                  </Button>
+                  {canCreate ? (
+                    <Button
+                      onClick={() => openTransactionForm(item.id)}
+                      variant="secondary"
+                    >
+                      Add Stock
+                    </Button>
+                  ) : null}
+                  {canUpdate ? (
+                    <Button onClick={() => openEditItemForm(item)} variant="secondary">
+                      Edit
+                    </Button>
+                  ) : null}
+                  {canUpdate && item.status !== "discontinued" ? (
+                    <Button
+                      onClick={() => setDiscontinueTarget(item)}
+                      variant="danger"
+                    >
+                      Discontinue
+                    </Button>
+                  ) : null}
+                </div>
                 {isOutOfStock(item) || isLowStock(item) ? (
                   <p
                     className={`mt-3 rounded-lg border bg-white px-3 py-2 text-sm font-semibold ${
