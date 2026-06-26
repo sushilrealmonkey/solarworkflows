@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../../services/supabaseClient";
+import { slugify } from "./companyUtils";
 import type {
   CreatePlatformCompanyFormValues,
   CreatePlatformCompanyResult,
@@ -51,6 +52,11 @@ function requireSupabase() {
 function nullable(value: string) {
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function nullablePhone(value: string) {
+  const trimmed = value.trim();
+  return trimmed && trimmed !== "+91" ? trimmed : null;
 }
 
 export async function fetchPlatformCompanies() {
@@ -273,9 +279,9 @@ export async function createPlatformCompany(
     {
       body: {
         organization_name: values.organization_name.trim(),
-        organization_slug: values.organization_slug.trim(),
+        organization_slug: slugify(values.organization_name),
         admin_full_name: values.admin_full_name.trim(),
-        admin_phone: nullable(values.admin_phone),
+        admin_phone: nullablePhone(values.admin_phone),
         admin_email: nullable(values.admin_email),
       },
     },

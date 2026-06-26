@@ -118,7 +118,7 @@ export function B2BSalesPage() {
       setError(
         nextError instanceof Error
           ? nextError.message
-          : "Unable to load B2B/Direct sales.",
+          : "Unable to load sales orders.",
       );
     } finally {
       setLoading(false);
@@ -215,7 +215,7 @@ export function B2BSalesPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="B2B/Direct sales are not available"
+        title="Sales orders are not available"
         description="Your role needs b2b_sales:view access to open this module."
       />
     );
@@ -238,7 +238,7 @@ export function B2BSalesPage() {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "Unable to refresh B2B/Direct customers.",
+          : "Unable to refresh business customers.",
         "error",
       );
     }
@@ -281,19 +281,19 @@ export function B2BSalesPage() {
       setSaving(true);
       if (formState.mode === "create") {
         await createB2BSale(profile, formState.values);
-        showToast("B2B/Direct sale created.", "success");
+        showToast("Sales order created.", "success");
       } else if (formState.sale) {
         await updateB2BSale(formState.sale.id, formState.values, {
           deleteMissingItems: canDelete,
         });
-        showToast("B2B/Direct sale updated.", "success");
+        showToast("Sales order updated.", "success");
       }
 
       setFormState(null);
       await loadData();
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "B2B/Direct sale save failed.",
+        nextError instanceof Error ? nextError.message : "Sales order save failed.",
         "error",
       );
     } finally {
@@ -310,11 +310,11 @@ export function B2BSalesPage() {
       setDeleting(true);
       await deleteB2BSale(deleteTarget.id);
       setSales((current) => current.filter((sale) => sale.id !== deleteTarget.id));
-      showToast("B2B/Direct sale deleted.", "success");
+      showToast("Sales order deleted.", "success");
       setDeleteTarget(null);
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "B2B/Direct sale delete failed.",
+        nextError instanceof Error ? nextError.message : "Sales order delete failed.",
         "error",
       );
     } finally {
@@ -326,10 +326,10 @@ export function B2BSalesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="B2B/Direct Sales"
-          description="Sell individual or bulk products to B2B/Direct customers without creating a project."
+          title="Sales Orders"
+          description="Sell individual or bulk products to business customers without creating a project."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Create B2B/Direct Sale</Button> : null}
+        {canCreate ? <Button onClick={openCreateForm}>Create Sales Order</Button> : null}
       </div>
 
       <Toolbar className="md:grid-cols-4">
@@ -376,13 +376,13 @@ export function B2BSalesPage() {
       </Toolbar>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load B2B/Direct sales" description={error} /> : null}
+      {error ? <EmptyState title="Could not load sales orders" description={error} /> : null}
       {!loading && !error && filteredSales.length === 0 ? (
         <EmptyState
-          title="No B2B/Direct sales found"
-          description="Create a sale for an active B2B/Direct customer, then add product line items."
+          title="No sales orders found"
+          description="Create a sales order for an active business customer, then add product line items."
           action={
-            canCreate ? <Button onClick={openCreateForm}>Create B2B/Direct Sale</Button> : null
+            canCreate ? <Button onClick={openCreateForm}>Create Sales Order</Button> : null
           }
         />
       ) : null}
@@ -407,7 +407,7 @@ export function B2BSalesPage() {
                 {filteredSales.map((sale) => (
                   <tr key={sale.id}>
                     <td className="px-4 py-3 font-semibold text-slate-950">
-                      {sale.sale_code ?? "B2B/Direct Sale"}
+                      {sale.sale_code ?? "Sales Order"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-900">
@@ -471,7 +471,7 @@ export function B2BSalesPage() {
                       {formatDate(sale.sale_date)}
                     </p>
                     <h2 className="mt-1 text-base font-semibold text-slate-950">
-                      {sale.sale_code ?? "B2B/Direct Sale"}
+                      {sale.sale_code ?? "Sales Order"}
                     </h2>
                     <p className="mt-1 text-sm text-slate-600">
                       {sale.customer?.business_name ||
@@ -521,7 +521,7 @@ export function B2BSalesPage() {
 
       {formState ? (
         <B2BSaleFormModal
-          title={formState.mode === "create" ? "Create B2B/Direct Sale" : "Edit B2B/Direct Sale"}
+          title={formState.mode === "create" ? "Create Sales Order" : "Edit Sales Order"}
           values={formState.values}
           setValues={(values) =>
             setFormState((current) => (current ? { ...current, values } : current))
@@ -537,8 +537,8 @@ export function B2BSalesPage() {
 
       {deleteTarget ? (
         <ConfirmDialog
-          title="Delete B2B/Direct sale?"
-          description={`This will remove ${deleteTarget.sale_code ?? "this B2B/Direct sale"} and its item rows.`}
+          title="Delete sales order?"
+          description={`This will remove ${deleteTarget.sale_code ?? "this sales order"} and its item rows.`}
           confirming={deleting}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={confirmDelete}

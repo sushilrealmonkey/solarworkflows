@@ -400,7 +400,7 @@ function buildEpcDashboardModel(
 
   const pipelineRows = [
     {
-      label: "New Leads",
+      label: "New Enquiries",
       count: leads.filter((lead) => lead.status === "new").length,
       value: sumLeadValue(leads.filter((lead) => lead.status === "new")),
       tone: "blue",
@@ -824,7 +824,7 @@ function TodaysWorkPanel({
     >
       {loading ? <LoadingRows count={3} /> : null}
       {!loading && followups.length === 0 ? (
-        <GuidedEmptyState to="/leads" action="Review Leads">
+        <GuidedEmptyState to="/leads" action="Review Enquiries">
           Nothing due today. Schedule follow-ups on active leads to keep sales moving.
         </GuidedEmptyState>
       ) : null}
@@ -1888,7 +1888,7 @@ function TenantDashboard() {
 
   const metricCards = [
     ["Total Customers", summary.total_customers],
-    ["Total Leads", summary.total_leads],
+    ["Total Enquiries", summary.total_leads],
     ["Active Projects", summary.active_projects],
     ["Completed Projects", summary.completed_projects],
     ["Pending Site Surveys", summary.pending_site_surveys],
@@ -2282,7 +2282,7 @@ function RecentLeadsWidget({
 }) {
   return (
     <WidgetFrame
-      title="Recent Leads"
+      title="Recent Enquiries"
       locked={locked}
       action={
         !locked ? (

@@ -407,7 +407,7 @@ export function CustomerDetailPage() {
           ) : null}
 
           {customer.customer_segment === "b2b_direct" ? (
-            <DetailSection title="B2B/Direct Workflow">
+            <DetailSection title="Business Workflow">
               <DetailItem label="Sales" value="Create and review project-free product sales." />
               <DetailItem label="Billing" value="Generate invoices and record direct payments from sale details." />
               <div className="flex flex-wrap gap-2 sm:col-span-2">
@@ -424,7 +424,7 @@ export function CustomerDetailPage() {
                     className="inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
                     to={`/invoices?customerId=${customer.id}`}
                   >
-                    View Invoices
+                    View Tax Invoices
                   </Link>
                 ) : null}
                 {canViewPayments ? (

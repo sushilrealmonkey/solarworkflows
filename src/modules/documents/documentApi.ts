@@ -63,6 +63,7 @@ export async function fetchDocuments(
   let query = client
     .from("documents")
     .select(documentSelect)
+    .neq("document_type", "invoice_pdf")
     .order("created_at", { ascending: false });
 
   if (!profile?.is_super_admin) {

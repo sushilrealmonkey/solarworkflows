@@ -388,7 +388,7 @@ export function CompanyDetailPage() {
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <DetailSection title="Activity Snapshot">
           <Metric label="Customers" value={summary?.total_customers ?? 0} />
-          <Metric label="Leads" value={summary?.total_leads ?? 0} />
+          <Metric label="Enquiries" value={summary?.total_leads ?? 0} />
           <Metric label="Active Projects" value={summary?.active_projects ?? 0} />
           <Metric label="Completed Projects" value={summary?.completed_projects ?? 0} />
           <Metric label="Pending Surveys" value={summary?.pending_site_surveys ?? 0} />

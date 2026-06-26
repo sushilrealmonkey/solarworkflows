@@ -121,16 +121,16 @@ export function B2BSaleFormModal({
       title={title}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Save B2B/Direct Sale"
+      submitLabel="Save Sales Order"
       submitting={saving}
       maxWidthClass="sm:max-w-5xl"
     >
       <SelectInput
-        label="B2B/Direct Customer"
+        label="Business Customer"
         value={values.customer_id}
         onChange={(customer_id) => update("customer_id", customer_id)}
         options={[
-          { value: "", label: "Select B2B/Direct customer" },
+          { value: "", label: "Select business customer" },
           ...options.customers.map((customer) => ({
             value: customer.id,
             label: [
@@ -352,7 +352,7 @@ export function B2BPaymentFormModal({
 
   return (
     <Modal
-      title="Add B2B/Direct Payment"
+      title="Add Business Payment"
       onClose={onClose}
       onSubmit={onSubmit}
       submitLabel="Save Payment"

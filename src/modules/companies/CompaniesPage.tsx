@@ -26,10 +26,9 @@ type CompanyFilter = "all" | "active" | "inactive" | "pending";
 
 const emptyFormValues: CreatePlatformCompanyFormValues = {
   organization_name: "",
-  organization_slug: "",
   admin_full_name: "",
   admin_email: "",
-  admin_phone: "",
+  admin_phone: "+91",
 };
 
 export function CompaniesPage() {
@@ -191,7 +190,7 @@ export function CompaniesPage() {
   ) {
     setValues((current) => ({
       ...current,
-      [key]: key === "organization_slug" ? slugify(value) : value,
+      [key]: value,
     }));
   }
 
@@ -448,14 +447,6 @@ function CreateCompanyForm({
           value={values.organization_name}
         />
         <TextField
-          helpText="Used for the default tenant subdomain slug."
-          label="Workspace slug"
-          onChange={(value) => onUpdateValue("organization_slug", value)}
-          placeholder="solar-epc"
-          required
-          value={values.organization_slug}
-        />
-        <TextField
           label="Primary admin name"
           onChange={(value) => onUpdateValue("admin_full_name", value)}
           placeholder="Admin full name"
@@ -474,7 +465,7 @@ function CreateCompanyForm({
           helpText="Optional. Email is enough for password setup."
           label="Primary admin phone"
           onChange={(value) => onUpdateValue("admin_phone", value)}
-          placeholder="+91..."
+          placeholder="+91 98765 43210"
           value={values.admin_phone}
         />
       </div>
@@ -862,10 +853,6 @@ function validateForm(values: CreatePlatformCompanyFormValues) {
     return "Company name is required.";
   }
 
-  if (!values.organization_slug.trim()) {
-    return "Workspace slug is required.";
-  }
-
   if (!values.admin_full_name.trim()) {
     return "Primary admin name is required.";
   }
@@ -937,12 +924,4 @@ function formatDateTime(value: string | null) {
     month: "short",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
 }

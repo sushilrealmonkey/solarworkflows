@@ -114,6 +114,10 @@ import type {
   InventoryItem,
   InventoryTransactionWithRelations,
 } from "../inventory/types";
+import { fetchProjectInvoices } from "../invoices/invoiceApi";
+import { InvoiceStatusBadge } from "../invoices/InvoiceComponents";
+import type { InvoiceWithRelations } from "../invoices/types";
+import { formatMoney } from "../quotations/quotationUtils";
 
 type MaterialIssueFormValues = {
   item_id: string;
@@ -152,6 +156,7 @@ export function ProjectDetailPage() {
   const [documents, setDocuments] = useState<OrganizationDocumentWithRelations[]>(
     [],
   );
+  const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([]);
   const [documentForm, setDocumentForm] = useState<DocumentUploadValues | null>(
     null,
   );
@@ -176,6 +181,7 @@ export function ProjectDetailPage() {
   const canUpdate = hasPermission(profile, permissions, "projects", "update");
   const canDelete = hasPermission(profile, permissions, "projects", "delete");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
+  const canViewInvoices = hasPermission(profile, permissions, "invoices", "view");
   const canCreatePayment = hasPermission(
     profile,
     permissions,
@@ -232,6 +238,7 @@ export function ProjectDetailPage() {
         nextInstallationVendors,
         nextInventoryItems,
         nextProjectMaterials,
+        nextInvoices,
       ] = await Promise.all([
         fetchProject(profile, id),
         fetchProjectCustomers(profile),
@@ -243,6 +250,7 @@ export function ProjectDetailPage() {
         canViewInventory
           ? fetchProjectInventoryTransactions(profile, id)
           : Promise.resolve([]),
+        canViewInvoices ? fetchProjectInvoices(profile, id) : Promise.resolve([]),
       ]);
       setProject(nextProject);
       setCustomers(nextCustomers);
@@ -252,6 +260,7 @@ export function ProjectDetailPage() {
       setInstallationVendors(nextInstallationVendors);
       setInventoryItems(nextInventoryItems);
       setProjectMaterials(nextProjectMaterials);
+      setInvoices(nextInvoices);
       if (nextProject && canViewPayments) {
         const nextSummary = await fetchProjectPaymentSummary(profile, nextProject.id);
         const paymentProject = projectToPaymentOption(nextProject);
@@ -263,9 +272,14 @@ export function ProjectDetailPage() {
         const nextDocuments = await fetchDocuments(profile, {
           projectId: nextProject.id,
         });
-        setDocuments(nextDocuments);
+        setDocuments(
+          nextDocuments.filter((document) => document.document_type !== "invoice_pdf"),
+        );
       } else {
         setDocuments([]);
+      }
+      if (!canViewInvoices) {
+        setInvoices([]);
       }
     } catch (nextError) {
       setError(
@@ -378,6 +392,28 @@ export function ProjectDetailPage() {
 
     setPaymentFormErrors({});
     setPaymentForm(emptyPaymentForm(projectToPaymentOption(project)));
+  }
+
+  function openProjectInvoiceForm() {
+    if (!project) {
+      return;
+    }
+
+    navigate(`/invoices?projectId=${project.id}`);
+  }
+
+  function openMaterialInvoiceForm(material: InventoryTransactionWithRelations) {
+    if (!project) {
+      return;
+    }
+
+    const params = new URLSearchParams({ projectId: project.id });
+    params.set("inventoryItemId", material.item_id);
+    if (material.quantity) {
+      params.set("quantity", String(material.quantity));
+    }
+
+    navigate(`/invoices?${params.toString()}`);
   }
 
   async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
@@ -610,7 +646,7 @@ export function ProjectDetailPage() {
               ) : null}
               {canCreateInvoice ? (
                 <Button
-                  onClick={() => navigate(`/invoices?projectId=${project.id}`)}
+                  onClick={openProjectInvoiceForm}
                   variant="secondary"
                 >
                   Create Project Invoice
@@ -710,6 +746,14 @@ export function ProjectDetailPage() {
             ) : null}
           </div>
 
+          {canViewInvoices ? (
+            <ProjectInvoicesSection
+              invoices={invoices}
+              canCreate={canCreateInvoice}
+              onCreate={openProjectInvoiceForm}
+            />
+          ) : null}
+
           {canViewDocuments ? (
             <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -749,7 +793,9 @@ export function ProjectDetailPage() {
             <ProjectMaterialsSection
               materials={projectMaterials}
               canCreate={canCreateInventory}
+              canCreateInvoice={canCreateInvoice}
               onAdd={openMaterialIssueForm}
+              onCreateInvoice={openMaterialInvoiceForm}
             />
           ) : null}
 
@@ -879,20 +925,169 @@ export function ProjectDetailPage() {
   );
 }
 
+function ProjectInvoicesSection({
+  invoices,
+  canCreate,
+  onCreate,
+}: {
+  invoices: InvoiceWithRelations[];
+  canCreate: boolean;
+  onCreate: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950">Tax Invoices</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Project billing records linked to this installation.
+          </p>
+        </div>
+        {canCreate ? <Button onClick={onCreate}>Create Invoice</Button> : null}
+      </div>
+
+      {invoices.length === 0 ? (
+        <div className="mt-4">
+          <EmptyState
+            title="No invoices linked"
+            description="Project invoices will appear here after they are created."
+            action={canCreate ? <Button onClick={onCreate}>Create Invoice</Button> : null}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="mt-4 hidden overflow-hidden rounded-lg border border-stone-200 lg:block">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Invoice</th>
+                  <th className="px-4 py-3">Invoice Date</th>
+                  <th className="px-4 py-3">Due Date</th>
+                  <th className="px-4 py-3">Total</th>
+                  <th className="px-4 py-3">Paid</th>
+                  <th className="px-4 py-3">Balance</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {invoices.map((invoice) => (
+                  <tr key={invoice.id}>
+                    <td className="px-4 py-3 font-semibold text-slate-950">
+                      {invoice.invoice_code ?? "Invoice"}
+                    </td>
+                    <td className="px-4 py-3">{formatDate(invoice.invoice_date)}</td>
+                    <td className="px-4 py-3">{formatDate(invoice.due_date)}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-950">
+                      {formatMoney(invoice.total_amount)}
+                    </td>
+                    <td className="px-4 py-3">{formatMoney(invoice.amount_paid)}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-950">
+                      {formatMoney(invoice.balance_due)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <InvoiceStatusBadge value={invoice.status} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        className="inline-flex min-h-9 items-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
+                        to={`/invoices/${invoice.id}`}
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:hidden">
+            {invoices.map((invoice) => (
+              <article
+                key={invoice.id}
+                className="rounded-lg border border-stone-200 bg-white p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {formatDate(invoice.invoice_date)}
+                    </p>
+                    <Link
+                      className="mt-1 block text-sm font-semibold text-[#06173f]"
+                      to={`/invoices/${invoice.id}`}
+                    >
+                      {invoice.invoice_code ?? "Invoice"}
+                    </Link>
+                  </div>
+                  <InvoiceStatusBadge value={invoice.status} />
+                </div>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <ProjectInvoiceCardItem
+                    label="Total"
+                    value={formatMoney(invoice.total_amount)}
+                  />
+                  <ProjectInvoiceCardItem
+                    label="Balance"
+                    value={formatMoney(invoice.balance_due)}
+                  />
+                  <ProjectInvoiceCardItem
+                    label="Paid"
+                    value={formatMoney(invoice.amount_paid)}
+                  />
+                  <ProjectInvoiceCardItem
+                    label="Due"
+                    value={formatDate(invoice.due_date)}
+                  />
+                </dl>
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ProjectInvoiceCardItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="font-medium text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
+function canInvoiceMaterial(material: InventoryTransactionWithRelations) {
+  return material.transaction_type === "project_issue";
+}
+
 function ProjectMaterialsSection({
   materials,
   canCreate,
+  canCreateInvoice,
   onAdd,
+  onCreateInvoice,
 }: {
   materials: InventoryTransactionWithRelations[];
   canCreate: boolean;
+  canCreateInvoice: boolean;
   onAdd: () => void;
+  onCreateInvoice: (material: InventoryTransactionWithRelations) => void;
 }) {
   const issuedMaterials = materials.filter(
     (material) =>
       material.transaction_type === "project_issue" ||
       material.transaction_type === "stock_out",
   );
+  const canShowInvoiceActions = canCreateInvoice &&
+    issuedMaterials.some((material) => canInvoiceMaterial(material));
 
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -920,6 +1115,9 @@ function ProjectMaterialsSection({
                   <th className="px-4 py-3">Quantity</th>
                   <th className="px-4 py-3">Notes</th>
                   <th className="px-4 py-3">Created By</th>
+                  {canShowInvoiceActions ? (
+                    <th className="px-4 py-3">Actions</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -952,6 +1150,20 @@ function ProjectMaterialsSection({
                         material.creator?.phone ??
                         "-"}
                     </td>
+                    {canShowInvoiceActions ? (
+                      <td className="px-4 py-3">
+                        {canInvoiceMaterial(material) ? (
+                          <Button
+                            onClick={() => onCreateInvoice(material)}
+                            variant="secondary"
+                          >
+                            Create Invoice
+                          </Button>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -982,6 +1194,16 @@ function ProjectMaterialsSection({
                 </p>
                 {material.notes ? (
                   <p className="mt-2 text-sm text-slate-600">{material.notes}</p>
+                ) : null}
+                {canCreateInvoice && canInvoiceMaterial(material) ? (
+                  <div className="mt-3">
+                    <Button
+                      onClick={() => onCreateInvoice(material)}
+                      variant="secondary"
+                    >
+                      Create Invoice
+                    </Button>
+                  </div>
                 ) : null}
               </article>
             ))}

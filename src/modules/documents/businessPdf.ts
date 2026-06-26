@@ -103,6 +103,9 @@ const margin = 14;
 const contentWidth = pageWidth - margin * 2;
 const inrSymbol = "\u20b9";
 const ptToMm = 0.3527777778;
+const technicalCoverLogoBox = { width: 42, height: 28 };
+const invoiceLogoBox = { width: 38, height: 26 };
+const standardLogoBox = { width: 24, height: 24 };
 let jsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
 async function loadJsPdf() {
@@ -499,36 +502,31 @@ function drawTechnicalCoverPage(
   doc.setTextColor(colors.text);
 
   const mastheadY = margin - 2;
-  if (context.logoDataUrl) {
-    try {
-      doc.addImage(
-        context.logoDataUrl.dataUrl,
-        context.logoDataUrl.format,
-        margin,
-        mastheadY,
-        23,
-        23,
-      );
-    } catch {
-      drawLogoFallback(doc, context.organization.name, colors.primary, mastheadY);
-    }
-  } else {
-    drawLogoFallback(doc, context.organization.name, colors.primary, mastheadY);
-  }
+  drawCompanyLogo(
+    doc,
+    context.logoDataUrl,
+    context.organization.name,
+    colors.primary,
+    margin,
+    mastheadY,
+    technicalCoverLogoBox.width,
+    technicalCoverLogoBox.height,
+  );
 
   doc.setTextColor(colors.text);
   doc.setFont("helvetica", "bold");
-  fitFontSize(doc, context.companyName, 130, 20, 14);
-  doc.text(context.companyName, margin + 31, mastheadY + 8);
+  const companyTextX = margin + technicalCoverLogoBox.width + 8;
+  fitFontSize(doc, context.companyName, 172 - companyTextX - 6, 20, 14);
+  doc.text(context.companyName, companyTextX, mastheadY + 8);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.8);
   doc.setTextColor(colors.muted);
   drawWrappedLines(
     doc,
     companyHeaderLines(context.settings),
-    margin + 31,
+    companyTextX,
     mastheadY + 16,
-    120,
+    172 - companyTextX - 6,
     4.2,
   );
   drawTrustSeal(doc, context.trustSealDataUrl, pageWidth - margin - 24, mastheadY - 1, 24);
@@ -1198,20 +1196,24 @@ async function buildBusinessPdf(input: BusinessPdfInput) {
     fetchImageAsDataUrl(input.settings.company_logo_url),
     fetchImageAsDataUrl(trustSealImageUrl),
   ]);
-  if (logoDataUrl) {
-    try {
-      doc.addImage(logoDataUrl.dataUrl, logoDataUrl.format, margin, y, 24, 24);
-    } catch {
-      drawLogoFallback(doc, input.organization.name, colors.primary, y);
-    }
-  } else {
-    drawLogoFallback(doc, input.organization.name, colors.primary, y);
-  }
+  const logoBox = input.kind === "invoice" ? invoiceLogoBox : standardLogoBox;
+  drawCompanyLogo(
+    doc,
+    logoDataUrl,
+    input.organization.name,
+    colors.primary,
+    margin,
+    y,
+    logoBox.width,
+    logoBox.height,
+  );
 
   doc.setTextColor(colors.text);
   doc.setFont("helvetica", "bold");
-  fitFontSize(doc, companyDisplayName(input), 94, 18, 13);
-  doc.text(companyDisplayName(input), margin + 31, y + 7);
+  const companyTextX = margin + logoBox.width + 7;
+  const companyHeaderWidth = pageWidth - margin - 61 - companyTextX - 4;
+  fitFontSize(doc, companyDisplayName(input), companyHeaderWidth, 18, 13);
+  doc.text(companyDisplayName(input), companyTextX, y + 7);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.8);
   const organizationLines = [
@@ -1227,7 +1229,14 @@ async function buildBusinessPdf(input: BusinessPdfInput) {
   ]
     .map(cleanPdfText)
     .filter(isPresentText);
-  y = drawWrappedLines(doc, organizationLines, margin + 31, y + 14, 94, 4.2);
+  y = drawWrappedLines(
+    doc,
+    organizationLines,
+    companyTextX,
+    y + 14,
+    companyHeaderWidth,
+    4.2,
+  );
   drawTrustSeal(doc, trustSealDataUrl, pageWidth - margin - 61, margin - 1, 25);
 
   doc.setFont("helvetica", "bold");
@@ -1371,13 +1380,84 @@ function drawTrustSeal(
   }
 }
 
-function drawLogoFallback(doc: PdfDoc, organizationName: string, primary: string, y: number) {
+function drawCompanyLogo(
+  doc: PdfDoc,
+  logoDataUrl: PdfImageData | null,
+  organizationName: string,
+  primary: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  maxHeight: number,
+) {
+  if (logoDataUrl) {
+    try {
+      const { width, height } = fitImageInsideBox(
+        doc,
+        logoDataUrl.dataUrl,
+        maxWidth,
+        maxHeight,
+      );
+      doc.addImage(
+        logoDataUrl.dataUrl,
+        logoDataUrl.format,
+        x + (maxWidth - width) / 2,
+        y + (maxHeight - height) / 2,
+        width,
+        height,
+      );
+      return;
+    } catch {
+      // Fall through to a generated mark so PDF export still succeeds.
+    }
+  }
+
+  drawLogoFallback(doc, organizationName, primary, x, y, maxWidth, maxHeight);
+}
+
+function fitImageInsideBox(
+  doc: PdfDoc,
+  imageDataUrl: string,
+  maxWidth: number,
+  maxHeight: number,
+) {
+  const imageProperties = doc.getImageProperties(imageDataUrl);
+  const ratio =
+    Number(imageProperties.width) > 0 && Number(imageProperties.height) > 0
+      ? Number(imageProperties.width) / Number(imageProperties.height)
+      : maxWidth / maxHeight;
+  const boxRatio = maxWidth / maxHeight;
+
+  if (ratio > boxRatio) {
+    return {
+      width: maxWidth,
+      height: maxWidth / ratio,
+    };
+  }
+
+  return {
+    width: maxHeight * ratio,
+    height: maxHeight,
+  };
+}
+
+function drawLogoFallback(
+  doc: PdfDoc,
+  organizationName: string,
+  primary: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
   doc.setFillColor(primary);
-  doc.roundedRect(margin, y, 24, 24, 2, 2, "F");
+  doc.roundedRect(x, y, width, height, 2, 2, "F");
   doc.setTextColor("#ffffff");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.text(initials(organizationName), margin + 12, y + 15, { align: "center" });
+  doc.text(initials(organizationName), x + width / 2, y + height / 2 + 3, {
+    align: "center",
+  });
 }
 
 function drawPartyAndDetails(

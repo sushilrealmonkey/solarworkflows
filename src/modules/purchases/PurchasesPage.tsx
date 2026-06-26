@@ -162,7 +162,7 @@ export function PurchasesPage() {
       setError(
         nextError instanceof Error
           ? nextError.message
-          : "Unable to load purchases.",
+          : "Unable to load purchase orders.",
       );
     } finally {
       setLoading(false);
@@ -199,8 +199,8 @@ export function PurchasesPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="Purchases are not available"
-        description="Your role needs inventory:view access to open purchase tracking."
+        title="Purchase orders are not available"
+        description="Your role needs inventory:view access to open purchase order tracking."
       />
     );
   }
@@ -250,14 +250,14 @@ export function PurchasesPage() {
     try {
       setUpdatingStatus(true);
       await updatePurchaseOrderStatus(statusTarget.order.id, statusTarget.status);
-      showToast("Purchase status updated.", "success");
+      showToast("Purchase order status updated.", "success");
       setStatusTarget(null);
       await loadData();
     } catch (nextError) {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "Purchase status update failed.",
+          : "Purchase order status update failed.",
         "error",
       );
     } finally {
@@ -289,7 +289,7 @@ export function PurchasesPage() {
     try {
       setUpdatingStatus(true);
       await receivePurchaseOrderItems(receiveTarget.id, receiveForm);
-      showToast("Purchase received and stock updated.", "success");
+      showToast("Material received and stock updated.", "success");
       setReceiveTarget(null);
       setReceiveForm(null);
       await loadData();
@@ -297,7 +297,7 @@ export function PurchasesPage() {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "Purchase receiving failed.",
+          : "Material receive failed.",
         "error",
       );
     } finally {
@@ -309,7 +309,7 @@ export function PurchasesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="Purchases"
+          title="Purchase Orders"
           description="Create purchase orders and receive stock into inventory."
         />
         {canCreate ? <Button onClick={openCreateForm}>Create Purchase Order</Button> : null}
@@ -317,7 +317,7 @@ export function PurchasesPage() {
 
       <Toolbar>
         <SearchInput
-          placeholder="Search PO, vendor, or phone"
+          placeholder="Search PO, supplier, or phone"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
         />
@@ -334,16 +334,16 @@ export function PurchasesPage() {
           ]}
         />
         <SelectInput
-          label="Vendor"
+          label="Supplier"
           value={filters.vendorId}
           onChange={(vendorId) =>
             setFilters((current) => ({ ...current, vendorId }))
           }
           options={[
-            { value: "", label: "All vendors" },
+            { value: "", label: "All suppliers" },
             ...vendors.map((vendor) => ({
               value: vendor.id,
-              label: `${vendor.vendor_code ?? "Vendor"} - ${vendor.vendor_name}`,
+              label: `${vendor.vendor_code ?? "Supplier"} - ${vendor.vendor_name}`,
             })),
           ]}
         />
@@ -354,7 +354,7 @@ export function PurchasesPage() {
       {!loading && !error && filteredOrders.length === 0 ? (
         <EmptyState
           title="No purchase orders found"
-          description="Create a purchase order to track vendor procurement and received stock."
+          description="Create a purchase order to track supplier procurement and received stock."
           action={canCreate ? <Button onClick={openCreateForm}>Create Purchase Order</Button> : null}
         />
       ) : null}
@@ -398,7 +398,7 @@ export function PurchasesPage() {
           }
           confirming={updatingStatus}
           confirmLabel={
-            statusTarget.status === "received" ? "Receive Stock" : "Update Status"
+            statusTarget.status === "received" ? "Material Receive" : "Update Status"
           }
           confirmingLabel="Updating..."
           confirmVariant={statusTarget.status === "cancelled" ? "danger" : "primary"}
@@ -506,7 +506,7 @@ export function PurchaseOrdersSection({
           <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
             <tr>
               <th className="px-4 py-3">Code</th>
-              <th className="px-4 py-3">Vendor</th>
+              <th className="px-4 py-3">Supplier</th>
               <th className="px-4 py-3">Order Date</th>
               <th className="px-4 py-3">Expected</th>
               <th className="px-4 py-3">Status</th>
@@ -536,7 +536,7 @@ export function PurchaseOrdersSection({
                 </td>
                 <td className="px-4 py-3">
                   <span className="font-semibold text-slate-950">
-                    {order.vendor?.vendor_name ?? "Vendor"}
+                    {order.vendor?.vendor_name ?? "Supplier"}
                   </span>
                   <div className="text-xs text-slate-500">
                     {order.vendor?.phone ?? ""}
@@ -599,7 +599,7 @@ export function PurchaseOrdersSection({
                   </Link>
                 </p>
                 <span className="mt-1 block text-base font-semibold text-slate-950">
-                  {order.vendor?.vendor_name ?? "Vendor"}
+                  {order.vendor?.vendor_name ?? "Supplier"}
                 </span>
                 <p className="mt-1 text-sm text-slate-600">
                   {formatDate(order.order_date)} / {order.items?.length ?? 0} items
@@ -701,7 +701,7 @@ function PurchaseStatusActions({
       ) : null}
       {canShowReceiveAction && onReceive ? (
         <Button onClick={() => onReceive(order)}>
-          Receive Stock
+          Material Receive
         </Button>
       ) : null}
       {canShowStatusActions && onStatusChange && order.status !== "cancelled" ? (
@@ -767,14 +767,14 @@ function PurchaseOrderFormModal({
       submitting={saving}
     >
       <SelectInput
-        label="Vendor"
+        label="Supplier"
         value={values.vendor_id}
         onChange={(vendor_id) => setValues({ ...values, vendor_id })}
         options={[
-          { value: "", label: "Select vendor" },
+          { value: "", label: "Select supplier" },
           ...vendors.map((vendor) => ({
             value: vendor.id,
-            label: `${vendor.vendor_code ?? "Vendor"} - ${vendor.vendor_name}`,
+            label: `${vendor.vendor_code ?? "Supplier"} - ${vendor.vendor_name}`,
           })),
         ]}
       />
@@ -969,7 +969,7 @@ export function PurchaseReceiveFormModal({
       title={`Receive ${formatPurchaseCode(order.purchase_code)}`}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Receive Stock"
+      submitLabel="Material Receive"
       submitting={saving}
       maxWidthClass="sm:max-w-4xl"
     >

@@ -60,7 +60,7 @@ export function vendorToForm(vendor: Vendor): VendorFormValues {
 
 export function validateVendorForm(values: VendorFormValues) {
   return {
-    vendor_name: requiredError(values.vendor_name, "Vendor name"),
+    vendor_name: requiredError(values.vendor_name, "Supplier name"),
   };
 }
 

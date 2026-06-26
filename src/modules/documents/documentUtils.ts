@@ -16,7 +16,6 @@ export const documentTypeOptions: DocumentType[] = [
   "property_document",
   "quotation_pdf",
   "proforma_invoice_pdf",
-  "invoice_pdf",
   "purchase_order_pdf",
   "payment_receipt",
   "site_photo",

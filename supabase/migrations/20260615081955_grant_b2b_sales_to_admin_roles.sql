@@ -1,10 +1,10 @@
--- Repair B2B Sales access for tenant admin roles that existed before or missed
+-- Repair sales order access for tenant admin roles that existed before or missed
 -- the original B2B module permission seed.
 
 insert into public.modules (module_key, module_name, description, sort_order, is_active)
 values (
   'b2b_sales',
-  'B2B Sales',
+  'Sales Orders',
   'Project-free product sales to installer customers',
   365,
   true

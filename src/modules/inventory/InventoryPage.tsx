@@ -458,7 +458,7 @@ export function InventoryPage() {
       <section className="grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)_minmax(150px,0.7fr)_minmax(170px,0.8fr)]">
         <SearchInput
           className="block"
-          placeholder="Search product, category, brand, specs, or vendor"
+          placeholder="Search product, category, brand, specs, or supplier"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
         />
@@ -838,7 +838,7 @@ export function InventoryPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-slate-500">Vendor</dt>
+                    <dt className="text-xs text-slate-500">Supplier</dt>
                     <dd className="font-medium text-slate-900">
                       {inventoryVendorName(item) || "-"}
                     </dd>
@@ -1007,11 +1007,11 @@ export function InventoryItemFormModal({
       ) : null}
       <ProductSnapshot product={selectedProduct} />
       <SelectInput
-        label="Vendor"
+        label="Supplier"
         value={values.vendor_id}
         onChange={(value) => update("vendor_id", value)}
         options={[
-          { value: "", label: "No vendor linked" },
+          { value: "", label: "No supplier linked" },
           ...masters.vendors.map((vendor) => ({
             value: vendor.id,
             label: vendor.name,

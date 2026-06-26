@@ -172,7 +172,7 @@ export function emptyB2BPaymentForm(): B2BPaymentFormValues {
 export function validateB2BSaleForm(values: B2BSaleFormValues) {
   const discount = Number(values.discount_amount || 0);
   const errors: Record<string, string> = {
-    customer_id: requiredError(values.customer_id, "B2B/Direct customer"),
+    customer_id: requiredError(values.customer_id, "Business customer"),
     sale_date: requiredError(values.sale_date, "Sale date"),
     discount_amount:
       Number.isFinite(discount) && discount >= 0

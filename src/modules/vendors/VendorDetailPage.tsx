@@ -85,7 +85,7 @@ export function VendorDetailPage() {
       setPurchaseOrders(nextPurchaseOrders);
     } catch (nextError) {
       setError(
-        nextError instanceof Error ? nextError.message : "Unable to load vendor.",
+        nextError instanceof Error ? nextError.message : "Unable to load supplier.",
       );
     } finally {
       setLoading(false);
@@ -101,8 +101,8 @@ export function VendorDetailPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="Vendor details are not available"
-        description="Your role needs vendors:view access to open vendor details."
+        title="Supplier details are not available"
+        description="Your role needs vendors:view access to open supplier details."
       />
     );
   }
@@ -125,11 +125,11 @@ export function VendorDetailPage() {
       setSaving(true);
       await updateVendor(vendor.id, editing);
       setEditing(null);
-      showToast("Vendor updated.", "success");
+      showToast("Supplier updated.", "success");
       await loadVendor();
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Vendor update failed.",
+        nextError instanceof Error ? nextError.message : "Supplier update failed.",
         "error",
       );
     } finally {
@@ -145,11 +145,11 @@ export function VendorDetailPage() {
     try {
       setDeleting(true);
       await deleteVendor(vendor.id);
-      showToast("Vendor deleted.", "success");
+      showToast("Supplier deleted.", "success");
       navigate("/vendors");
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Vendor delete failed.",
+        nextError instanceof Error ? nextError.message : "Supplier delete failed.",
         "error",
       );
     } finally {
@@ -160,15 +160,15 @@ export function VendorDetailPage() {
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/vendors">
-        Back to vendors
+        Back to suppliers
       </Link>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load vendor" description={error} /> : null}
+      {error ? <EmptyState title="Could not load supplier" description={error} /> : null}
       {!loading && !error && !vendor ? (
         <EmptyState
-          title="Vendor not found"
-          description="This vendor may have been deleted or is outside your organization access."
+          title="Supplier not found"
+          description="This supplier may have been deleted or is outside your organization access."
         />
       ) : null}
 
@@ -177,7 +177,7 @@ export function VendorDetailPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <PageHeader
               title={vendor.vendor_name}
-              description={`${vendor.vendor_code ?? "Vendor"} / ${labelize(
+              description={`${vendor.vendor_code ?? "Supplier"} / ${labelize(
                 vendor.vendor_type,
               )}`}
             />
@@ -190,7 +190,7 @@ export function VendorDetailPage() {
                   }}
                   variant="secondary"
                 >
-                  Edit Vendor
+                  Edit Supplier
                 </Button>
               ) : null}
               {canDelete ? (
@@ -198,16 +198,16 @@ export function VendorDetailPage() {
                   onClick={() => setConfirmingDelete(true)}
                   variant="danger"
                 >
-                  Delete Vendor
+                  Delete Supplier
                 </Button>
               ) : null}
             </div>
           </div>
 
-          <DetailSection title="Vendor Details">
-            <DetailItem label="Vendor Code" value={vendor.vendor_code ?? "-"} />
+          <DetailSection title="Supplier Details">
+            <DetailItem label="Supplier Code" value={vendor.vendor_code ?? "-"} />
             <DetailItem label="Status" value={<VendorStatusBadge value={vendor.status} />} />
-            <DetailItem label="Vendor Type" value={labelize(vendor.vendor_type)} />
+            <DetailItem label="Supplier Type" value={labelize(vendor.vendor_type)} />
             <DetailItem label="Created" value={formatDate(vendor.created_at)} />
             <DetailItem label="Notes" value={vendor.notes ?? "-"} />
           </DetailSection>
@@ -234,7 +234,7 @@ export function VendorDetailPage() {
               canManageStatus={false}
               canReceive={false}
               showPricing={canViewPricing}
-              emptyTitle="No purchase orders for this vendor"
+              emptyTitle="No purchase orders for this supplier"
             />
           ) : null}
         </>
@@ -242,7 +242,7 @@ export function VendorDetailPage() {
 
       {editing ? (
         <VendorFormModal
-          title="Edit Vendor"
+          title="Edit Supplier"
           values={editing}
           setValues={setEditing}
           errors={formErrors}
@@ -254,8 +254,8 @@ export function VendorDetailPage() {
 
       {confirmingDelete && vendor ? (
         <ConfirmDialog
-          title="Delete vendor?"
-          description={`This will remove ${vendor.vendor_name}. Vendors linked to purchase orders may be protected by the database.`}
+          title="Delete supplier?"
+          description={`This will remove ${vendor.vendor_name}. Suppliers linked to purchase orders may be protected by the database.`}
           confirming={deleting}
           onCancel={() => setConfirmingDelete(false)}
           onConfirm={handleDelete}

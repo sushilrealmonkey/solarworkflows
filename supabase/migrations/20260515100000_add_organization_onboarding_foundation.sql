@@ -112,15 +112,15 @@ insert into public.modules (module_key, module_name, description, sort_order, is
 values
   ('dashboard', 'Dashboard', 'Dashboard access', 300, true),
   ('customers', 'Customers', 'Customer management', 310, true),
-  ('leads', 'Leads', 'Lead management', 320, true),
+  ('leads', 'Enquiries', 'Lead management', 320, true),
   ('projects', 'Projects', 'Project management', 330, true),
   ('site_surveys', 'Site Surveys', 'Site survey management', 340, true),
   ('quotations', 'Quotations', 'Quotation management', 350, true),
-  ('invoices', 'Invoices', 'Invoice management', 360, true),
+  ('invoices', 'Tax Invoices', 'Invoice management', 360, true),
   ('payments', 'Payments', 'Payment management', 370, true),
   ('documents', 'Documents', 'Document management', 380, true),
   ('inventory', 'Inventory', 'Inventory access foundation', 390, true),
-  ('vendors', 'Vendors', 'Vendor management', 400, true),
+  ('vendors', 'Suppliers', 'Vendor management', 400, true),
   ('staff', 'Staff', 'Organization staff management', 410, true),
   ('reports', 'Reports', 'Reports access', 420, true),
   ('settings', 'Settings', 'Organization settings management', 430, true)

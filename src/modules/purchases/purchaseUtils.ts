@@ -75,7 +75,7 @@ export function calculatePurchaseTotals(values: PurchaseOrderFormValues) {
 export function validatePurchaseOrderForm(values: PurchaseOrderFormValues) {
   const itemErrors = values.items.map(validatePurchaseItemForm);
   return {
-    vendor_id: requiredError(values.vendor_id, "Vendor"),
+    vendor_id: requiredError(values.vendor_id, "Supplier"),
     items: values.items.length === 0 ? "At least one item is required." : "",
     itemErrors,
   };

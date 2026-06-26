@@ -127,8 +127,11 @@ Deno.serve(async (request) => {
     const { data: inviteData, error: inviteError } =
       await sendInviteEmail(serviceClient, payload.admin_email, appBaseUrl, {
         full_name: payload.admin_full_name,
+        company_name: payload.organization_name,
         organization_name: payload.organization_name,
         organization_slug: payload.organization_slug,
+        staff_role: "Admin",
+        staff_role_article: articleFor("Admin"),
       });
 
     if (inviteError || !inviteData.user) {
@@ -203,6 +206,11 @@ async function sendAdminSetupLink(
     );
   }
 
+  const companyName = await resolveCompanyName(
+    serviceClient,
+    profile.organization_id,
+  );
+
   if (profile.auth_user_id) {
     const setupDelivery = await createPasswordSetupDelivery(
       serviceClient,
@@ -232,6 +240,9 @@ async function sendAdminSetupLink(
   const { data: inviteData, error: inviteError } =
     await sendInviteEmail(serviceClient, adminEmail, appBaseUrl, {
       full_name: profile.full_name,
+      company_name: companyName,
+      staff_role: "Admin",
+      staff_role_article: articleFor("Admin"),
     });
 
   if (inviteError || !inviteData.user) {
@@ -273,6 +284,45 @@ function sendInviteEmail(
     redirectTo: `${appBaseUrl}/create-password`,
     data,
   });
+}
+
+async function resolveCompanyName(
+  serviceClient: ReturnType<typeof createClient>,
+  organizationId: string | null,
+) {
+  if (!organizationId) {
+    return null;
+  }
+
+  const { data: settingsData } = await serviceClient
+    .from("organization_settings")
+    .select("company_name")
+    .eq("organization_id", organizationId)
+    .maybeSingle();
+
+  const settingsCompanyName = normalizeNullableText(
+    typeof settingsData?.company_name === "string"
+      ? settingsData.company_name
+      : null,
+  );
+
+  if (settingsCompanyName) {
+    return settingsCompanyName;
+  }
+
+  const { data: organizationData } = await serviceClient
+    .from("organizations")
+    .select("name")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  return normalizeNullableText(
+    typeof organizationData?.name === "string" ? organizationData.name : null,
+  );
+}
+
+function articleFor(value: string) {
+  return /^[aeiou]/i.test(value.trim()) ? "an" : "a";
 }
 
 async function createPasswordSetupDelivery(

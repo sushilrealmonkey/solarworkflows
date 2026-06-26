@@ -3,32 +3,33 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>SolarWorkflows invitation</title>
+    <title>Bizlee invitation</title>
   </head>
-  <body style="margin: 0; background: #f8fafc; color: #0f172a; font-family: Arial, Helvetica, sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #f8fafc;">
+  <body style="margin: 0; background: #fff4e1; color: #0b1f3a; font-family: Arial, Helvetica, sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: #fff4e1;">
       <tr>
         <td align="center" style="padding: 24px 12px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 560px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 560px; background: #ffffff; border: 1px solid #f6d7a8; border-radius: 16px; overflow: hidden;">
             <tr>
-              <td style="background: #064e3b; padding: 28px 24px; color: #ffffff;">
-                <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #fde68a;">Workspace invitation</p>
-                <h1 style="margin: 12px 0 0; font-size: 26px; line-height: 1.25;">Set up your SolarWorkflows account</h1>
+              <td style="background: #06245c; padding: 28px 24px; color: #ffffff;">
+                <img src="{{ .SiteURL }}/bizlee-logo.png" width="176" alt="Bizlee" style="display: block; width: 176px; max-width: 100%; height: auto; margin: 0 0 24px;" />
+                <p style="margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #ffb15c;">{{ if .Data.company_name }}{{ .Data.company_name }} {{ end }}{{ if .Data.staff_role }}{{ .Data.staff_role }} {{ end }}Invitation</p>
+                <h1 style="margin: 12px 0 0; font-size: 26px; line-height: 1.25;">Set up your Bizlee account</h1>
               </td>
             </tr>
             <tr>
               <td style="padding: 28px 24px;">
                 <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6;">Hello{{ if .Data.full_name }} {{ .Data.full_name }}{{ end }},</p>
-                <p style="margin: 0 0 22px; font-size: 15px; line-height: 1.7; color: #475569;">You have been invited to a SolarWorkflows workspace. Use the secure button below to accept the invitation and create your password.</p>
+                <p style="margin: 0 0 22px; font-size: 15px; line-height: 1.7; color: #40516b;">You have been invited as {{ if .Data.staff_role }}{{ if .Data.staff_role_article }}{{ .Data.staff_role_article }}{{ else }}a{{ end }} {{ .Data.staff_role }}{{ else }}a team member{{ end }} for {{ if .Data.company_name }}{{ .Data.company_name }}{{ else }}your company{{ end }} workspace in Bizlee. Use the secure button below to accept the invitation and create your password.</p>
                 <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                   <tr>
-                    <td style="border-radius: 10px; background: #059669;">
+                    <td style="border-radius: 10px; background: #ff7a1a;">
                       <a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="display: inline-block; padding: 13px 20px; color: #ffffff; font-size: 15px; font-weight: 700; text-decoration: none;">Accept invitation</a>
                     </td>
                   </tr>
                 </table>
                 <p style="margin: 24px 0 0; font-size: 13px; line-height: 1.6; color: #64748b;">If the button does not work, copy and paste this link into your browser:</p>
-                <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.6; word-break: break-all;"><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="color: #047857;">{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite</a></p>
+                <p style="margin: 6px 0 0; font-size: 12px; line-height: 1.6; word-break: break-all;"><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite" style="color: #06245c;">{{ .RedirectTo }}?token_hash={{ .TokenHash }}&amp;type=invite</a></p>
                 <p style="margin: 24px 0 0; font-size: 13px; line-height: 1.6; color: #64748b;">If you were not expecting this invitation, you can safely ignore this email.</p>
               </td>
             </tr>

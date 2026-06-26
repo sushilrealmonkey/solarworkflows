@@ -288,7 +288,7 @@ export function PurchaseDetailPage() {
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/purchases">
-        Back to purchases
+        Back to purchase orders
       </Link>
 
       {loading ? <LoadingSkeleton /> : null}
@@ -307,7 +307,7 @@ export function PurchaseDetailPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <PageHeader
               title={formatPurchaseCode(order.purchase_code)}
-              description={`Purchase order for ${order.vendor?.vendor_name ?? "vendor"}.`}
+              description={`Purchase order for ${order.vendor?.vendor_name ?? "supplier"}.`}
             />
             <PurchaseDetailActions
               canManageStatus={canManageStatus}
@@ -341,9 +341,9 @@ export function PurchaseDetailPage() {
             <DetailItem label="Notes" value={order.notes ?? "-"} />
           </DetailSection>
 
-          <DetailSection title="Vendor">
+          <DetailSection title="Supplier">
             <DetailItem
-              label="Vendor"
+              label="Supplier"
               value={
                 order.vendor ? (
                   <Link
@@ -358,7 +358,7 @@ export function PurchaseDetailPage() {
               }
             />
             <DetailItem
-              label="Vendor Code"
+              label="Supplier Code"
               value={order.vendor?.vendor_code ?? "-"}
             />
             <DetailItem
@@ -540,7 +540,7 @@ function PurchaseDetailActions({
         </Button>
       ) : null}
       {canShowReceiveAction ? (
-        <Button onClick={onReceive}>Receive Stock</Button>
+        <Button onClick={onReceive}>Material Receive</Button>
       ) : null}
       {canShowStatusActions && order.status !== "cancelled" ? (
         <Button onClick={() => onStatusChange("cancelled")} variant="danger">

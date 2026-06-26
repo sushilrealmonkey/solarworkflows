@@ -267,7 +267,7 @@ export function customerTypeOptionsForSegment(segment: CustomerSegment) {
 
 export function customerSegmentLabel(segment: CustomerSegment | null | undefined) {
   if (segment === "b2b_direct") {
-    return "B2B/Direct";
+    return "Business";
   }
 
   return "Project Based";

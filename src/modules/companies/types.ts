@@ -69,7 +69,6 @@ export type PlatformCompanySettings = {
 
 export type CreatePlatformCompanyFormValues = {
   organization_name: string;
-  organization_slug: string;
   admin_full_name: string;
   admin_email: string;
   admin_phone: string;

@@ -274,7 +274,7 @@ function SalesReportSection({
           "Quotation Value",
           "Projects",
           "Project Value",
-          "Invoices",
+          "Tax Invoices",
           "Received",
           "Balance",
         ]}

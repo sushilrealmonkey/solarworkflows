@@ -316,8 +316,8 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
         <PageHeader
           title={
             segment === "b2b_direct"
-              ? "B2B/Direct Customers"
-              : "Project Based Customers"
+              ? "Business Customers"
+              : "Customers"
           }
           description={
             segment === "b2b_direct"
@@ -327,7 +327,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
         />
         {canCreate ? (
           <Button onClick={openCreateForm}>
-            {segment === "b2b_direct" ? "Add B2B/Direct Customer" : "Add Customer"}
+            {segment === "b2b_direct" ? "Add Business Customer" : "Add Customer"}
           </Button>
         ) : null}
       </div>
@@ -375,13 +375,13 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
           title="No customers found"
           description={
             segment === "b2b_direct"
-              ? "Create a B2B/Direct customer before recording product sales without projects."
+              ? "Create a business customer before recording product sales without projects."
               : "Create a customer directly or convert a qualified lead."
           }
           action={
             canCreate ? (
               <Button onClick={openCreateForm}>
-                {segment === "b2b_direct" ? "Add B2B/Direct Customer" : "Add Customer"}
+                {segment === "b2b_direct" ? "Add Business Customer" : "Add Customer"}
               </Button>
             ) : null
           }

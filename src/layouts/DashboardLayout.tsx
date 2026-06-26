@@ -424,10 +424,10 @@ function NavigationIcon({ item }: { item: NavigationItem }) {
 }
 
 function navigationIconId(item: NavigationItem) {
-  if (item.path === "/sales") return "sales";
-  if (item.path === "/projects-workflow") return "projects";
+  if (item.path === "/project-sales") return "sales";
+  if (item.path === "/product-sales") return "b2b_sales";
   if (item.path === "/stock-purchasing") return "stock";
-  if (item.path === "/finance") return "finance";
+  if (item.path === "/masters") return "product_master";
 
   const exactRouteIcons: Record<string, string> = {
     "/leads": "leads",
@@ -443,6 +443,7 @@ function navigationIconId(item: NavigationItem) {
     "/inventory": "inventory",
     "/vendors": "vendors",
     "/purchases": "purchases",
+    "/material-receive": "material_receive",
     "/proforma-invoices": "proforma_invoices",
     "/invoices": "invoices",
     "/payments": "payments",
@@ -586,6 +587,7 @@ function IconGlyph({ id }: { id: string }) {
         </svg>
       );
     case "purchases":
+    case "material_receive":
       return (
         <svg aria-hidden="true" className="h-5 w-5" {...common}>
           <path d="M6 7h15l-2 7H8L6 4H3" />

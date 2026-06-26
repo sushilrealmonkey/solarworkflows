@@ -404,7 +404,7 @@ export function InvoiceDetailPage() {
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/invoices">
-        Back to invoices
+        Back to tax invoices
       </Link>
 
       {loading ? <LoadingSkeleton /> : null}

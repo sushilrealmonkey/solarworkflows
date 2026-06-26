@@ -157,7 +157,7 @@ export function LeadsPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="Leads are not available"
+        title="Enquiries are not available"
         description="Your role needs leads:view access to open this module."
       />
     );
@@ -283,10 +283,10 @@ export function LeadsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="Leads"
-          description="Capture solar enquiries, track status, assign staff, and convert qualified leads into customer profiles."
+          title="Enquiries"
+          description="Capture solar enquiries, track status, assign staff, and convert qualified enquiries into customer profiles."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Add Lead</Button> : null}
+        {canCreate ? <Button onClick={openCreateForm}>Add Enquiry</Button> : null}
       </div>
 
       {conversionLink ? (
@@ -367,9 +367,9 @@ export function LeadsPage() {
       {error ? <EmptyState title="Could not load leads" description={error} /> : null}
       {!loading && !error && filteredLeads.length === 0 ? (
         <EmptyState
-          title="No leads found"
-          description="Add a lead to start tracking enquiries and follow-up status."
-          action={canCreate ? <Button onClick={openCreateForm}>Add Lead</Button> : null}
+          title="No enquiries found"
+          description="Add an enquiry to start tracking enquiries and follow-up status."
+          action={canCreate ? <Button onClick={openCreateForm}>Add Enquiry</Button> : null}
         />
       ) : null}
 
@@ -574,7 +574,7 @@ export function LeadsPage() {
 
       {formState ? (
         <LeadFormModal
-          title={formState.mode === "create" ? "Add Lead" : "Edit Lead"}
+          title={formState.mode === "create" ? "Add Enquiry" : "Edit Enquiry"}
           values={formState.values}
           setValues={(values) =>
             setFormState((current) => (current ? { ...current, values } : current))

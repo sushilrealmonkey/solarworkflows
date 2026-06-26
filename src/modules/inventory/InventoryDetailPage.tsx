@@ -371,7 +371,7 @@ export function InventoryDetailPage() {
             />
             <DetailItem label="HSN Code" value={item.catalog_product?.hsn_code ?? "-"} />
             <DetailItem
-              label="Vendor"
+              label="Supplier"
               value={inventoryVendorName(item) || "-"}
             />
             <DetailItem
@@ -507,7 +507,7 @@ function InventoryBatchesSection({
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Received Date</th>
-                  <th className="px-4 py-3">Vendor</th>
+                  <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Received Qty</th>
                   <th className="px-4 py-3">Remaining Qty</th>
                   <th className="px-4 py-3">Bill No.</th>

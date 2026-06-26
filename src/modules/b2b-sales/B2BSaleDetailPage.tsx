@@ -126,7 +126,7 @@ export function B2BSaleDetailPage() {
       setPayments(nextPayments);
     } catch (nextError) {
       setError(
-        nextError instanceof Error ? nextError.message : "Unable to load B2B/Direct sale.",
+        nextError instanceof Error ? nextError.message : "Unable to load sales order.",
       );
     } finally {
       setLoading(false);
@@ -142,8 +142,8 @@ export function B2BSaleDetailPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="B2B/Direct sale details are not available"
-        description="Your role needs b2b_sales:view access to open B2B/Direct sales."
+        title="Sales order details are not available"
+        description="Your role needs b2b_sales:view access to open sales orders."
       />
     );
   }
@@ -168,11 +168,11 @@ export function B2BSaleDetailPage() {
         deleteMissingItems: canDelete,
       });
       setEditing(null);
-      showToast("B2B/Direct sale updated.", "success");
+      showToast("Sales order updated.", "success");
       await loadSale();
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "B2B/Direct sale update failed.",
+        nextError instanceof Error ? nextError.message : "Sales order update failed.",
         "error",
       );
     } finally {
@@ -194,14 +194,14 @@ export function B2BSaleDetailPage() {
       } else {
         await cancelB2BSale(sale.id);
       }
-      showToast("B2B/Direct sale status updated.", "success");
+      showToast("Sales order status updated.", "success");
       setStatusAction(null);
       await loadSale();
     } catch (nextError) {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "B2B/Direct sale status update failed.",
+          : "Sales order status update failed.",
         "error",
       );
     } finally {
@@ -217,7 +217,7 @@ export function B2BSaleDetailPage() {
     try {
       setCreatingProforma(true);
       const proformaInvoice = await createProformaInvoiceFromB2BSale(sale.id);
-      showToast("Proforma invoice created from B2B/Direct sale.", "success");
+      showToast("Proforma invoice created from sales order.", "success");
       await loadSale();
       navigate(`/proforma-invoices/${proformaInvoice.id}`);
     } catch (nextError) {
@@ -273,7 +273,7 @@ export function B2BSaleDetailPage() {
       setSavingPayment(true);
       await createB2BSalePayment(profile, sale, paymentForm);
       setPaymentForm(null);
-      showToast("B2B/Direct payment recorded.", "success");
+      showToast("Business payment recorded.", "success");
       await loadSale();
     } catch (nextError) {
       showToast(
@@ -288,14 +288,14 @@ export function B2BSaleDetailPage() {
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/b2b-sales">
-        Back to B2B/Direct sales
+        Back to sales orders
       </Link>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load B2B/Direct sale" description={error} /> : null}
+      {error ? <EmptyState title="Could not load sales order" description={error} /> : null}
       {!loading && !error && !sale ? (
         <EmptyState
-          title="B2B/Direct sale not found"
+          title="Sales order not found"
           description="This sale may have been deleted or is outside your organization access."
         />
       ) : null}
@@ -304,7 +304,7 @@ export function B2BSaleDetailPage() {
         <>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <PageHeader
-              title={sale.sale_code ?? "B2B/Direct Sale"}
+              title={sale.sale_code ?? "Sales Order"}
               description={`${sale.customer?.business_name || sale.customer?.full_name || "Customer"} / ${formatDate(sale.sale_date)}`}
             />
             <div className="flex flex-wrap gap-2">
@@ -403,7 +403,7 @@ export function B2BSaleDetailPage() {
                   <div className="mt-4">
                     <EmptyState
                       title="No sale items"
-                      description="Add product line items before confirming this B2B/Direct sale."
+                      description="Add product line items before confirming this sales order."
                     />
                   </div>
                 ) : (
@@ -435,7 +435,7 @@ export function B2BSaleDetailPage() {
 
       {sale && editing ? (
         <B2BSaleFormModal
-          title="Edit B2B/Direct Sale"
+          title="Edit Sales Order"
           values={editing}
           setValues={setEditing}
           errors={formErrors}
@@ -570,7 +570,7 @@ function RelatedPaymentsSection({
       {payments.length === 0 ? (
         <div className="mt-4">
           <EmptyState
-            title="No B2B/Direct payments"
+            title="No business payments"
             description="Record payment after creating the linked proforma invoice."
             action={canCreatePayment ? <Button onClick={onAddPayment}>Add Payment</Button> : null}
           />
@@ -642,26 +642,26 @@ function proformaInvoiceLink(sale: B2BSaleWithRelations, canViewInvoices: boolea
 
 function statusTitle(action: StatusAction) {
   if (action === "dispatch") {
-    return "Dispatch B2B/Direct sale?";
+    return "Dispatch sales order?";
   }
 
   if (action === "cancel") {
-    return "Cancel B2B/Direct sale?";
+    return "Cancel sales order?";
   }
 
-  return "Confirm B2B/Direct sale?";
+  return "Confirm sales order?";
 }
 
 function statusDescription(action: StatusAction, code: string | null) {
   if (action === "dispatch") {
-    return `This will reduce inventory stock for ${code ?? "this B2B/Direct sale"}.`;
+    return `This will reduce inventory stock for ${code ?? "this sales order"}.`;
   }
 
   if (action === "cancel") {
-    return `This will cancel ${code ?? "this B2B/Direct sale"} before dispatch.`;
+    return `This will cancel ${code ?? "this sales order"} before dispatch.`;
   }
 
-  return `This will lock ${code ?? "this B2B/Direct sale"} for invoice and dispatch steps.`;
+  return `This will lock ${code ?? "this sales order"} for invoice and dispatch steps.`;
 }
 
 function statusConfirmLabel(action: StatusAction) {

@@ -88,7 +88,7 @@ export function VendorsPage() {
       setVendors(await fetchVendors(profile));
     } catch (nextError) {
       setError(
-        nextError instanceof Error ? nextError.message : "Unable to load vendors.",
+        nextError instanceof Error ? nextError.message : "Unable to load suppliers.",
       );
     } finally {
       setLoading(false);
@@ -126,7 +126,7 @@ export function VendorsPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="Vendors are not available"
+        title="Suppliers are not available"
         description="Your role needs vendors:view access to open this module."
       />
     );
@@ -182,16 +182,16 @@ export function VendorsPage() {
       setSaving(true);
       if (formState.mode === "create") {
         await createVendor(profile, formState.values);
-        showToast("Vendor created.", "success");
+        showToast("Supplier created.", "success");
       } else if (formState.vendor) {
         await updateVendor(formState.vendor.id, formState.values);
-        showToast("Vendor updated.", "success");
+        showToast("Supplier updated.", "success");
       }
       setFormState(null);
       await loadData();
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Vendor save failed.",
+        nextError instanceof Error ? nextError.message : "Supplier save failed.",
         "error",
       );
     } finally {
@@ -210,11 +210,11 @@ export function VendorsPage() {
       setVendors((current) =>
         current.filter((vendor) => vendor.id !== deleteTarget.id),
       );
-      showToast("Vendor deleted.", "success");
+      showToast("Supplier deleted.", "success");
       setDeleteTarget(null);
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Vendor delete failed.",
+        nextError instanceof Error ? nextError.message : "Supplier delete failed.",
         "error",
       );
     } finally {
@@ -226,14 +226,14 @@ export function VendorsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="Vendors"
+          title="Suppliers"
           description="Manage suppliers, installers, transporters, and service partners."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Add Vendor</Button> : null}
+        {canCreate ? <Button onClick={openCreateForm}>Add Supplier</Button> : null}
       </div>
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <VendorMetricCard label="Total Vendors" value={vendors.length} />
+        <VendorMetricCard label="Total Suppliers" value={vendors.length} />
         <VendorMetricCard
           label="Active"
           value={vendors.filter((vendor) => vendor.status === "active").length}
@@ -255,13 +255,13 @@ export function VendorsPage() {
       <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
         <SearchInput
           className="block"
-          placeholder="Search vendor, contact, phone, or GST"
+          placeholder="Search supplier, contact, phone, or GST"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
         />
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <SelectInput
-            label="Vendor Type"
+            label="Supplier Type"
             value={filters.type}
             onChange={(type) => setFilters((current) => ({ ...current, type }))}
             options={[
@@ -288,12 +288,12 @@ export function VendorsPage() {
       </section>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load vendors" description={error} /> : null}
+      {error ? <EmptyState title="Could not load suppliers" description={error} /> : null}
       {!loading && !error && filteredVendors.length === 0 ? (
         <EmptyState
-          title="No vendors found"
-          description="Add vendors to support purchasing and procurement tracking."
-          action={canCreate ? <Button onClick={openCreateForm}>Add Vendor</Button> : null}
+          title="No suppliers found"
+          description="Add suppliers to support purchasing and procurement tracking."
+          action={canCreate ? <Button onClick={openCreateForm}>Add Supplier</Button> : null}
         />
       ) : null}
 
@@ -304,7 +304,7 @@ export function VendorsPage() {
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Code</th>
-                  <th className="px-4 py-3">Vendor</th>
+                  <th className="px-4 py-3">Supplier</th>
                   <th className="px-4 py-3">Contact</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">GST</th>
@@ -409,7 +409,7 @@ export function VendorsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {vendor.vendor_code ?? "Vendor"}
+                      {vendor.vendor_code ?? "Supplier"}
                     </p>
                     <h2 className="mt-1 text-base font-semibold text-slate-950">
                       {vendor.vendor_name}
@@ -513,7 +513,7 @@ export function VendorsPage() {
 
       {formState ? (
         <VendorFormModal
-          title={formState.mode === "create" ? "Add Vendor" : "Edit Vendor"}
+          title={formState.mode === "create" ? "Add Supplier" : "Edit Supplier"}
           values={formState.values}
           setValues={(values) =>
             setFormState((current) => (current ? { ...current, values } : current))
@@ -527,8 +527,8 @@ export function VendorsPage() {
 
       {deleteTarget ? (
         <ConfirmDialog
-          title="Delete vendor?"
-          description={`This will remove ${deleteTarget.vendor_name}. Vendors linked to purchase orders may be protected by the database.`}
+          title="Delete supplier?"
+          description={`This will remove ${deleteTarget.vendor_name}. Suppliers linked to purchase orders may be protected by the database.`}
           confirming={deleting}
           onCancel={() => setDeleteTarget(null)}
           onConfirm={confirmDelete}
@@ -580,11 +580,11 @@ export function VendorFormModal({
       title={title}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Save Vendor"
+      submitLabel="Save Supplier"
       submitting={saving}
     >
       <TextInput
-        label="Vendor Name"
+        label="Supplier Name"
         value={values.vendor_name}
         onChange={(value) => update("vendor_name", value)}
         error={errors.vendor_name}
@@ -621,7 +621,7 @@ export function VendorFormModal({
         onChange={(value) => update("pan_number", value)}
       />
       <SelectInput
-        label="Vendor Type"
+        label="Supplier Type"
         value={values.vendor_type}
         onChange={(value) => update("vendor_type", value as VendorFormValues["vendor_type"])}
         options={vendorTypeOptions.map((value) => ({

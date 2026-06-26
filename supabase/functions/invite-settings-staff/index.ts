@@ -16,6 +16,15 @@ type StaffProfileRow = {
   status: string | null;
 };
 
+type SettingsRow = {
+  company_name: string | null;
+};
+
+type RoleRow = {
+  id: string;
+  role_name: string | null;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -58,6 +67,15 @@ Deno.serve(async (request) => {
       },
     });
 
+    const inviteMetadata = await resolveInviteMetadata(
+      callerClient,
+      payload.role_id,
+    );
+
+    if (inviteMetadata.error) {
+      return jsonResponse({ error: inviteMetadata.error }, 400);
+    }
+
     const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
@@ -70,6 +88,9 @@ Deno.serve(async (request) => {
         redirectTo: `${appBaseUrl}/create-password`,
         data: {
           full_name: payload.full_name,
+          company_name: inviteMetadata.company_name,
+          staff_role: inviteMetadata.staff_role,
+          staff_role_article: inviteMetadata.staff_role_article,
         },
       });
 
@@ -153,6 +174,67 @@ function validateInviteBody(body: InviteStaffRequestBody) {
     role_id: roleId,
     status,
   };
+}
+
+async function resolveInviteMetadata(
+  callerClient: ReturnType<typeof createClient>,
+  roleId: string | null,
+) {
+  const { data: settingsData, error: settingsError } =
+    await callerClient.rpc("get_organization_settings", {});
+
+  if (settingsError) {
+    return {
+      error: settingsError.message,
+      company_name: null,
+      staff_role: null,
+      staff_role_article: null,
+    };
+  }
+
+  let staffRole: string | null = null;
+
+  if (roleId) {
+    const { data: rolesData, error: rolesError } =
+      await callerClient.rpc("get_settings_roles");
+
+    if (rolesError) {
+      return {
+        error: rolesError.message,
+        company_name: null,
+        staff_role: null,
+        staff_role_article: null,
+      };
+    }
+
+    const role = ((rolesData ?? []) as RoleRow[]).find(
+      (candidate) => candidate.id === roleId,
+    );
+
+    if (!role) {
+      return {
+        error: "Selected staff role could not be found",
+        company_name: null,
+        staff_role: null,
+        staff_role_article: null,
+      };
+    }
+
+    staffRole = normalizeNullableText(role.role_name);
+  }
+
+  const settings = settingsData as SettingsRow | null;
+
+  return {
+    error: null,
+    company_name: normalizeNullableText(settings?.company_name ?? null),
+    staff_role: staffRole,
+    staff_role_article: staffRole ? articleFor(staffRole) : null,
+  };
+}
+
+function articleFor(value: string) {
+  return /^[aeiou]/i.test(value.trim()) ? "an" : "a";
 }
 
 function normalizeText(value: string | undefined) {

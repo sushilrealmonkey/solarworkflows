@@ -33,6 +33,7 @@ import {
   emptyInvoiceItemForm,
   invoiceContextLabel,
   invoiceItemToForm,
+  inventoryItemToInvoiceItemForm,
   isActiveInvoice,
   invoiceStatusOptions,
   invoiceToForm,
@@ -52,6 +53,11 @@ type InvoiceFilters = {
   status: string;
   invoiceDate: string;
   dueDate: string;
+};
+
+type InvoiceItemPrefill = {
+  inventoryItemId?: string;
+  quantity?: string;
 };
 
 export function InvoicesPage() {
@@ -131,7 +137,10 @@ export function InvoicesPage() {
       return;
     }
 
-    void openCreateForm(project);
+    void openCreateForm(project, {
+      inventoryItemId: searchParams.get("inventoryItemId") ?? undefined,
+      quantity: searchParams.get("quantity") ?? undefined,
+    });
     setSearchParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, loading, canCreate, options.projects.length]);
@@ -185,18 +194,23 @@ export function InvoicesPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="Invoices are not available"
+        title="Tax invoices are not available"
         description="Your role needs invoices:view access to open this module."
       />
     );
   }
 
-  async function openCreateForm(project?: InvoiceProjectOption) {
+  async function openCreateForm(
+    project?: InvoiceProjectOption,
+    itemPrefill?: InvoiceItemPrefill,
+  ) {
     let currentProject = project;
+    let currentOptions = options;
 
     try {
       const nextOptions = await fetchInvoiceLinkOptions(profile);
       setOptions(nextOptions);
+      currentOptions = nextOptions;
       currentProject = project
         ? nextOptions.projects.find((option) => option.id === project.id) ?? project
         : undefined;
@@ -210,7 +224,14 @@ export function InvoicesPage() {
     }
 
     const values = emptyInvoiceForm(currentProject, "project");
-    if (currentProject?.quotation_id) {
+    const prefilledInventoryItem = prefillItemFromInventory(
+      currentOptions,
+      itemPrefill,
+    );
+
+    if (prefilledInventoryItem) {
+      values.items = [prefilledInventoryItem];
+    } else if (currentProject?.quotation_id) {
       values.items = await prefillItemsFromQuotation(currentProject.quotation);
     }
 
@@ -400,8 +421,8 @@ export function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="Invoices"
-          description="Create project-first invoices, with manual item invoices available for customer-only billing."
+          title="Tax Invoices"
+          description="Create project-first tax invoices, with manual item tax invoices available for customer-only billing."
         />
         {canCreate ? (
           <Button onClick={() => void openCreateForm()}>
@@ -446,11 +467,11 @@ export function InvoicesPage() {
       </Toolbar>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load invoices" description={error} /> : null}
+      {error ? <EmptyState title="Could not load tax invoices" description={error} /> : null}
       {!loading && !error && filteredInvoices.length === 0 ? (
         <EmptyState
-          title="No invoices found"
-          description="Create a project invoice first, or use a manual item invoice for customer-only billing."
+          title="No tax invoices found"
+          description="Create a project tax invoice first, or use a manual item tax invoice for customer-only billing."
           action={
             canCreate ? (
               <Button onClick={() => void openCreateForm()}>
@@ -660,6 +681,29 @@ function quotationItemToInvoiceItem(item: QuotationItem) {
     unit: item.unit ?? "",
     unit_price: numberToInput(item.unit_price),
     gst_percent: numberToInput(item.gst_percent) || "0",
+  };
+}
+
+function prefillItemFromInventory(
+  options: InvoiceLinkOptions,
+  itemPrefill: InvoiceItemPrefill | undefined,
+) {
+  if (!itemPrefill?.inventoryItemId) {
+    return null;
+  }
+
+  const inventoryItem = options.inventoryItems.find(
+    (item) => item.id === itemPrefill.inventoryItemId,
+  );
+
+  if (!inventoryItem) {
+    return null;
+  }
+
+  const quantity = Number(itemPrefill.quantity);
+  return {
+    ...inventoryItemToInvoiceItemForm(inventoryItem, emptyInvoiceItemForm()),
+    quantity: Number.isFinite(quantity) && quantity > 0 ? String(quantity) : "1",
   };
 }
 

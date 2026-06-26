@@ -160,6 +160,30 @@ export async function fetchInvoices(profile: UserProfile | null) {
   return (data ?? []) as unknown as InvoiceWithRelations[];
 }
 
+export async function fetchProjectInvoices(
+  profile: UserProfile | null,
+  projectId: string,
+) {
+  const client = requireSupabase();
+  let query = client
+    .from("invoices")
+    .select(invoiceSelect)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as unknown as InvoiceWithRelations[];
+}
+
 export async function fetchInvoice(profile: UserProfile | null, id: string) {
   const client = requireSupabase();
   let query = client.from("invoices").select(invoiceSelect).eq("id", id);
