@@ -3,6 +3,23 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-06-29
+
+- Added a shared record-title UI pattern for Enquiry, Site Survey, Quotation,
+  Customer, and Project detail pages using record type, customer/site name, and
+  code/related record/status/phone metadata.
+- Updated enquiry, customer, site survey, quotation, and project screens with
+  next-step actions such as Create Site Survey, Create Quotation, Go to
+  Project, and Create Sale based on existing workflow state and permissions.
+- Added B2B/Direct sale customer snapshot fields for billing address, delivery
+  address, and GST number.
+- Added item-level discount support for B2B sale items and proforma invoice
+  items, including non-negative constraints and recalculated totals.
+- Updated B2B/Direct sale to proforma flow so generated proforma invoices copy
+  item discounts from the sale.
+- Added quotation PDF generation/storage workflow that creates `quotation_pdf`
+  document records and reuses stored previews on quotation detail pages.
+
 ## 2026-06-17
 
 - Added a Super Admin dashboard with EPC-level platform metrics, company setup

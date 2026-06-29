@@ -38,6 +38,10 @@ src/
 Each module should keep its page components, API helpers, types, and utilities
 inside the module folder when practical.
 
+Shared cross-module UI belongs in `src/components`. `RecordTitle` is the shared
+workflow detail heading component currently used by Enquiry, Site Survey,
+Quotation, Customer, and Project detail pages.
+
 ## Routing And Navigation
 
 Routes are declared in `src/app/routes.ts`. Navigation is derived from those
@@ -61,6 +65,11 @@ All tenant-owned business data must have a tenant owner column. The project rule
 prefers `company_id`; existing migrations also use `organization_id` and
 `tenant_id`. Any future normalization must include a migration plan, RLS review,
 and compatibility review.
+
+Generated PDFs are tracked through document metadata and Supabase storage.
+Quotation PDFs use the `quotation_pdf` document type; proforma, invoice, and
+purchase order PDF workflows use their own document types and the same storage
+boundary.
 
 ## Security
 

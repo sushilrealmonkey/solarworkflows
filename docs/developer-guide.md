@@ -60,6 +60,11 @@ also change generated references or examples that need validation.
 - Keep navigation and action controls usable on small screens.
 - Avoid layouts that depend on desktop width to be understandable.
 - Keep shared components consistent before adding new visual patterns.
+- Use `RecordTitle` for the implemented workflow detail title pattern only:
+  Enquiry, Site Survey, Quotation, Customer, and Project. Do not broaden it to
+  unrelated modules without a product decision.
+- Keep next-step action labels workflow-specific and permission-aware. Avoid
+  adding placeholder actions that imply unsupported business logic.
 
 ## Supabase Conventions
 
@@ -83,6 +88,11 @@ also change generated references or examples that need validation.
 - Actual purchase cost belongs to purchase lines and received
   `inventory_batches`; changing current Product Master pricing must never alter
   historical PO or batch costs.
+- B2B/Direct sale customer snapshot fields and item-level discounts must stay
+  aligned between UI form calculations, Supabase triggers/RPCs, and generated
+  proforma invoice items.
+- Generated quotation PDFs should be stored through document metadata as
+  `quotation_pdf` records and reused on detail pages when already present.
 
 ## Super Admin Setup
 

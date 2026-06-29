@@ -38,18 +38,21 @@ dummy workflow data for default testing.
 | B2B/Direct customer | Create or edit a B2B/Direct customer with subtype `b2b_installer`, `retailer`, or `distributor`. | Customer saves with `customer_segment = 'b2b_direct'` and appears in B2B/Direct Sales customer selection. |
 | Segment isolation | Open project, quotation, and site survey customer selectors. | B2B/Direct customers do not appear in installation workflow selectors. |
 | Detail actions | Open a B2B/Direct customer detail page. | Create Sale, View Sales, View Invoices, and View Payments actions appear according to permissions. |
+| Universal title | Open Enquiry, Site Survey, Quotation, Customer, and Project detail pages. | Each page shows record type, customer/site name, and code/related record/status/phone metadata without layout overlap on mobile. |
 
 ## B2B/Direct Sales Validation
 
 | Area | Scenario | Expected Result |
 | --- | --- | --- |
 | Sale create | Create a B2B/Direct sale with multiple active inventory products. | Sale is saved as draft with item snapshots and calculated totals. |
+| Customer snapshots | Create a B2B/Direct sale from a customer with billing address, delivery address, and GST number values. | The sale stores the billing/delivery/GST snapshot values and generated proforma context uses those values. |
+| Item discount | Add a line-level discount to a B2B/Direct sale item. | Line total and sale totals subtract the discount before GST, and negative discounts are blocked. |
 | Pricing access | Create a B2B/Direct sale as a user without `product_pricing:view`. | Product selling prices are not prefilled, but manual unit price entry works. |
 | Confirm sale | Confirm a draft B2B/Direct sale. | Sale status changes to confirmed and remains editable only through allowed actions. |
 | Dispatch stock | Dispatch a confirmed B2B/Direct sale. | Inventory creates one `stock_out` transaction per item and stock decreases once. |
 | Duplicate dispatch | Try to dispatch an already dispatched B2B/Direct sale. | Dispatch is blocked and stock is not reduced again. |
 | Stock shortage | Dispatch a sale whose quantity exceeds available stock after reservations. | Dispatch is blocked with an out-of-stock warning. |
-| Proforma creation | Create a proforma invoice from a B2B/Direct sale. | A linked PI is created with matching item rows and `b2b_sale_id`. |
+| Proforma creation | Create a proforma invoice from a B2B/Direct sale. | A linked PI is created with matching item rows, copied item discounts, and `b2b_sale_id`. |
 | B2B/Direct payment | Record partial and full payments from the B2B/Direct sale or PI detail page. | Payments link to the sale/PI and PI balance/status recalculates. |
 | Final invoice creation | Fully pay the linked PI, then create the final invoice. | A final invoice is created with copied item snapshots and links to the PI and B2B sale. |
 | Project isolation | Create, proforma, pay, invoice, and dispatch a B2B/Direct sale. | No project record is created or required. |
@@ -60,7 +63,16 @@ dummy workflow data for default testing.
 | --- | --- | --- |
 | Project PI | Create a proforma invoice for a project customer with linked project/quotation items. | PI saves with calculated totals and can generate a PI PDF. |
 | Manual PI | Create a customer-only proforma invoice with inventory-linked items. | PI saves without requiring a project or B2B sale. |
+| PI item discount | Create or generate a PI with item-level discounts. | PI item totals and PDF totals reflect discounts before GST. |
 | Partial payment | Record a partial received payment against a PI. | PI status becomes `partially_paid` and balance decreases. |
 | Full payment | Record received payments covering the PI total. | PI status becomes `paid` and the Create Invoice action becomes available. |
 | Conversion guard | Try to create a final invoice from an unpaid, cancelled, or already converted PI. | Conversion is blocked and no duplicate final invoice is created. |
 | PDF storage | Generate and regenerate a PI PDF. | A `proforma_invoice_pdf` document is stored and preview opens from the PI detail page. |
+
+## Quotation Validation
+
+| Area | Scenario | Expected Result |
+| --- | --- | --- |
+| Quotation PDF storage | Open a quotation detail page with `documents:create` access and no existing stored PDF. | A quotation PDF is generated, stored as a `quotation_pdf` document, and exposed as a download/preview action. |
+| Quotation PDF reuse | Reopen the same quotation detail page after a PDF exists. | The stored PDF preview URL is reused rather than creating a duplicate document. |
+| Quotation discount totals | Enter a turnkey discount on a quotation. | Taxable amount, GST, total, detail view, and PDF summary use the discounted turnkey calculation consistently. |

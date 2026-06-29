@@ -73,6 +73,18 @@ final invoice links through `invoices.b2b_sale_id` and
 invoice, and final invoice through `payments.b2b_sale_id`,
 `payments.proforma_invoice_id`, and `payments.invoice_id`.
 
+B2B sales also store customer snapshot fields on the sale record:
+`billing_address`, `delivery_address`, and `gst_number`. These values preserve
+the billing context used for the sale and for generated proforma PDFs even if
+customer profile data changes later.
+
+B2B sale items and proforma invoice items support line-level
+`discount_amount`. The database constrains discounts to non-negative values,
+caps effective discounts at the line gross amount in defaulting triggers, and
+calculates line totals after discount. `create_proforma_invoice_from_b2b_sale`
+copies the sale item discount snapshots into `proforma_invoice_items` so the
+proforma totals match the originating B2B sale.
+
 B2B stock movement happens only when a confirmed sale is dispatched. Dispatch
 creates `stock_out` rows in `inventory_transactions` with
 `reference_type = 'b2b_sale'`; draft, confirmed, and invoiced sales do not
@@ -106,10 +118,11 @@ price, GST, bill number, vendor, and received date. Normal inventory staff acces
 batch history through staff-safe RPCs that omit cost fields unless the user has
 `product_pricing:view`.
 
-Generated proforma invoice, invoice, and purchase order PDFs are stored through
-the same `documents` metadata and organization document storage flow used by
-quotation PDFs. Because PO PDFs include price-bearing purchase totals,
-generation requires both `documents:create` and purchase pricing visibility.
+Generated quotation, proforma invoice, invoice, and purchase order PDFs are
+stored through the same `documents` metadata and organization document storage
+flow. Quotation detail pages use `quotation_pdf` documents for stored previews
+and downloads. Because PO PDFs include price-bearing purchase totals, generation
+requires both `documents:create` and purchase pricing visibility.
 
 ## RLS Expectations
 

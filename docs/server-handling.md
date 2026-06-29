@@ -103,13 +103,18 @@ The frontend custom domain should be configured in Railway as
 - Review RLS whenever a table, view, RPC, or storage bucket changes.
 - Do not manually patch production data without a documented plan.
 - Keep seed data separate from production behavior.
+- Recent migration examples include B2B sale customer snapshot fields and
+  B2B/proforma item discount support. When changing financial totals, update
+  trigger/RPC behavior and UI calculations together.
 
 ## Storage
 
 Storage is used for organization documents and generated PDF-related workflows,
-including quotation, invoice, and purchase order PDFs. Storage access must be
-protected with Supabase policies. Upload, replace, read, and delete behavior
-should be tested with tenant-scoped users, not only admin credentials.
+including quotation, proforma invoice, invoice, and purchase order PDFs. Stored
+quotation PDFs use `quotation_pdf` document metadata and should be reused for
+preview/download when present. Storage access must be protected with Supabase
+policies. Upload, replace, read, and delete behavior should be tested with
+tenant-scoped users, not only admin credentials.
 
 ## Environments
 

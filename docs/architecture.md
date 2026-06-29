@@ -28,6 +28,10 @@ Feature folders should remain self-contained. A typical module may include:
 Shared code should move to `src/components`, `src/services`, or another shared
 location only when multiple modules need it.
 
+Current shared UI includes `src/components/RecordTitle.tsx`, which standardizes
+selected workflow detail page headings. It is used only for the implemented
+record types: Enquiry, Site Survey, Quotation, Customer, and Project.
+
 ## Route Pattern
 
 Routes live in `src/app/routes.ts`. Navigation is derived in
@@ -69,3 +73,9 @@ Future changes must not introduce ambiguous ownership. See
 
 The UI is mobile-first. Desktop layouts may add density and side navigation, but
 mobile usability must remain the default design constraint.
+
+Workflow pages should keep action placement consistent: list and detail views
+may expose next-step actions when the target workflow is already backed by
+permissions and data state. Examples include enquiry to site survey/quotation,
+site survey to quotation/project, quotation to site survey/project, customer to
+sale/project, and project operational actions.
