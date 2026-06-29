@@ -15,6 +15,7 @@ import type {
   QuotationItemFormValues,
   QuotationPaymentTerm,
   QuotationPaymentTermFormValues,
+  QuotationStatus,
   QuotationWarranty,
   QuotationWarrantyFormValues,
   QuotationWithRelations,
@@ -660,6 +661,13 @@ async function attachQuotationChildRows(
   quotations: QuotationWithRelations[],
 ) {
   const quotationIds = quotations.map((quotation) => quotation.id);
+  const leadIds = [
+    ...new Set(
+      quotations
+        .map((quotation) => quotation.lead_id)
+        .filter((leadId): leadId is string => Boolean(leadId)),
+    ),
+  ];
   const [warranties, paymentTerms] = await Promise.all([
     fetchQuotationWarrantiesForQuotations(profile, quotationIds),
     fetchQuotationPaymentTermsForQuotations(profile, quotationIds),
@@ -679,11 +687,120 @@ async function attachQuotationChildRows(
     paymentTermsByQuotation.set(paymentTerm.quotation_id, rows);
   });
 
+  const relatedSurveyIdsByLead = await fetchRelatedSurveyIdsByLead(
+    profile,
+    leadIds,
+  );
+  const relatedSurveyIds = [
+    ...new Set(
+      quotations
+        .map(
+          (quotation) =>
+            quotation.site_survey_id ??
+            (quotation.lead_id
+              ? relatedSurveyIdsByLead.get(quotation.lead_id) ?? null
+              : null),
+        )
+        .filter((surveyId): surveyId is string => Boolean(surveyId)),
+    ),
+  ];
+  const projectIdsByQuotation = await fetchProjectIdsForQuotations(
+    profile,
+    quotationIds,
+    relatedSurveyIds,
+  );
+
   return quotations.map((quotation) => ({
     ...quotation,
     quotation_warranties: warrantiesByQuotation.get(quotation.id) ?? [],
     quotation_payment_terms: paymentTermsByQuotation.get(quotation.id) ?? [],
+    related_site_survey_id:
+      quotation.site_survey_id ??
+      (quotation.lead_id ? relatedSurveyIdsByLead.get(quotation.lead_id) ?? null : null),
+    project_id: projectIdsByQuotation.get(quotation.id) ?? null,
   }));
+}
+
+async function fetchRelatedSurveyIdsByLead(
+  profile: UserProfile | null,
+  leadIds: string[],
+) {
+  const surveyIdsByLead = new Map<string, string>();
+
+  if (leadIds.length === 0) {
+    return surveyIdsByLead;
+  }
+
+  const client = requireSupabase();
+  let query = client
+    .from("site_surveys")
+    .select("id, lead_id")
+    .in("lead_id", leadIds)
+    .order("created_at", { ascending: false });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  (data ?? []).forEach((survey) => {
+    if (survey.lead_id && !surveyIdsByLead.has(survey.lead_id)) {
+      surveyIdsByLead.set(survey.lead_id, survey.id);
+    }
+  });
+
+  return surveyIdsByLead;
+}
+
+async function fetchProjectIdsForQuotations(
+  profile: UserProfile | null,
+  quotationIds: string[],
+  surveyIds: string[],
+) {
+  const projectIdsByQuotation = new Map<string, string>();
+
+  if (quotationIds.length === 0) {
+    return projectIdsByQuotation;
+  }
+
+  const client = requireSupabase();
+  const filters = [`quotation_id.in.(${quotationIds.join(",")})`];
+
+  if (surveyIds.length > 0) {
+    filters.push(`site_survey_id.in.(${surveyIds.join(",")})`);
+  }
+
+  let query = client
+    .from("projects")
+    .select("id, quotation_id, site_survey_id")
+    .or(filters.join(","));
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  (data ?? []).forEach((project) => {
+    if (project.quotation_id && !projectIdsByQuotation.has(project.quotation_id)) {
+      projectIdsByQuotation.set(project.quotation_id, project.id);
+    }
+  });
+
+  return projectIdsByQuotation;
 }
 
 export async function fetchQuotations(profile: UserProfile | null) {
@@ -919,6 +1036,7 @@ export async function createQuotation(
     }
   }
 
+  await completeLinkedSiteSurvey(normalizedValues.site_survey_id);
   return data as Quotation;
 }
 
@@ -1150,6 +1268,54 @@ export async function rejectQuotation(quotationId: string) {
   }
 
   return data as Quotation;
+}
+
+export async function updateQuotationStatus(
+  quotationId: string,
+  status: QuotationStatus,
+) {
+  if (status === "sent") {
+    return markQuotationSent(quotationId);
+  }
+
+  if (status === "accepted") {
+    return acceptQuotation(quotationId);
+  }
+
+  if (status === "rejected") {
+    return rejectQuotation(quotationId);
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("quotations")
+    .update({ status })
+    .eq("id", quotationId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as Quotation;
+}
+
+async function completeLinkedSiteSurvey(siteSurveyId: string) {
+  const trimmedSiteSurveyId = siteSurveyId.trim();
+
+  if (!trimmedSiteSurveyId) {
+    return;
+  }
+
+  const client = requireSupabase();
+  const { error } = await client.rpc("complete_site_survey", {
+    survey_id: trimmedSiteSurveyId,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }
 
 export async function fetchQuotationCustomers(profile: UserProfile | null) {

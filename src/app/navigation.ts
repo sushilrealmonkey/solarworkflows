@@ -68,7 +68,6 @@ export const navigationItems: NavigationItem[] = [
       navigationRoute("/products-materials/categories"),
     ],
   },
-  navigationRoute("/reports"),
   navigationRoute("/settings"),
 ];
 

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -60,6 +60,13 @@ export function QuotationsPage() {
   const canCreate = hasPermission(profile, permissions, "quotations", "create");
   const canUpdate = hasPermission(profile, permissions, "quotations", "update");
   const canDelete = hasPermission(profile, permissions, "quotations", "delete");
+  const canViewProjects = hasPermission(profile, permissions, "projects", "view");
+  const canCreateSurvey = hasPermission(
+    profile,
+    permissions,
+    "site_surveys",
+    "create",
+  );
 
   async function loadData() {
     if (!canView) {
@@ -102,6 +109,11 @@ export function QuotationsPage() {
     const nextParams = new URLSearchParams();
     const leadId = searchParams.get("leadId");
     const siteSurveyId = searchParams.get("siteSurveyId");
+    if (!leadId && !siteSurveyId) {
+      setPrefillHandled(true);
+      setSearchParams({}, { replace: true });
+      return;
+    }
     if (leadId) {
       nextParams.set("leadId", leadId);
     }
@@ -157,12 +169,22 @@ export function QuotationsPage() {
     );
   }
 
-  function openCreateForm() {
-    navigate("/quotations/new");
-  }
-
   function openEditForm(quotation: QuotationWithRelations) {
     navigate(`/quotations/${quotation.id}/edit`);
+  }
+
+  function openQuotationDetail(quotationId: string) {
+    navigate(`/quotations/${quotationId}`);
+  }
+
+  function handleQuotationRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    quotationId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openQuotationDetail(quotationId);
+    }
   }
 
   async function confirmDelete() {
@@ -195,9 +217,8 @@ export function QuotationsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
           title="Quotations"
-          description="Build itemized solar proposals from customers, leads, and completed site survey data."
+          description="Review itemized solar proposals created from enquiries and completed site survey data."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Add Quotation</Button> : null}
       </div>
 
       <Toolbar className="md:grid-cols-3">
@@ -248,58 +269,52 @@ export function QuotationsPage() {
       {!loading && !error && filteredQuotations.length === 0 ? (
         <EmptyState
           title="No quotations found"
-          description="Create a quotation directly or start from a site survey when technical details are ready."
-          action={canCreate ? <Button onClick={openCreateForm}>Add Quotation</Button> : null}
+          description="Quotations will appear here after they are created from an enquiry or site survey."
         />
       ) : null}
 
       {!loading && !error && filteredQuotations.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm 2xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Quotation</th>
                   <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Lead</th>
-                  <th className="px-4 py-3">Capacity</th>
-                  <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3">Subsidy</th>
                   <th className="px-4 py-3">Net Payable</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Quote Date</th>
                   <th className="px-4 py-3">Valid Until</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3 text-right">Next Step</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filteredQuotations.map((quotation) => {
                   const contact = getQuotationContact(quotation);
                   return (
-                    <tr key={quotation.id}>
+                    <tr
+                      key={quotation.id}
+                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                      onClick={() => openQuotationDetail(quotation.id)}
+                      onKeyDown={(event) =>
+                        handleQuotationRowKeyDown(event, quotation.id)
+                      }
+                      role="link"
+                      tabIndex={0}
+                    >
                       <td className="px-4 py-3 font-semibold text-slate-950">
                         {quotation.quotation_code ?? "-"}
                         {quotation.quotation_title ? (
                           <div className="mt-1 text-xs font-normal text-slate-500">
-                            {quotation.quotation_title}
-                          </div>
-                        ) : null}
+                          {quotation.quotation_title}
+                        </div>
+                      ) : null}
                       </td>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900">
+                        <div className="font-medium text-[#06173f]">
                           {contact.customerName}
                         </div>
                         <div className="text-xs text-slate-500">{contact.phone}</div>
-                      </td>
-                      <td className="px-4 py-3">{contact.leadName}</td>
-                      <td className="px-4 py-3">
-                        {formatKw(quotation.system_capacity_kw)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMoney(quotation.total_amount)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatMoney(quotation.subsidy_amount)}
                       </td>
                       <td className="px-4 py-3 font-semibold text-slate-950">
                         {formatMoney(quotation.net_payable_amount)}
@@ -313,26 +328,12 @@ export function QuotationsPage() {
                       <td className="px-4 py-3">
                         {formatDate(quotation.valid_until)}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <ViewLink to={`/quotations/${quotation.id}`}>View</ViewLink>
-                          {canUpdate ? (
-                            <Button
-                              onClick={() => openEditForm(quotation)}
-                              variant="secondary"
-                            >
-                              Edit
-                            </Button>
-                          ) : null}
-                          {canDelete ? (
-                            <Button
-                              onClick={() => setDeleteTarget(quotation)}
-                              variant="danger"
-                            >
-                              Delete
-                            </Button>
-                          ) : null}
-                        </div>
+                      <td className="w-44 px-4 py-3">
+                        <QuotationNextStepActions
+                          canCreateSurvey={canCreateSurvey}
+                          canViewProjects={canViewProjects}
+                          quotation={quotation}
+                        />
                       </td>
                     </tr>
                   );
@@ -341,13 +342,19 @@ export function QuotationsPage() {
             </table>
           </div>
 
-          <div className="grid gap-3 2xl:hidden">
+          <div className="grid gap-3 xl:hidden">
             {filteredQuotations.map((quotation) => {
               const contact = getQuotationContact(quotation);
               return (
                 <article
                   key={quotation.id}
-                  className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+                  className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                  onClick={() => openQuotationDetail(quotation.id)}
+                  onKeyDown={(event) =>
+                    handleQuotationRowKeyDown(event, quotation.id)
+                  }
+                  role="link"
+                  tabIndex={0}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -394,7 +401,21 @@ export function QuotationsPage() {
                       </dd>
                     </div>
                   </dl>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <QuotationNextStepActions
+                      canCreateSurvey={canCreateSurvey}
+                      canViewProjects={canViewProjects}
+                      quotation={quotation}
+                    />
+                  </div>
+                  <div
+                    className="mt-4 flex flex-wrap gap-2"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <ViewLink to={`/quotations/${quotation.id}`}>View</ViewLink>
                     {canUpdate ? (
                       <Button
@@ -429,6 +450,49 @@ export function QuotationsPage() {
           onConfirm={confirmDelete}
         />
       ) : null}
+    </div>
+  );
+}
+
+function QuotationNextStepActions({
+  quotation,
+  canCreateSurvey,
+  canViewProjects,
+}: {
+  quotation: QuotationWithRelations;
+  canCreateSurvey: boolean;
+  canViewProjects: boolean;
+}) {
+  const relatedSiteSurveyId =
+    quotation.related_site_survey_id ?? quotation.site_survey_id;
+  const projectPath = quotation.project_id
+    ? `/projects/${quotation.project_id}`
+    : "/projects";
+  const className =
+    "inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700";
+
+  return (
+    <div
+      className="flex flex-col items-stretch gap-2"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {relatedSiteSurveyId && canViewProjects ? (
+        <Link className={className} to={projectPath}>
+          Go to Project
+        </Link>
+      ) : !relatedSiteSurveyId && canCreateSurvey && quotation.lead_id ? (
+        <Link
+          className={className}
+          to={`/site-surveys?new=1&leadId=${quotation.lead_id}`}
+        >
+          Create Site Survey
+        </Link>
+      ) : (
+        <span className="text-right text-sm font-medium text-slate-500">
+          {relatedSiteSurveyId ? "Project ready" : "No next step available"}
+        </span>
+      )}
     </div>
   );
 }

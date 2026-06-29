@@ -156,6 +156,45 @@ export async function fetchCustomer(profile: UserProfile | null, id: string) {
   return data as Customer | null;
 }
 
+export async function fetchProjectIdsForCustomers(
+  profile: UserProfile | null,
+  customerIds: string[],
+) {
+  const projectIdsByCustomer = new Map<string, string>();
+  const uniqueCustomerIds = [...new Set(customerIds.filter(Boolean))];
+
+  if (uniqueCustomerIds.length === 0) {
+    return projectIdsByCustomer;
+  }
+
+  const client = requireSupabase();
+  let query = client
+    .from("projects")
+    .select("id, customer_id")
+    .in("customer_id", uniqueCustomerIds)
+    .order("created_at", { ascending: false });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  (data ?? []).forEach((project) => {
+    if (project.customer_id && !projectIdsByCustomer.has(project.customer_id)) {
+      projectIdsByCustomer.set(project.customer_id, project.id);
+    }
+  });
+
+  return projectIdsByCustomer;
+}
+
 export async function createCustomer(
   profile: UserProfile | null,
   values: CustomerFormValues,
@@ -241,6 +280,44 @@ export async function deleteCustomer(id: string) {
   }
 }
 
+async function fetchProjectIdForLeadState(
+  profile: UserProfile | null,
+  leadId: string,
+  surveyIds: string[],
+  quotationIds: string[],
+) {
+  const client = requireSupabase();
+  const filters = [`lead_id.eq.${leadId}`];
+
+  if (surveyIds.length > 0) {
+    filters.push(`site_survey_id.in.(${surveyIds.join(",")})`);
+  }
+
+  if (quotationIds.length > 0) {
+    filters.push(`quotation_id.in.(${quotationIds.join(",")})`);
+  }
+
+  let query = client
+    .from("projects")
+    .select("id")
+    .or(filters.join(","))
+    .limit(1);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data?.[0]?.id ?? null;
+}
+
 export async function fetchLeads(profile: UserProfile | null) {
   const client = requireSupabase();
   let query = client
@@ -260,7 +337,143 @@ export async function fetchLeads(profile: UserProfile | null) {
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as Lead[]).filter((lead) => lead.status !== "converted");
+  const leads = ((data ?? []) as Lead[]).filter(
+    (lead) => lead.status !== "converted",
+  );
+  const leadIds = leads.map((lead) => lead.id);
+
+  if (leadIds.length === 0) {
+    return leads;
+  }
+
+  let surveyQuery = client
+    .from("site_surveys")
+    .select("id, lead_id")
+    .in("lead_id", leadIds);
+  let quotationQuery = client
+    .from("quotations")
+    .select("id, lead_id, site_survey_id")
+    .or(
+      `lead_id.in.(${leadIds.join(",")}),site_survey_id.not.is.null`,
+    );
+
+  if (!profile?.is_super_admin) {
+    const organizationId = requireOrganization(profile);
+    surveyQuery = surveyQuery.eq("organization_id", organizationId);
+    quotationQuery = quotationQuery.eq("organization_id", organizationId);
+  } else if (profile.organization_id) {
+    surveyQuery = surveyQuery.eq("organization_id", profile.organization_id);
+    quotationQuery = quotationQuery.eq("organization_id", profile.organization_id);
+  }
+
+  const [
+    { data: surveyRows, error: surveyError },
+    { data: quotationRows, error: quotationError },
+  ] = await Promise.all([surveyQuery, quotationQuery]);
+
+  if (surveyError) {
+    throw new Error(surveyError.message);
+  }
+
+  if (quotationError) {
+    throw new Error(quotationError.message);
+  }
+
+  const surveyIdsByLead = new Map<string, string[]>();
+  (surveyRows ?? []).forEach((survey) => {
+    if (!survey.lead_id) {
+      return;
+    }
+    const rows = surveyIdsByLead.get(survey.lead_id) ?? [];
+    rows.push(survey.id);
+    surveyIdsByLead.set(survey.lead_id, rows);
+  });
+
+  const leadIdsWithQuotation = new Set<string>();
+  const surveyIdsWithQuotation = new Set<string>();
+  const quotationIdsByLead = new Map<string, string[]>();
+  const quotationLeadById = new Map<string, string>();
+  (quotationRows ?? []).forEach((quotation) => {
+    if (quotation.lead_id) {
+      leadIdsWithQuotation.add(quotation.lead_id);
+      const rows = quotationIdsByLead.get(quotation.lead_id) ?? [];
+      rows.push(quotation.id);
+      quotationIdsByLead.set(quotation.lead_id, rows);
+      quotationLeadById.set(quotation.id, quotation.lead_id);
+    }
+    if (quotation.site_survey_id) {
+      surveyIdsWithQuotation.add(quotation.site_survey_id);
+      const surveyLeadId = [...surveyIdsByLead.entries()].find(([, surveyIds]) =>
+        surveyIds.includes(quotation.site_survey_id ?? ""),
+      )?.[0];
+      if (surveyLeadId) {
+        const rows = quotationIdsByLead.get(surveyLeadId) ?? [];
+        rows.push(quotation.id);
+        quotationIdsByLead.set(surveyLeadId, rows);
+        quotationLeadById.set(quotation.id, surveyLeadId);
+      }
+    }
+  });
+
+  const allSurveyIds = [...surveyIdsByLead.values()].flat();
+  const quotationIds = (quotationRows ?? []).map((quotation) => quotation.id);
+  const projectFilters = [`lead_id.in.(${leadIds.join(",")})`];
+
+  if (allSurveyIds.length > 0) {
+    projectFilters.push(`site_survey_id.in.(${allSurveyIds.join(",")})`);
+  }
+
+  if (quotationIds.length > 0) {
+    projectFilters.push(`quotation_id.in.(${quotationIds.join(",")})`);
+  }
+
+  let projectQuery = client
+    .from("projects")
+    .select("id, lead_id, site_survey_id, quotation_id")
+    .or(projectFilters.join(","));
+
+  if (!profile?.is_super_admin) {
+    projectQuery = projectQuery.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    projectQuery = projectQuery.eq("organization_id", profile.organization_id);
+  }
+
+  const { data: projectRows, error: projectError } = await projectQuery;
+
+  if (projectError) {
+    throw new Error(projectError.message);
+  }
+
+  const projectIdsByLead = new Map<string, string>();
+  (projectRows ?? []).forEach((project) => {
+    const surveyLeadId = project.site_survey_id
+      ? [...surveyIdsByLead.entries()].find(([, surveyIds]) =>
+          surveyIds.includes(project.site_survey_id ?? ""),
+        )?.[0]
+      : null;
+    const quotationLeadId = project.quotation_id
+      ? quotationLeadById.get(project.quotation_id)
+      : null;
+    const leadId = project.lead_id ?? surveyLeadId ?? quotationLeadId;
+
+    if (leadId && !projectIdsByLead.has(leadId)) {
+      projectIdsByLead.set(leadId, project.id);
+    }
+  });
+
+  return leads.map((lead) => {
+    const surveyIds = surveyIdsByLead.get(lead.id) ?? [];
+    return {
+      ...lead,
+      action_state: {
+        hasSiteSurvey: surveyIds.length > 0,
+        hasQuotation:
+          leadIdsWithQuotation.has(lead.id) ||
+          surveyIds.some((surveyId) => surveyIdsWithQuotation.has(surveyId)),
+        projectId: projectIdsByLead.get(lead.id) ?? null,
+      },
+    };
+  });
 }
 
 export async function fetchLead(profile: UserProfile | null, id: string) {
@@ -348,10 +561,20 @@ export async function fetchLeadActionState(
     throw new Error(directQuotationError.message);
   }
 
-  if ((directQuotationRows ?? []).length > 0 || surveyIds.length === 0) {
+  const directQuotationIds = (directQuotationRows ?? []).map(
+    (quotation) => quotation.id,
+  );
+
+  if (directQuotationIds.length > 0 || surveyIds.length === 0) {
     return {
       hasSiteSurvey: surveyIds.length > 0,
-      hasQuotation: (directQuotationRows ?? []).length > 0,
+      hasQuotation: directQuotationIds.length > 0,
+      projectId: await fetchProjectIdForLeadState(
+        profile,
+        leadId,
+        surveyIds,
+        directQuotationIds,
+      ),
     };
   }
 
@@ -387,9 +610,19 @@ export async function fetchLeadActionState(
     throw new Error(surveyQuotationError.message);
   }
 
+  const surveyQuotationIds = (surveyQuotationRows ?? []).map(
+    (quotation) => quotation.id,
+  );
+
   return {
     hasSiteSurvey: surveyIds.length > 0,
-    hasQuotation: (surveyQuotationRows ?? []).length > 0,
+    hasQuotation: surveyQuotationIds.length > 0,
+    projectId: await fetchProjectIdForLeadState(
+      profile,
+      leadId,
+      surveyIds,
+      surveyQuotationIds,
+    ),
   };
 }
 

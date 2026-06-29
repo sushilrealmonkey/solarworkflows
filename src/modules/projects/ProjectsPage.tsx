@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
-import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
-  AlertDialog,
   Badge,
-  Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   Modal,
@@ -18,34 +20,21 @@ import {
   TextArea,
   TextInput,
   Toolbar,
-  ViewLink,
 } from "../crm/CrmComponents";
 import {
   formatDate,
   hasPermission,
   labelize,
-  requiredError,
   staffName,
 } from "../crm/crmUtils";
 import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
-import { fetchVendors } from "../vendors/vendorApi";
 import type { Vendor } from "../vendors/types";
 import {
-  createProject,
-  deleteProject,
-  fetchProjectCustomers,
-  fetchProjectQuotations,
   fetchProjects,
-  fetchProjectSiteSurveys,
-  updateProject,
-  updateProjectStatus,
 } from "./projectApi";
 import {
-  emptyProjectForm,
-  filterInstallationVendors,
   formatCustomerAddress,
-  formatKw,
   formatTeamDisplay,
   getProjectContact,
   parseTeamInput,
@@ -53,7 +42,6 @@ import {
   projectPriorityOptions,
   projectStatusOptions,
   projectStatusTone,
-  projectToForm,
   projectTypeOptions,
   teamVendorAssignmentInput,
 } from "./projectUtils";
@@ -79,14 +67,9 @@ type ProjectFilters = {
 
 export function ProjectsPage() {
   const { profile, permissions } = useAuth();
-  const { showToast } = useToast();
   const navigate = useNavigate();
   const [projects, setProjects] = useState<ProjectWithRelations[]>([]);
-  const [customers, setCustomers] = useState<SurveyCustomerSummary[]>([]);
-  const [quotations, setQuotations] = useState<QuotationWithRelations[]>([]);
-  const [siteSurveys, setSiteSurveys] = useState<SiteSurveyWithRelations[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
-  const [installationVendors, setInstallationVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<ProjectFilters>({
@@ -96,28 +79,8 @@ export function ProjectsPage() {
     manager: "",
     startDate: "",
   });
-  const [formState, setFormState] = useState<{
-    mode: "create" | "edit";
-    project: ProjectWithRelations | null;
-    values: ProjectFormValues;
-  } | null>(null);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<ProjectWithRelations | null>(
-    null,
-  );
-  const [deleting, setDeleting] = useState(false);
-  const [statusTarget, setStatusTarget] = useState<{
-    project: ProjectWithRelations;
-    status: ProjectStatus;
-  } | null>(null);
-  const [stockOutAlert, setStockOutAlert] = useState<string | null>(null);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   const canView = hasPermission(profile, permissions, "projects", "view");
-  const canCreate = hasPermission(profile, permissions, "projects", "create");
-  const canUpdate = hasPermission(profile, permissions, "projects", "update");
-  const canDelete = hasPermission(profile, permissions, "projects", "delete");
 
   async function loadData() {
     if (!canView) {
@@ -128,27 +91,12 @@ export function ProjectsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [
-        nextProjects,
-        nextCustomers,
-        nextQuotations,
-        nextSiteSurveys,
-        nextStaff,
-        nextInstallationVendors,
-      ] = await Promise.all([
+      const [nextProjects, nextStaff] = await Promise.all([
         fetchProjects(profile),
-        fetchProjectCustomers(profile),
-        fetchProjectQuotations(profile),
-        fetchProjectSiteSurveys(profile),
         fetchStaffOptions(profile),
-        fetchVendors(profile).then(filterInstallationVendors).catch(() => []),
       ]);
       setProjects(nextProjects);
-      setCustomers(nextCustomers);
-      setQuotations(nextQuotations);
-      setSiteSurveys(nextSiteSurveys);
       setStaff(nextStaff);
-      setInstallationVendors(nextInstallationVendors);
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load projects.",
@@ -207,114 +155,17 @@ export function ProjectsPage() {
     );
   }
 
-  function openCreateForm() {
-    setFormErrors({});
-    setFormState({
-      mode: "create",
-      project: null,
-      values: emptyProjectForm(),
-    });
+  function openProjectDetail(projectId: string) {
+    navigate(`/projects/${projectId}`);
   }
 
-  function openEditForm(project: ProjectWithRelations) {
-    setFormErrors({});
-    setFormState({
-      mode: "edit",
-      project,
-      values: projectToForm(project),
-    });
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!formState) {
-      return;
-    }
-
-    const nextErrors = {
-      customer_id: requiredError(formState.values.customer_id, "Customer"),
-      project_name: requiredError(formState.values.project_name, "Project name"),
-    };
-    setFormErrors(nextErrors);
-
-    if (Object.values(nextErrors).some(Boolean)) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      if (formState.mode === "create") {
-        const project = await createProject(profile, formState.values);
-        showToast("Project created.", "success");
-        setFormState(null);
-        navigate(`/projects/${project.id}`);
-        return;
-      }
-
-      if (formState.project) {
-        await updateProject(formState.project.id, formState.values);
-        showToast("Project updated.", "success");
-        setFormState(null);
-        await loadData();
-      }
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Project save failed.",
-        "error",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteProject(deleteTarget.id);
-      setProjects((current) =>
-        current.filter((project) => project.id !== deleteTarget.id),
-      );
-      showToast("Project deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Project delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  async function confirmStatusUpdate() {
-    if (!statusTarget) {
-      return;
-    }
-
-    try {
-      setUpdatingStatus(true);
-      await updateProjectStatus(statusTarget.project.id, statusTarget.status);
-      showToast("Project status updated.", "success");
-      setStatusTarget(null);
-      await loadData();
-    } catch (nextError) {
-      const message =
-        nextError instanceof Error
-          ? nextError.message
-          : "Project status update failed.";
-
-      if (statusTarget.status === "material_dispatched") {
-        setStockOutAlert(message);
-      } else {
-        showToast(message, "error");
-      }
-    } finally {
-      setUpdatingStatus(false);
+  function handleProjectRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    projectId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openProjectDetail(projectId);
     }
   }
 
@@ -323,9 +174,8 @@ export function ProjectsPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
           title="Projects"
-          description="Track accepted solar installations from project creation through commissioning."
+          description="Track accepted solar installations created from quotation approval through commissioning."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Add Project</Button> : null}
       </div>
 
       <Toolbar className="md:grid-cols-4">
@@ -390,48 +240,51 @@ export function ProjectsPage() {
       {!loading && !error && filteredProjects.length === 0 ? (
         <EmptyState
           title="No projects found"
-          description="Create a project manually or convert an accepted quotation into an installation project."
-          action={canCreate ? <Button onClick={openCreateForm}>Add Project</Button> : null}
+          description="Projects will appear here after an accepted quotation is converted into an installation project."
         />
       ) : null}
 
       {!loading && !error && filteredProjects.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm 2xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Code</th>
+                  <th className="px-4 py-3">Project Code</th>
                   <th className="px-4 py-3">Project</th>
-                  <th className="px-4 py-3">Customer</th>
-                  <th className="px-4 py-3">Capacity</th>
+                  <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Priority</th>
-                  <th className="px-4 py-3">Manager</th>
-                  <th className="px-4 py-3">Start</th>
-                  <th className="px-4 py-3">Expected</th>
+                  <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filteredProjects.map((project) => {
                   const contact = getProjectContact(project);
                   return (
-                    <tr key={project.id}>
+                    <tr
+                      key={project.id}
+                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                      onClick={() => openProjectDetail(project.id)}
+                      onKeyDown={(event) =>
+                        handleProjectRowKeyDown(event, project.id)
+                      }
+                      role="link"
+                      tabIndex={0}
+                    >
                       <td className="px-4 py-3 font-semibold text-slate-950">
                         {project.project_code ?? "-"}
                       </td>
-                      <td className="px-4 py-3">{project.project_name ?? "-"}</td>
                       <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900">
+                        <div className="font-medium text-[#06173f]">
+                          {project.project_name ?? contact.customerName}
+                        </div>
+                        <div className="text-xs text-slate-500">
                           {contact.customerName}
                         </div>
-                        <div className="text-xs text-slate-500">{contact.phone}</div>
                       </td>
-                      <td className="px-4 py-3">
-                        {formatKw(project.system_capacity_kw)}
-                      </td>
+                      <td className="px-4 py-3">{contact.phone}</td>
                       <td className="px-4 py-3">
                         <ProjectStatusBadge value={project.project_status} />
                       </td>
@@ -441,41 +294,7 @@ export function ProjectsPage() {
                       <td className="px-4 py-3">
                         {staffName(staff, project.assigned_project_manager)}
                       </td>
-                      <td className="px-4 py-3">{formatDate(project.start_date)}</td>
-                      <td className="px-4 py-3">
-                        {formatDate(project.expected_completion_date)}
-                      </td>
                       <td className="px-4 py-3">{formatDate(project.created_at)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <ViewLink to={`/projects/${project.id}`}>View</ViewLink>
-                          {canUpdate ? (
-                            <>
-                              <Button
-                                onClick={() => openEditForm(project)}
-                                variant="secondary"
-                              >
-                                Edit
-                              </Button>
-                              <ProjectStatusSelect
-                                disabled={updatingStatus}
-                                value={project.project_status ?? "created"}
-                                onChange={(status) =>
-                                  setStatusTarget({ project, status })
-                                }
-                              />
-                            </>
-                          ) : null}
-                          {canDelete ? (
-                            <Button
-                              onClick={() => setDeleteTarget(project)}
-                              variant="danger"
-                            >
-                              Delete
-                            </Button>
-                          ) : null}
-                        </div>
-                      </td>
                     </tr>
                   );
                 })}
@@ -483,13 +302,17 @@ export function ProjectsPage() {
             </table>
           </div>
 
-          <div className="grid gap-3 2xl:hidden">
+          <div className="grid gap-3 xl:hidden">
             {filteredProjects.map((project) => {
               const contact = getProjectContact(project);
               return (
                 <article
                   key={project.id}
-                  className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+                  className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                  onClick={() => openProjectDetail(project.id)}
+                  onKeyDown={(event) => handleProjectRowKeyDown(event, project.id)}
+                  role="link"
+                  tabIndex={0}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -500,16 +323,16 @@ export function ProjectsPage() {
                         {project.project_name ?? contact.customerName}
                       </h2>
                       <p className="mt-1 text-sm text-slate-600">
-                        {contact.customerName} / {contact.phone}
+                        {contact.phone}
                       </p>
                     </div>
                     <ProjectStatusBadge value={project.project_status} />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <dt className="text-xs text-slate-500">Capacity</dt>
+                      <dt className="text-xs text-slate-500">Customer</dt>
                       <dd className="font-medium text-slate-900">
-                        {formatKw(project.system_capacity_kw)}
+                        {contact.customerName}
                       </dd>
                     </div>
                     <div>
@@ -519,105 +342,23 @@ export function ProjectsPage() {
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-slate-500">Start</dt>
+                      <dt className="text-xs text-slate-500">Created</dt>
                       <dd className="font-medium text-slate-900">
-                        {formatDate(project.start_date)}
+                        {formatDate(project.created_at)}
                       </dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-slate-500">Manager</dt>
+                      <dt className="text-xs text-slate-500">Assigned</dt>
                       <dd className="font-medium text-slate-900">
                         {staffName(staff, project.assigned_project_manager)}
                       </dd>
                     </div>
                   </dl>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <ViewLink to={`/projects/${project.id}`}>View</ViewLink>
-                    {canUpdate ? (
-                      <>
-                        <Button
-                          onClick={() => openEditForm(project)}
-                          variant="secondary"
-                        >
-                          Edit
-                        </Button>
-                        <ProjectStatusSelect
-                          disabled={updatingStatus}
-                          value={project.project_status ?? "created"}
-                          onChange={(status) => setStatusTarget({ project, status })}
-                        />
-                      </>
-                    ) : null}
-                    {canDelete ? (
-                      <Button
-                        onClick={() => setDeleteTarget(project)}
-                        variant="danger"
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
-                  </div>
                 </article>
               );
             })}
           </div>
         </>
-      ) : null}
-
-      {formState ? (
-        <ProjectFormModal
-          title={formState.mode === "create" ? "Add Project" : "Edit Project"}
-          values={formState.values}
-          setValues={(values) =>
-            setFormState((current) => (current ? { ...current, values } : current))
-          }
-          errors={formErrors}
-          customers={customers}
-          quotations={quotations}
-          siteSurveys={siteSurveys}
-          staff={staff}
-          installationVendors={installationVendors}
-          onClose={() => setFormState(null)}
-          onSubmit={handleSubmit}
-          saving={saving}
-        />
-      ) : null}
-
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete project?"
-          description={`This will remove ${deleteTarget.project_name ?? deleteTarget.project_code ?? "this project"} from the installation workflow.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
-
-      {statusTarget ? (
-        <ConfirmDialog
-          title={
-            statusTarget.status === "cancelled"
-              ? "Cancel project?"
-              : "Update project status?"
-          }
-          description={`Set ${statusTarget.project.project_code ?? "this project"} to ${labelize(statusTarget.status)}.`}
-          confirming={updatingStatus}
-          confirmLabel={
-            statusTarget.status === "cancelled" ? "Cancel Project" : "Update Status"
-          }
-          confirmingLabel="Updating..."
-          confirmVariant={statusTarget.status === "cancelled" ? "danger" : "primary"}
-          onCancel={() => setStatusTarget(null)}
-          onConfirm={confirmStatusUpdate}
-        />
-      ) : null}
-
-      {stockOutAlert ? (
-        <AlertDialog
-          title="BOM stock out entry is not placed"
-          description={stockOutAlert}
-          onClose={() => setStockOutAlert(null)}
-        />
       ) : null}
     </div>
   );

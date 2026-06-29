@@ -105,6 +105,11 @@ const surveySelect = `
     state,
     pincode,
     assigned_to
+  ),
+  quotations:quotations!quotations_site_survey_id_fkey(
+    id,
+    quotation_code,
+    status
   )
 `;
 
@@ -127,7 +132,11 @@ export async function fetchSiteSurveys(profile: UserProfile | null) {
     throw new Error(error.message);
   }
 
-  return (data ?? []) as SiteSurveyWithRelations[];
+  const surveys = await attachSurveyProjectIds(
+    profile,
+    (data ?? []) as SiteSurveyWithRelations[],
+  );
+  return addSurveyFileUrls(surveys);
 }
 
 export async function fetchSiteSurvey(profile: UserProfile | null, id: string) {
@@ -144,7 +153,12 @@ export async function fetchSiteSurvey(profile: UserProfile | null, id: string) {
     throw new Error(error.message);
   }
 
-  return data as SiteSurveyWithRelations | null;
+  const surveys = await attachSurveyProjectIds(
+    profile,
+    data ? ([data] as SiteSurveyWithRelations[]) : [],
+  );
+  const [survey] = await addSurveyFileUrls(surveys);
+  return survey ?? null;
 }
 
 export async function createSiteSurvey(
@@ -244,7 +258,8 @@ export async function uploadSiteSurveyPhoto(
     throw new Error(error.message);
   }
 
-  return data as SiteSurveyWithRelations;
+  const [nextSurvey] = await addSurveyFileUrls([data as SiteSurveyWithRelations]);
+  return nextSurvey;
 }
 
 export async function uploadSiteSurveyDocument(
@@ -260,7 +275,7 @@ export async function uploadSiteSurveyDocument(
   );
   const { data, error } = await requireSupabase()
     .from("site_surveys")
-    .update({ electricity_bill_url: uploadedFile.url })
+    .update({ electricity_bill_url: uploadedFile.file_path ?? uploadedFile.url })
     .eq("id", survey.id)
     .select(surveySelect)
     .single();
@@ -269,7 +284,8 @@ export async function uploadSiteSurveyDocument(
     throw new Error(error.message);
   }
 
-  return data as SiteSurveyWithRelations;
+  const [nextSurvey] = await addSurveyFileUrls([data as SiteSurveyWithRelations]);
+  return nextSurvey;
 }
 
 export async function deleteSiteSurvey(id: string) {
@@ -320,6 +336,137 @@ async function uploadSiteSurveyFile(
     mime_type: file.type || undefined,
     uploaded_at: new Date().toISOString(),
   } satisfies SiteSurveyFile;
+}
+
+async function addSurveyFileUrls(surveys: SiteSurveyWithRelations[]) {
+  const client = requireSupabase();
+
+  return Promise.all(
+    surveys.map(async (survey) => {
+      const sitePhotos = await Promise.all(
+        (survey.site_photos ?? []).map(async (photo) => {
+          const filePath = photo.file_path ?? storagePathFromUrl(photo.url);
+          if (!filePath) {
+            return photo;
+          }
+
+          const { data } = await client.storage
+            .from(siteSurveyUploadBucket)
+            .createSignedUrl(filePath, 60 * 10);
+
+          return {
+            ...photo,
+            file_path: filePath,
+            url: data?.signedUrl ?? photo.url,
+          };
+        }),
+      );
+      const documentPath = storagePathFromUrl(survey.electricity_bill_url);
+      let electricityBillUrl = survey.electricity_bill_url;
+
+      if (documentPath) {
+        const { data } = await client.storage
+          .from(siteSurveyUploadBucket)
+          .createSignedUrl(documentPath, 60 * 10);
+        electricityBillUrl = data?.signedUrl ?? survey.electricity_bill_url;
+      }
+
+      return {
+        ...survey,
+        site_photos: sitePhotos,
+        electricity_bill_url: electricityBillUrl,
+      };
+    }),
+  );
+}
+
+async function attachSurveyProjectIds(
+  profile: UserProfile | null,
+  surveys: SiteSurveyWithRelations[],
+) {
+  if (surveys.length === 0) {
+    return surveys;
+  }
+
+  const client = requireSupabase();
+  const surveyIds = surveys.map((survey) => survey.id);
+  const quotationIds = surveys.flatMap((survey) =>
+    (survey.quotations ?? []).map((quotation) => quotation.id),
+  );
+  const filters = [`site_survey_id.in.(${surveyIds.join(",")})`];
+
+  if (quotationIds.length > 0) {
+    filters.push(`quotation_id.in.(${quotationIds.join(",")})`);
+  }
+
+  let query = client
+    .from("projects")
+    .select("id, site_survey_id, quotation_id")
+    .or(filters.join(","));
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const projectIdsBySurvey = new Map<string, string>();
+  const surveyIdByQuotation = new Map<string, string>();
+
+  surveys.forEach((survey) => {
+    (survey.quotations ?? []).forEach((quotation) => {
+      surveyIdByQuotation.set(quotation.id, survey.id);
+    });
+  });
+
+  (data ?? []).forEach((project) => {
+    const surveyId = project.site_survey_id
+      ? project.site_survey_id
+      : project.quotation_id
+        ? surveyIdByQuotation.get(project.quotation_id)
+        : null;
+
+    if (surveyId && !projectIdsBySurvey.has(surveyId)) {
+      projectIdsBySurvey.set(surveyId, project.id);
+    }
+  });
+
+  return surveys.map((survey) => ({
+    ...survey,
+    project_id: projectIdsBySurvey.get(survey.id) ?? null,
+  }));
+}
+
+function storagePathFromUrl(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  const marker = `/object/public/${siteSurveyUploadBucket}/`;
+  const markerIndex = value.indexOf(marker);
+  if (markerIndex >= 0) {
+    return decodeURIComponent(value.slice(markerIndex + marker.length));
+  }
+
+  const signedMarker = `/object/sign/${siteSurveyUploadBucket}/`;
+  const signedMarkerIndex = value.indexOf(signedMarker);
+  if (signedMarkerIndex >= 0) {
+    return decodeURIComponent(
+      value.slice(signedMarkerIndex + signedMarker.length).split("?")[0] ?? "",
+    );
+  }
+
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return "";
+  }
+
+  return value;
 }
 
 function sanitizeFileName(value: string) {

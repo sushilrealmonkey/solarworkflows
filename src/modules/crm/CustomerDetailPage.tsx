@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { PageHeader } from "../../components/PageHeader";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   deleteCustomer,
   fetchCustomer,
+  fetchProjectIdsForCustomers,
   fetchStaffOptions,
   updateCustomer,
 } from "./crmApi";
@@ -17,6 +18,7 @@ import {
   formatDate,
   hasPermission,
   labelize,
+  normalizeCustomerSubmitValues,
   requiredError,
   staffName,
 } from "./crmUtils";
@@ -30,6 +32,9 @@ import {
   EmptyState,
   LoadingSkeleton,
   Modal,
+  NextStepLabel,
+  PencilIcon,
+  PlaceholderAction,
   SelectInput,
   StaffSelect,
   StatusBadge,
@@ -63,6 +68,7 @@ export function CustomerDetailPage() {
   const navigate = useNavigate();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<CustomerFormValues | null>(null);
@@ -91,6 +97,7 @@ export function CustomerDetailPage() {
   const canViewInvoices = hasPermission(profile, permissions, "invoices", "view");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canViewDocuments = hasPermission(profile, permissions, "documents", "view");
+  const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateDocument = hasPermission(
     profile,
     permissions,
@@ -103,6 +110,8 @@ export function CustomerDetailPage() {
     "documents",
     "delete",
   );
+  const primaryActionClass =
+    "inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700";
 
   async function loadCustomer() {
     if (!canView || !id) {
@@ -119,9 +128,16 @@ export function CustomerDetailPage() {
           fetchStaffOptions(profile),
           canViewDocuments ? fetchDocuments(profile, { customerId: id }) : [],
         ]);
+      const nextProjectIdsByCustomer =
+        nextCustomer && canViewProjects
+          ? await fetchProjectIdsForCustomers(profile, [nextCustomer.id])
+          : new Map<string, string>();
       setCustomer(nextCustomer);
       setStaff(nextStaff);
       setDocuments(nextDocuments);
+      setProjectId(
+        nextCustomer ? nextProjectIdsByCustomer.get(nextCustomer.id) ?? null : null,
+      );
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -137,7 +153,7 @@ export function CustomerDetailPage() {
     void loadCustomer();
     // loadCustomer closes over the current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, canViewDocuments, id, profile?.id]);
+  }, [canView, canViewDocuments, canViewProjects, id, profile?.id]);
 
   if (!canView) {
     return (
@@ -299,39 +315,61 @@ export function CustomerDetailPage() {
       {customer ? (
         <>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <PageHeader
-              title={
+            <RecordTitle
+              recordType="Customer"
+              name={
                 customer.customer_segment === "b2b_direct"
                   ? customer.business_name || customer.full_name
                   : customer.full_name
               }
-              description={`${customer.customer_code ?? "Customer"} / ${customer.phone}`}
+              meta={[
+                customer.customer_code ?? "Customer",
+                customer.lead_source,
+                labelize(customer.status),
+                customer.phone,
+              ]}
+              action={
+                canUpdate ? (
+                  <button
+                    aria-label="Edit customer"
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
+                    onClick={() => {
+                      setFormErrors({});
+                      setEditing(customerToForm(customer));
+                    }}
+                    title="Edit customer"
+                    type="button"
+                  >
+                    <PencilIcon />
+                  </button>
+                ) : null
+              }
             />
-            <div className="flex flex-wrap gap-2">
-              {customer.customer_segment === "b2b_direct" && canCreateB2BSale ? (
-                <Link
-                  className="inline-flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700"
-                  to={`/b2b-sales?customerId=${customer.id}&new=1`}
-                >
-                  Create Sale
-                </Link>
-              ) : null}
-              {canUpdate ? (
-                <Button
-                  onClick={() => {
-                    setFormErrors({});
-                    setEditing(customerToForm(customer));
-                  }}
-                  variant="secondary"
-                >
-                  Edit Customer
-                </Button>
-              ) : null}
-              {canDelete ? (
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Customer
-                </Button>
-              ) : null}
+            <div className="space-y-3 sm:text-right">
+              <NextStepLabel />
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                {customer.customer_segment === "b2b_direct" ? (
+                  canCreateB2BSale ? (
+                    <Link
+                      className={primaryActionClass}
+                      to={`/b2b-sales?customerId=${customer.id}&new=1`}
+                    >
+                      Create Sale
+                    </Link>
+                  ) : (
+                    <PlaceholderAction>Create Sale</PlaceholderAction>
+                  )
+                ) : projectId && canViewProjects ? (
+                  <Link
+                    className={primaryActionClass}
+                    to={`/projects/${projectId}`}
+                  >
+                    Go to Project
+                  </Link>
+                ) : (
+                  <PlaceholderAction>Go to Project</PlaceholderAction>
+                )}
+              </div>
             </div>
           </div>
 
@@ -437,6 +475,24 @@ export function CustomerDetailPage() {
                 ) : null}
               </div>
             </DetailSection>
+          ) : null}
+
+          {canDelete ? (
+            <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-rose-900">
+                    Danger Zone
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-slate-600">
+                    Delete this customer record from the organization.
+                  </p>
+                </div>
+                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
+                  Delete Customer
+                </Button>
+              </div>
+            </section>
           ) : null}
         </>
       ) : null}
@@ -559,31 +615,4 @@ function customerListPath(customer: Customer | null) {
   return customer?.customer_segment === "b2b_direct"
     ? "/customers/b2b-direct"
     : "/customers/project-based";
-}
-
-function normalizeCustomerSubmitValues(
-  values: CustomerFormValues,
-): CustomerFormValues {
-  if (values.customer_segment === "project_based") {
-    return {
-      ...values,
-      customer_segment: "project_based",
-      business_name: "",
-      gst_number: "",
-      contact_person_name: "",
-    };
-  }
-
-  return {
-    ...values,
-    customer_segment: "b2b_direct",
-    customer_type: "b2b_installer",
-    status: "active",
-    full_name:
-      values.contact_person_name.trim() ||
-      values.full_name.trim() ||
-      values.business_name.trim(),
-    lead_source: "",
-    assigned_to: "",
-  };
 }

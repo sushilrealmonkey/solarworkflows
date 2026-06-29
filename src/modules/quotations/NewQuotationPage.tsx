@@ -25,6 +25,7 @@ import type {
 import {
   createQuotation,
   fetchQuotation,
+  fetchQuotationItems,
   fetchNextQuotationCode,
   fetchQuotationCustomers,
   fetchQuotationLead,
@@ -68,6 +69,7 @@ import {
   quotationSiteTypeOptions,
   quotationSystemTypeOptions,
   quotationUnitOptions,
+  quotationValidUntilFromDateInput,
   quotationToForm,
   surveyToQuotationForm,
 } from "./quotationUtils";
@@ -77,6 +79,7 @@ import type {
   QuotationPaymentTermFormValues,
   QuotationWarrantyFormValues,
 } from "./types";
+import { generateAndStoreQuotationPdf } from "./quotationPdfWorkflow";
 
 const tabs = [
   "Project",
@@ -106,7 +109,7 @@ const standardPanelWattages = [
 ];
 
 export function NewQuotationPage() {
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, organization } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const { id: editQuotationId } = useParams();
@@ -134,7 +137,16 @@ export function NewQuotationPage() {
   const canView = hasPermission(profile, permissions, "quotations", "view");
   const canCreate = hasPermission(profile, permissions, "quotations", "create");
   const canUpdate = hasPermission(profile, permissions, "quotations", "update");
+  const canCreateDocuments = hasPermission(
+    profile,
+    permissions,
+    "documents",
+    "create",
+  );
   const canSave = isEditing ? canUpdate : canCreate;
+  const hasLinkedCreateSource = Boolean(
+    searchParams.get("leadId") || searchParams.get("siteSurveyId"),
+  );
 
   useEffect(() => {
     async function loadOptions() {
@@ -311,6 +323,15 @@ export function NewQuotationPage() {
     );
   }
 
+  if (!isEditing && !hasLinkedCreateSource) {
+    return (
+      <AccessDenied
+        title="New quotation starts from an enquiry"
+        description="Open an enquiry or site survey and use Create Quotation to continue the workflow."
+      />
+    );
+  }
+
   function update(key: keyof QuotationFormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
   }
@@ -319,7 +340,7 @@ export function NewQuotationPage() {
     setValues((current) => ({
       ...current,
       quotation_date: quotationDate,
-      valid_until: oneMonthFromDateInput(quotationDate),
+      valid_until: quotationValidUntilFromDateInput(quotationDate),
     }));
   }
 
@@ -518,8 +539,45 @@ export function NewQuotationPage() {
             prepareNewQuotationValues(values),
           )
         : await createQuotation(profile, prepareNewQuotationValues(values));
+
+      let pdfGenerated = false;
+      try {
+        if (canCreateDocuments) {
+          const fullQuotation = await fetchQuotation(profile, quotation.id);
+          const quotationItems = await fetchQuotationItems(profile, quotation.id);
+
+          if (fullQuotation) {
+            await generateAndStoreQuotationPdf(
+              profile,
+              organization,
+              fullQuotation,
+              quotationItems,
+            );
+            pdfGenerated = true;
+          }
+        } else {
+          showToast(
+            "Quotation saved, but your role needs documents:create access to generate its PDF automatically.",
+            "error",
+          );
+        }
+      } catch (pdfError) {
+        showToast(
+          pdfError instanceof Error
+            ? `Quotation saved, but PDF generation failed: ${pdfError.message}`
+            : "Quotation saved, but PDF generation failed.",
+          "error",
+        );
+      }
+
       showToast(
-        editQuotationId ? "Quotation updated." : "Quotation created.",
+        pdfGenerated
+          ? editQuotationId
+            ? "Quotation updated and PDF refreshed."
+            : "Quotation created and PDF generated."
+          : editQuotationId
+            ? "Quotation updated."
+            : "Quotation created.",
         "success",
       );
       navigate(`/quotations/${quotation.id}`);
@@ -1580,7 +1638,7 @@ function PreviewText({ label, value }: { label: string; value: string }) {
 
 function newQuotationDefaults(values: QuotationFormValues): QuotationFormValues {
   const validUntil =
-    oneMonthFromDateInput(values.quotation_date) || values.valid_until;
+    quotationValidUntilFromDateInput(values.quotation_date) || values.valid_until;
   const paymentTermRows =
     values.payment_term_rows.length > 0
       ? values.payment_term_rows
@@ -1971,30 +2029,3 @@ function calculatePaymentTermAmount(percentage: string, totalAmount: string) {
   return String(Math.round((amount * percent / 100) * 100) / 100);
 }
 
-function oneMonthFromDateInput(value: string) {
-  if (!value) {
-    return "";
-  }
-
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) {
-    return "";
-  }
-
-  const [, year, month, day] = match;
-  const originalDay = Number(day);
-  const nextDate = new Date(Number(year), Number(month) - 1, 1);
-  nextDate.setMonth(nextDate.getMonth() + 1);
-  const lastDayOfTargetMonth = new Date(
-    nextDate.getFullYear(),
-    nextDate.getMonth() + 1,
-    0,
-  ).getDate();
-  nextDate.setDate(Math.min(originalDay, lastDayOfTargetMonth));
-
-  return [
-    String(nextDate.getFullYear()),
-    String(nextDate.getMonth() + 1).padStart(2, "0"),
-    String(nextDate.getDate()).padStart(2, "0"),
-  ].join("-");
-}

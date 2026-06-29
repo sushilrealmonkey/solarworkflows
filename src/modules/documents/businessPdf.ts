@@ -23,6 +23,7 @@ import {
   deriveQuotationMaterialSummary,
   formatIndianCurrencyInWords,
   hasTurnkeyGstAmount,
+  quotationValidUntilFromDateInput,
 } from "../quotations/quotationUtils";
 import {
   isStaleDynamicImportError,
@@ -331,6 +332,16 @@ export async function buildProformaInvoicePdf(
   organization: OrganizationBranding,
   settings: OrganizationSettings,
 ) {
+  const billingAddress =
+    proformaInvoice.b2b_sale?.billing_address ||
+    (proformaInvoice.customer
+      ? formatCustomerAddress(proformaInvoice.customer)
+      : null);
+  const deliveryAddress = proformaInvoice.b2b_sale?.delivery_address ?? "";
+  const gstNumber =
+    proformaInvoice.b2b_sale?.gst_number ||
+    proformaInvoice.customer?.gst_number ||
+    "";
   const details: Array<[string, string]> = [
     [
       "Proforma Type",
@@ -381,16 +392,13 @@ export async function buildProformaInvoicePdf(
       code: proformaInvoice.customer?.customer_code,
       phone: proformaInvoice.customer?.phone,
       email: proformaInvoice.customer?.email,
-      address: proformaInvoice.customer
-        ? formatCustomerAddress(proformaInvoice.customer)
-        : null,
+      address: billingAddress,
       extraLines: [
         proformaInvoice.customer?.contact_person_name
           ? `Contact: ${proformaInvoice.customer.contact_person_name}`
           : "",
-        proformaInvoice.customer?.gst_number
-          ? `GST: ${proformaInvoice.customer.gst_number}`
-          : "",
+        gstNumber ? `GST: ${gstNumber}` : "",
+        deliveryAddress ? `Delivery Address: ${deliveryAddress}` : "",
       ].filter(Boolean),
     },
     details,
@@ -642,7 +650,7 @@ function drawTechnicalClientHeaderCard(
     [
       "Valid Until",
       formatDate(
-        oneMonthFromDate(quotation.quotation_date),
+        quotationValidUntilFromDateInput(quotation.quotation_date),
         context.settings.date_format,
       ),
     ],
@@ -1467,9 +1475,21 @@ function drawPartyAndDetails(
   y: number,
 ) {
   const columnWidth = (contentWidth - 6) / 2;
+  const customerLines = [
+    input.customer.code ? `Code: ${input.customer.code}` : "",
+    input.customer.phone ? `Phone: ${input.customer.phone}` : "",
+    input.customer.email ? `Email: ${input.customer.email}` : "",
+    input.customer.address ?? "",
+    ...(input.customer.extraLines ?? []),
+  ].filter(Boolean);
+  const estimatedCustomerLineCount = customerLines.reduce(
+    (count, line) => count + Math.max(Math.ceil(line.length / 45), 1),
+    0,
+  );
   const boxHeight = Math.max(
     input.kind === "quotation" ? 50 : 42,
     18 + input.details.length * 4.6,
+    20 + estimatedCustomerLineCount * 4,
   );
   drawBox(doc, margin, y, columnWidth, boxHeight, input.partyTitle ?? "Customer Details", colors);
   doc.setFont("helvetica", "bold");
@@ -1480,13 +1500,7 @@ function drawPartyAndDetails(
   doc.setFontSize(8.5);
   drawWrappedLines(
     doc,
-    [
-      input.customer.code ? `Code: ${input.customer.code}` : "",
-      input.customer.phone ? `Phone: ${input.customer.phone}` : "",
-      input.customer.email ? `Email: ${input.customer.email}` : "",
-      input.customer.address ?? "",
-      ...(input.customer.extraLines ?? []),
-    ].filter(Boolean),
+    customerLines,
     margin + 4,
     y + 19,
     columnWidth - 8,
@@ -2517,46 +2531,6 @@ function formatDate(value: string | null | undefined, dateFormat: string | null)
   }
 
   return `${day}/${month}/${year}`;
-}
-
-function oneMonthFromDate(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  const date = parsePdfDate(value);
-  if (!date) {
-    return null;
-  }
-
-  const originalDay = date.getDate();
-  const nextDate = new Date(date);
-  nextDate.setDate(1);
-  nextDate.setMonth(nextDate.getMonth() + 1);
-  const lastDayOfTargetMonth = new Date(
-    nextDate.getFullYear(),
-    nextDate.getMonth() + 1,
-    0,
-  ).getDate();
-  nextDate.setDate(Math.min(originalDay, lastDayOfTargetMonth));
-
-  return [
-    String(nextDate.getFullYear()),
-    String(nextDate.getMonth() + 1).padStart(2, "0"),
-    String(nextDate.getDate()).padStart(2, "0"),
-  ].join("-");
-}
-
-function parsePdfDate(value: string) {
-  const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (dateOnlyMatch) {
-    const [, year, month, day] = dateOnlyMatch;
-    const date = new Date(Number(year), Number(month) - 1, Number(day));
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function valueWithUnit(value: number | string | null | undefined, unit: string) {

@@ -41,7 +41,6 @@ import { InvoicesPage } from "../modules/invoices/InvoicesPage";
 import { InvoiceDetailPage } from "../modules/invoices/InvoiceDetailPage";
 import { ProformaInvoicesPage } from "../modules/proforma-invoices/ProformaInvoicesPage";
 import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/ProformaInvoiceDetailPage";
-import { ReportsPage } from "../modules/reports/ReportsPage";
 import { CompaniesPage } from "../modules/companies/CompaniesPage";
 import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
 import {
@@ -131,7 +130,7 @@ export default function App() {
           <Route path="/proforma-invoices/:id" element={<ProformaInvoiceDetailPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
           <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/reports" element={<Navigate to="/dashboard" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/*" element={<Navigate to="/settings" replace />} />
           {routes

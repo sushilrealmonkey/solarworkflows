@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -15,6 +15,7 @@ import {
   deleteCustomer,
   fetchCustomers,
   fetchLeads,
+  fetchProjectIdsForCustomers,
   fetchStaffOptions,
   updateCustomer,
 } from "./crmApi";
@@ -28,6 +29,7 @@ import {
   formatDate,
   hasPermission,
   labelize,
+  normalizeCustomerSubmitValues,
   requiredError,
   staffName,
 } from "./crmUtils";
@@ -45,6 +47,8 @@ import {
   EmptyState,
   LoadingSkeleton,
   Modal,
+  NextStepLabel,
+  PlaceholderAction,
   SearchInput,
   SelectInput,
   StaffSelect,
@@ -68,6 +72,9 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [projectIdsByCustomer, setProjectIdsByCustomer] = useState<
+    Map<string, string>
+  >(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CustomerFilters>({
@@ -82,7 +89,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
     leadId: string;
     values: CustomerFormValues;
   } | null>(null);
-  const [choosingCreateFlow, setChoosingCreateFlow] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
@@ -92,6 +98,9 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   const canCreate = hasPermission(profile, permissions, "customers", "create");
   const canUpdate = hasPermission(profile, permissions, "customers", "update");
   const canDelete = hasPermission(profile, permissions, "customers", "delete");
+  const canViewProjects = hasPermission(profile, permissions, "projects", "view");
+  const canCreateB2BSale = hasPermission(profile, permissions, "b2b_sales", "create");
+  const canCreateDirectly = segment === "b2b_direct" && canCreate;
 
   async function loadData() {
     if (!canView) {
@@ -107,9 +116,16 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
         fetchLeads(profile).catch(() => []),
         fetchStaffOptions(profile),
       ]);
+      const nextProjectIdsByCustomer = canViewProjects
+        ? await fetchProjectIdsForCustomers(
+            profile,
+            nextCustomers.map((customer) => customer.id),
+          )
+        : new Map<string, string>();
       setCustomers(nextCustomers);
       setLeads(nextLeads);
       setStaff(nextStaff);
+      setProjectIdsByCustomer(nextProjectIdsByCustomer);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -125,7 +141,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
     void loadData();
     // loadData closes over the current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id, segment]);
+  }, [canView, canViewProjects, profile?.id, segment]);
 
   const filteredCustomers = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -162,20 +178,10 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   }
 
   function openCreateForm() {
-    if (segment === "b2b_direct") {
-      openCreateFormForSource("direct");
-      return;
-    }
-
-    setChoosingCreateFlow(true);
-  }
-
-  function openCreateFormForSource(source: "direct" | "lead") {
     setFormErrors({});
-    setChoosingCreateFlow(false);
     setFormState({
       mode: "create",
-      source,
+      source: "direct",
       customer: null,
       leadId: "",
       values: emptyCustomerFormForSegment(segment),
@@ -319,14 +325,10 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
           description={
             segment === "b2b_direct"
               ? "Manage installers, retailers, and direct product-sale customers."
-              : "Manage customers for solar installation leads, surveys, quotations, and projects."
+              : "Review customers created from the enquiry workflow for surveys, quotations, and projects."
           }
         />
-        {canCreate ? (
-          <Button onClick={openCreateForm}>
-            {segment === "b2b_direct" ? "Add Business Customer" : "Add Customer"}
-          </Button>
-        ) : null}
+        {canCreateDirectly ? <Button onClick={openCreateForm}>Add Business Customer</Button> : null}
       </div>
 
       <Toolbar>
@@ -373,13 +375,11 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
           description={
             segment === "b2b_direct"
               ? "Create a business customer before recording product sales without projects."
-              : "Create a customer directly or convert a qualified lead."
+              : "Customers will appear here after an enquiry is converted in the enquiry workflow."
           }
           action={
-            canCreate ? (
-              <Button onClick={openCreateForm}>
-                {segment === "b2b_direct" ? "Add Business Customer" : "Add Customer"}
-              </Button>
+            canCreateDirectly ? (
+              <Button onClick={openCreateForm}>Add Business Customer</Button>
             ) : null
           }
         />
@@ -399,6 +399,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3">Next Step</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -429,6 +430,17 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                       {staffName(staff, customer.assigned_to)}
                     </td>
                     <td className="px-4 py-3">{formatDate(customer.created_at)}</td>
+                    <td
+                      className="px-4 py-3"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <CustomerNextStepActions
+                        customer={customer}
+                        projectId={projectIdsByCustomer.get(customer.id) ?? null}
+                        canViewProjects={canViewProjects}
+                        canCreateB2BSale={canCreateB2BSale}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -482,6 +494,19 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                     </dd>
                   </div>
                 </dl>
+                <div
+                  className="mt-4 space-y-2"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <NextStepLabel />
+                  <CustomerNextStepActions
+                    customer={customer}
+                    projectId={projectIdsByCustomer.get(customer.id) ?? null}
+                    canViewProjects={canViewProjects}
+                    canCreateB2BSale={canCreateB2BSale}
+                  />
+                </div>
                 <div
                   className="mt-4 flex flex-wrap gap-2"
                   onClick={(event) => event.stopPropagation()}
@@ -538,13 +563,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
         />
       ) : null}
 
-      {choosingCreateFlow ? (
-        <CustomerCreateChoiceModal
-          onClose={() => setChoosingCreateFlow(false)}
-          onSelect={openCreateFormForSource}
-        />
-      ) : null}
-
       {deleteTarget ? (
         <ConfirmDialog
           title="Delete customer?"
@@ -558,7 +576,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   );
 }
 
-function CustomerFormModal({
+export function CustomerFormModal({
   title,
   segment,
   source,
@@ -724,61 +742,6 @@ function CustomerFormModal({
   );
 }
 
-function CustomerCreateChoiceModal({
-  onClose,
-  onSelect,
-}: {
-  onClose: () => void;
-  onSelect: (source: "lead" | "direct") => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <section className="w-full max-w-xl rounded-xl border border-stone-200 bg-white p-5 shadow-xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-950">
-              Add Customer
-            </h2>
-            <p className="mt-1 text-sm leading-6 text-slate-600">
-              Choose how this customer should be created.
-            </p>
-          </div>
-          <Button onClick={onClose} variant="ghost">
-            Close
-          </Button>
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          <button
-            className="rounded-xl border border-stone-200 bg-white p-4 text-left shadow-sm transition hover:bg-stone-50"
-            onClick={() => onSelect("lead")}
-            type="button"
-          >
-            <p className="text-base font-semibold text-slate-950">
-              Create customer from lead
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Select a lead and prefill the customer form from lead data.
-            </p>
-          </button>
-          <button
-            className="rounded-xl border border-stone-200 bg-white p-4 text-left shadow-sm transition hover:bg-stone-50"
-            onClick={() => onSelect("direct")}
-            type="button"
-          >
-            <p className="text-base font-semibold text-slate-950">
-              Create customer directly
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Open a blank customer form with all input fields.
-            </p>
-          </button>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 function leadToCustomerForm(
   lead: Lead | undefined,
   currentValues: CustomerFormValues,
@@ -820,33 +783,49 @@ function customerName(customer: Customer, segment: CustomerSegment) {
   return customer.full_name;
 }
 
-function normalizeCustomerSubmitValues(
-  values: CustomerFormValues,
-  segment: CustomerSegment,
-): CustomerFormValues {
-  if (segment === "project_based") {
-    return {
-      ...values,
-      customer_segment: "project_based",
-      business_name: "",
-      gst_number: "",
-      contact_person_name: "",
-    };
+function CustomerNextStepActions({
+  customer,
+  projectId,
+  canViewProjects,
+  canCreateB2BSale,
+}: {
+  customer: Customer;
+  projectId: string | null;
+  canViewProjects: boolean;
+  canCreateB2BSale: boolean;
+}) {
+  const actionClass =
+    "inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 lg:w-auto";
+
+  if (customer.customer_segment === "b2b_direct") {
+    return canCreateB2BSale ? (
+      <Link
+        className={actionClass}
+        onClick={(event) => event.stopPropagation()}
+        to={`/b2b-sales?customerId=${customer.id}&new=1`}
+      >
+        Create Sale
+      </Link>
+    ) : (
+      <PlaceholderAction>Create Sale</PlaceholderAction>
+    );
   }
 
-  return {
-    ...values,
-    customer_segment: "b2b_direct",
-    customer_type: "b2b_installer",
-    status: "active",
-    full_name:
-      values.contact_person_name.trim() ||
-      values.full_name.trim() ||
-      values.business_name.trim(),
-    lead_source: "",
-    assigned_to: "",
-  };
+  if (projectId && canViewProjects) {
+    return (
+      <Link
+        className={actionClass}
+        onClick={(event) => event.stopPropagation()}
+        to={`/projects/${projectId}`}
+      >
+        Go to Project
+      </Link>
+    );
+  }
+
+  return <PlaceholderAction>Go to Project</PlaceholderAction>;
 }
+
 
 function customerTypeFromLead(lead: Lead) {
   const text = `${lead.requirement_type ?? ""} ${lead.property_type ?? ""}`.toLowerCase();

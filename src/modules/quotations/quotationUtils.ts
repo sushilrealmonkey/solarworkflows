@@ -276,18 +276,10 @@ export const defaultTechnicalPaymentTerms: QuotationPaymentTermFormValues[] = [
   },
 ];
 
+export const quotationValidityDays = 7;
+
 export function emptyQuotationForm(): QuotationFormValues {
   const today = new Date();
-  const validUntil = new Date(today);
-  const originalDay = today.getDate();
-  validUntil.setDate(1);
-  validUntil.setMonth(today.getMonth() + 1);
-  validUntil.setDate(
-    Math.min(
-      originalDay,
-      new Date(validUntil.getFullYear(), validUntil.getMonth() + 1, 0).getDate(),
-    ),
-  );
 
   return {
     quotation_code: "",
@@ -309,7 +301,7 @@ export function emptyQuotationForm(): QuotationFormValues {
     discom: "",
     consumer_number: "",
     customer_electricity_bill_url: "",
-    valid_until: toDateInput(validUntil),
+    valid_until: quotationValidUntilFromDateInput(toDateInput(today)),
     system_capacity_kw: "",
     installation_location: "",
     site_type: "",
@@ -1360,6 +1352,25 @@ export function quotationStatusTone(value: string | null | undefined) {
 function toDateInput(date: Date) {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
   return offsetDate.toISOString().slice(0, 10);
+}
+
+export function quotationValidUntilFromDateInput(
+  value: string | null | undefined,
+) {
+  if (!value) {
+    return "";
+  }
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    return "";
+  }
+
+  const [, year, month, day] = match;
+  const validUntil = new Date(Number(year), Number(month) - 1, Number(day));
+  validUntil.setDate(validUntil.getDate() + quotationValidityDays);
+
+  return toDateInput(validUntil);
 }
 
 function roundMoney(value: number) {

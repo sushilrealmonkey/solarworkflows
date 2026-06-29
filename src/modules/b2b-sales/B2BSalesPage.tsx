@@ -32,12 +32,36 @@ import {
   fetchB2BSaleOptions,
   fetchB2BSales,
 } from "./b2bSalesApi";
-import { B2BSaleFormModal, B2BSaleStatusBadge } from "./B2BSalesComponents";
 import {
+  B2BSaleFormModal,
+  B2BSaleReviewModal,
+  B2BSaleStatusBadge,
+} from "./B2BSalesComponents";
+import { createCustomer } from "../crm/crmApi";
+import { CustomerFormModal } from "../crm/CustomersPage";
+import { buildProformaInvoicePdf } from "../documents/businessPdf";
+import {
+  buildProformaInvoicePdfPath,
+  fetchBusinessDocumentSettings,
+  uploadGeneratedPdf,
+} from "../documents/generatedPdfApi";
+import {
+  createProformaInvoiceFromB2BSale,
+  fetchProformaInvoice,
+  fetchProformaInvoiceItems,
+} from "../proforma-invoices/proformaInvoiceApi";
+import {
+  applyCustomerSnapshotToSaleForm,
   b2bSaleStatusOptions,
   emptyB2BSaleForm,
   validateB2BSaleForm,
 } from "./b2bSalesUtils";
+import {
+  emptyCustomerFormForSegment,
+  normalizeCustomerSubmitValues,
+  requiredError,
+} from "../crm/crmUtils";
+import type { CustomerFormValues } from "../crm/types";
 import type {
   B2BSaleFormValues,
   B2BSaleOptions,
@@ -52,7 +76,7 @@ type B2BSaleFilters = {
 };
 
 export function B2BSalesPage() {
-  const { profile, permissions, roleNames } = useAuth();
+  const { profile, permissions, roleNames, organization } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -73,11 +97,25 @@ export function B2BSalesPage() {
   const [formState, setFormState] = useState<{
     values: B2BSaleFormValues;
   } | null>(null);
+  const [reviewValues, setReviewValues] = useState<B2BSaleFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [generatingProforma, setGeneratingProforma] = useState(false);
+  const [customerFormValues, setCustomerFormValues] =
+    useState<CustomerFormValues | null>(null);
+  const [customerFormErrors, setCustomerFormErrors] = useState<Record<string, string>>({});
+  const [savingCustomer, setSavingCustomer] = useState(false);
 
   const canView = hasPermission(profile, permissions, "b2b_sales", "view");
   const canCreate = hasPermission(profile, permissions, "b2b_sales", "create");
+  const canCreateInvoices = hasPermission(profile, permissions, "invoices", "create");
+  const canCreateDocuments = hasPermission(profile, permissions, "documents", "create");
+  const canCreateCustomers = hasPermission(
+    profile,
+    permissions,
+    "customers",
+    "create",
+  );
   const canViewPricing = hasAdminPricingAccess(
     profile,
     permissions,
@@ -158,11 +196,18 @@ export function B2BSalesPage() {
 
     handledCreateParamRef.current = createKey;
     setFormErrors({});
+    const customer = options.customers.find(
+      (option) => option.id === linkedCustomerId,
+    );
+    const values = {
+      ...emptyB2BSaleForm(),
+      customer_id: linkedCustomerId,
+    };
+
     setFormState({
-      values: {
-        ...emptyB2BSaleForm(),
-        customer_id: linkedCustomerId,
-      },
+      values: customer
+        ? applyCustomerSnapshotToSaleForm(values, customer, { overwrite: true })
+        : values,
     });
   }, [
     canCreate,
@@ -215,16 +260,16 @@ export function B2BSalesPage() {
 
   async function openCreateForm() {
     setFormErrors({});
-    setFormState({
-      values: {
-        ...emptyB2BSaleForm(),
-        customer_id: filters.customerId,
-      },
-    });
 
     try {
-      await refreshOptions();
+      const nextOptions = await refreshOptions();
+      setFormState({
+        values: saleFormForCustomerId(filters.customerId, nextOptions),
+      });
     } catch (nextError) {
+      setFormState({
+        values: saleFormForCustomerId(filters.customerId, options),
+      });
       showToast(
         nextError instanceof Error
           ? nextError.message
@@ -238,6 +283,11 @@ export function B2BSalesPage() {
     navigate(`/b2b-sales/${saleId}`);
   }
 
+  function openBusinessCustomerForm() {
+    setCustomerFormErrors({});
+    setCustomerFormValues(emptyCustomerFormForSegment("b2b_direct"));
+  }
+
   function handleSaleRowKeyDown(
     event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
     saleId: string,
@@ -248,7 +298,7 @@ export function B2BSalesPage() {
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!formState) {
@@ -262,19 +312,193 @@ export function B2BSalesPage() {
       return;
     }
 
+    setReviewValues(formState.values);
+    setFormState(null);
+  }
+
+  async function saveReviewedSale(values: B2BSaleFormValues) {
+    const nextErrors = validateB2BSaleForm(values);
+    setFormErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      setReviewValues(null);
+      setFormState({ values });
+      return null;
+    }
+
     try {
       setSaving(true);
-      await createB2BSale(profile, formState.values);
+      const sale = await createB2BSale(profile, values);
       showToast("Sales order created.", "success");
-      setFormState(null);
+      setReviewValues(null);
       await loadData();
+      return sale;
     } catch (nextError) {
       showToast(
         nextError instanceof Error ? nextError.message : "Sales order save failed.",
         "error",
       );
+      return null;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveDraft() {
+    if (!reviewValues) {
+      return;
+    }
+
+    await saveReviewedSale(reviewValues);
+  }
+
+  async function handleGenerateProforma() {
+    if (!reviewValues) {
+      return;
+    }
+
+    if (!canCreateInvoices) {
+      showToast("Your role needs invoices:create access to generate a proforma invoice.", "error");
+      return;
+    }
+
+    if (!canCreateDocuments) {
+      showToast("Your role needs documents:create access to generate the proforma PDF.", "error");
+      return;
+    }
+
+    try {
+      setGeneratingProforma(true);
+      const sale = await saveReviewedSale(reviewValues);
+
+      if (!sale) {
+        return;
+      }
+
+      const proformaSummary = await createProformaInvoiceFromB2BSale(sale.id);
+      const [proformaInvoice, proformaItems, settings] = await Promise.all([
+        fetchProformaInvoice(profile, proformaSummary.id),
+        fetchProformaInvoiceItems(profile, proformaSummary.id),
+        fetchBusinessDocumentSettings(),
+      ]);
+
+      if (!proformaInvoice) {
+        throw new Error("Proforma invoice was created but could not be loaded.");
+      }
+
+      const filePath = buildProformaInvoicePdfPath(
+        proformaInvoice.organization_id,
+        proformaInvoice.proforma_code,
+        "PI",
+        proformaInvoice.id,
+      );
+      const pdfBlob = await buildProformaInvoicePdf(
+        proformaInvoice,
+        proformaItems,
+        organization,
+        settings,
+      );
+
+      await uploadGeneratedPdf(
+        profile,
+        {
+          document_type: "proforma_invoice_pdf",
+          document_name: `${proformaInvoice.proforma_code ?? "Proforma Invoice"} PDF`,
+          file_path: filePath,
+          customer_id: proformaInvoice.customer_id,
+          project_id: proformaInvoice.project_id,
+          quotation_id: proformaInvoice.quotation_id,
+          proforma_invoice_id: proformaInvoice.id,
+          notes: "Generated proforma invoice PDF",
+        },
+        pdfBlob,
+      );
+
+      showToast("Proforma invoice and PDF generated.", "success");
+      navigate(`/proforma-invoices/${proformaInvoice.id}`);
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Proforma invoice generation failed.",
+        "error",
+      );
+    } finally {
+      setGeneratingProforma(false);
+    }
+  }
+
+  async function handleBusinessCustomerSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!customerFormValues) {
+      return;
+    }
+
+    const nextErrors = {
+      business_name: requiredError(customerFormValues.business_name, "Business name"),
+      contact_person_name: requiredError(
+        customerFormValues.contact_person_name,
+        "Contact person",
+      ),
+      phone: requiredError(customerFormValues.phone, "Phone"),
+    };
+    setCustomerFormErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setSavingCustomer(true);
+      const createdCustomer = await createCustomer(
+        profile,
+        normalizeCustomerSubmitValues(customerFormValues, "b2b_direct"),
+      );
+
+      setOptions((current) => ({
+        ...current,
+        customers: current.customers.some(
+          (customer) => customer.id === createdCustomer.id,
+        )
+          ? current.customers
+          : [createdCustomer, ...current.customers],
+      }));
+      setFormState((current) =>
+        current
+          ? {
+              ...current,
+              values: applyCustomerSnapshotToSaleForm(
+                current.values,
+                createdCustomer,
+                { overwrite: true },
+              ),
+            }
+          : current,
+      );
+      setFilters((current) => ({ ...current, customerId: createdCustomer.id }));
+      setCustomerFormValues(null);
+      showToast("Business customer created.", "success");
+
+      try {
+        await refreshOptions();
+      } catch (nextError) {
+        showToast(
+          nextError instanceof Error
+            ? nextError.message
+            : "Unable to refresh business customers.",
+          "error",
+        );
+      }
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Business customer save failed.",
+        "error",
+      );
+    } finally {
+      setSavingCustomer(false);
     }
   }
 
@@ -458,13 +682,66 @@ export function B2BSalesPage() {
           errors={formErrors}
           options={options}
           canRemoveItems
+          onCreateBusinessCustomer={
+            canCreateCustomers ? openBusinessCustomerForm : undefined
+          }
           onClose={() => setFormState(null)}
           onSubmit={handleSubmit}
           saving={saving}
+          submitLabel="Review Sales Order"
+        />
+      ) : null}
+
+      {reviewValues ? (
+        <B2BSaleReviewModal
+          values={reviewValues}
+          options={options}
+          onEdit={() => {
+            setFormState({ values: reviewValues });
+            setReviewValues(null);
+          }}
+          onClose={() => setReviewValues(null)}
+          onSaveDraft={() => void handleSaveDraft()}
+          onGenerateProforma={() => void handleGenerateProforma()}
+          saving={saving}
+          generating={generatingProforma}
+        />
+      ) : null}
+
+      {customerFormValues ? (
+        <CustomerFormModal
+          title="Add Business Customer"
+          segment="b2b_direct"
+          source="direct"
+          leadId=""
+          leads={[]}
+          values={customerFormValues}
+          setLeadId={() => undefined}
+          setValues={setCustomerFormValues}
+          errors={customerFormErrors}
+          staff={[]}
+          onClose={() => setCustomerFormValues(null)}
+          onSubmit={handleBusinessCustomerSubmit}
+          saving={savingCustomer}
         />
       ) : null}
     </div>
   );
+}
+
+function saleFormForCustomerId(
+  customerId: string,
+  options: B2BSaleOptions,
+): B2BSaleFormValues {
+  const values = {
+    ...emptyB2BSaleForm(),
+    customer_id: customerId,
+  };
+  const customer = options.customers.find((option) => option.id === customerId);
+
+  return customer
+    ? applyCustomerSnapshotToSaleForm(values, customer, { overwrite: true })
+    : values;
 }
 
 function CardItem({ label, value }: { label: string; value: string }) {

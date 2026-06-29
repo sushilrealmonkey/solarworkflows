@@ -69,7 +69,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Settings"
         description="Manage organization branding and staff access."
@@ -146,7 +146,7 @@ export function SettingsOverviewPage() {
 }
 
 export function OrganizationSettingsPage() {
-  const { profile, refresh } = useAuth();
+  const { organization, profile, refresh, session } = useAuth();
   const { showToast } = useToast();
   const [values, setValues] = useState<OrganizationSettingsFormValues>(
     emptyOrganizationSettingsForm(),
@@ -161,7 +161,17 @@ export function OrganizationSettingsPage() {
         setLoading(true);
         setError(null);
         const settings = await fetchOrganizationSettings();
-        setValues(organizationSettingsToForm(settings));
+        setValues(
+          withEnrollmentDefaults(
+            organizationSettingsToForm(settings),
+            {
+              companyName: organization.id ? organization.name : null,
+              contactPerson: profile?.full_name,
+              contactEmail: session?.user.email,
+              contactPhone: profile?.phone,
+            },
+          ),
+        );
       } catch (nextError) {
         setError(
           nextError instanceof Error
@@ -174,14 +184,25 @@ export function OrganizationSettingsPage() {
     }
 
     void loadSettings();
-  }, []);
+  }, [
+    organization.id,
+    organization.name,
+    profile?.full_name,
+    profile?.phone,
+    session?.user.email,
+  ]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     try {
       setSaving(true);
-      const updatedSettings = await updateOrganizationSettings(values);
+      const updatedSettings = await updateOrganizationSettings({
+        ...values,
+        timezone: values.timezone || "Asia/Kolkata",
+        currency: values.currency || "INR",
+        date_format: values.date_format || "DD/MM/YYYY",
+      });
       setValues(organizationSettingsToForm(updatedSettings));
       await refresh();
       showToast("Organization settings updated.", "success");
@@ -220,112 +241,119 @@ export function OrganizationSettingsPage() {
 
   return (
     <form
-      className="space-y-5 rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5"
+      className="space-y-4 rounded-xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4"
       onSubmit={handleSubmit}
     >
-      <SectionTitle
-        title="Company Profile"
-        description="Company information used on generated documents for this tenant."
-      />
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <TextInput
-          label="Company Name"
-          value={values.company_name}
-          onChange={(value) => update("company_name", value)}
-        />
-        <TextArea
-          label="Address"
-          value={values.address}
-          onChange={(value) => update("address", value)}
-        />
-      </div>
-
-      <SectionTitle title="Branding" />
-      <div className="grid gap-4 md:grid-cols-2">
-        <CompanyLogoUploader
-          currentUrl={values.company_logo_url}
-          disabled={saving}
-          onUpload={handleLogoUpload}
-        />
-      </div>
-
-      <SectionTitle title="Contact And Compliance" />
-      <div className="grid gap-4 md:grid-cols-2">
-        <TextInput
-          label="Contact Person"
-          value={values.contact_person}
-          onChange={(value) => update("contact_person", value)}
-        />
-        <TextInput
-          label="Contact Email"
-          type="email"
-          value={values.contact_email}
-          onChange={(value) => update("contact_email", value)}
-        />
-        <TextInput
-          label="Contact Phone"
-          value={values.contact_phone}
-          onChange={(value) => update("contact_phone", value)}
-        />
-        <TextInput
-          label="GST Number"
-          value={values.gst_number}
-          onChange={(value) => update("gst_number", value)}
-        />
-        <TextInput
-          label="Timezone"
-          value={values.timezone}
-          onChange={(value) => update("timezone", value)}
-        />
-        <TextInput
-          label="Currency"
-          value={values.currency}
-          onChange={(value) => update("currency", value)}
-        />
-        <TextInput
-          label="Date Format"
-          value={values.date_format}
-          onChange={(value) => update("date_format", value)}
-        />
-      </div>
-
-      <SectionTitle title="Bank Details" />
-      <div className="grid gap-4 md:grid-cols-2">
-        <TextInput
-          label="Account Holder Name"
-          value={values.bank_account_holder_name}
-          onChange={(value) => update("bank_account_holder_name", value)}
-        />
-        <TextInput
-          label="Bank Name"
-          value={values.bank_name}
-          onChange={(value) => update("bank_name", value)}
-        />
-        <TextInput
-          label="IFSC Code"
-          value={values.bank_ifsc_code}
-          onChange={(value) => update("bank_ifsc_code", value)}
-        />
-        <TextInput
-          label="Account Number"
-          value={values.bank_account_number}
-          onChange={(value) => update("bank_account_number", value)}
-        />
-        <TextInput
-          label="Account Type"
-          value={values.bank_account_type}
-          onChange={(value) => update("bank_account_type", value)}
-        />
-      </div>
-
-      <div className="flex justify-end">
+      <div className="flex flex-col gap-3 border-b border-stone-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <SectionTitle title="Company Profile" />
+        </div>
         <Button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Save Settings"}
         </Button>
       </div>
+
+      <div className="grid gap-3 border-b border-stone-100 pb-4">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid gap-3">
+            <TextInput
+              label="Company Name"
+              value={values.company_name}
+              onChange={(value) => update("company_name", value)}
+            />
+            <TextArea
+              className="block"
+              label="Address"
+              value={values.address}
+              onChange={(value) => update("address", value)}
+            />
+          </div>
+          <CompanyLogoUploader
+            currentUrl={values.company_logo_url}
+            disabled={saving}
+            onUpload={handleLogoUpload}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextInput
+            label="Contact Person"
+            value={values.contact_person}
+            onChange={(value) => update("contact_person", value)}
+          />
+          <TextInput
+            label="Contact Email"
+            type="email"
+            value={values.contact_email}
+            onChange={(value) => update("contact_email", value)}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextInput
+            label="Contact Phone"
+            value={values.contact_phone}
+            onChange={(value) => update("contact_phone", value)}
+          />
+          <TextInput
+            label="GST Number"
+            value={values.gst_number}
+            onChange={(value) => update("gst_number", value)}
+          />
+        </div>
+      </div>
+
+      <SettingsSection title="Bank Details">
+        <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <TextInput
+              label="Account Holder Name"
+              value={values.bank_account_holder_name}
+              onChange={(value) => update("bank_account_holder_name", value)}
+            />
+            <TextInput
+              label="Account Number"
+              value={values.bank_account_number}
+              onChange={(value) => update("bank_account_number", value)}
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <TextInput
+              label="Bank Name"
+              value={values.bank_name}
+              onChange={(value) => update("bank_name", value)}
+            />
+            <TextInput
+              label="Account Type"
+              value={values.bank_account_type}
+              onChange={(value) => update("bank_account_type", value)}
+            />
+            <TextInput
+              label="IFSC Code"
+              value={values.bank_ifsc_code}
+              onChange={(value) => update("bank_ifsc_code", value)}
+            />
+          </div>
+        </div>
+      </SettingsSection>
     </form>
   );
+}
+
+function withEnrollmentDefaults(
+  values: OrganizationSettingsFormValues,
+  defaults: {
+    companyName?: string | null;
+    contactPerson?: string | null;
+    contactEmail?: string | null;
+    contactPhone?: string | null;
+  },
+): OrganizationSettingsFormValues {
+  return {
+    ...values,
+    company_name: values.company_name || defaults.companyName || "",
+    contact_person: values.contact_person || defaults.contactPerson || "",
+    contact_email: values.contact_email || defaults.contactEmail || "",
+    contact_phone: values.contact_phone || defaults.contactPhone || "",
+  };
 }
 
 export function StaffManagementPage() {
@@ -453,7 +481,7 @@ export function StaffManagementPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SectionTitle title="Staff Management" />
         <Button onClick={openCreateForm}>Add Staff</Button>
@@ -479,31 +507,31 @@ export function StaffManagementPage() {
 
       {!loading && !error && filteredStaff.length > 0 ? (
         <>
-          <div className="hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Email</th>
-                  <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-3 py-2.5">Name</th>
+                  <th className="px-3 py-2.5">Phone</th>
+                  <th className="px-3 py-2.5">Email</th>
+                  <th className="px-3 py-2.5">Role</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filteredStaff.map((member) => (
                   <tr key={member.id}>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
+                    <td className="px-3 py-2.5 font-semibold text-slate-950">
                       {member.full_name ?? "-"}
                     </td>
-                    <td className="px-4 py-3">{member.phone ?? "-"}</td>
-                    <td className="px-4 py-3">{member.email ?? "-"}</td>
-                    <td className="px-4 py-3">{member.role_name ?? "No role"}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">{member.phone ?? "-"}</td>
+                    <td className="px-3 py-2.5">{member.email ?? "-"}</td>
+                    <td className="px-3 py-2.5">{member.role_name ?? "No role"}</td>
+                    <td className="px-3 py-2.5">
                       <StaffStatusBadge value={member.status} />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <StaffRowActions
                         isMenuOpen={openStaffMenuId === member.id}
                         lastLogin={formatDateTime(member.last_login_at)}
@@ -532,7 +560,7 @@ export function StaffManagementPage() {
             {filteredStaff.map((member) => (
               <article
                 key={member.id}
-                className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+                className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -545,12 +573,12 @@ export function StaffManagementPage() {
                   </div>
                   <StaffStatusBadge value={member.status} />
                 </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                   <Detail label="Role" value={member.role_name ?? "No role"} />
                   <Detail label="Phone" value={member.phone ?? "-"} />
                   <Detail label="Email" value={member.email ?? "-"} />
                 </dl>
-                <div className="mt-4 flex justify-end">
+                <div className="mt-3 flex justify-end">
                   <StaffRowActions
                     isMenuOpen={openStaffMenuId === member.id}
                     lastLogin={formatDateTime(member.last_login_at)}
@@ -903,13 +931,28 @@ function SectionTitle({
 }) {
   return (
     <div>
-      <h2 className="text-lg font-semibold tracking-normal text-slate-950">
+      <h2 className="text-base font-semibold tracking-normal text-slate-950">
         {title}
       </h2>
       {description ? (
-        <p className="mt-1 text-sm leading-6 text-slate-600">{description}</p>
+        <p className="mt-1 text-sm leading-5 text-slate-600">{description}</p>
       ) : null}
     </div>
+  );
+}
+
+function SettingsSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="grid gap-3 border-b border-stone-100 pb-4 last:border-b-0 last:pb-0 lg:grid-cols-[11rem_minmax(0,1fr)]">
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      <div className="min-w-0">{children}</div>
+    </section>
   );
 }
 

@@ -492,8 +492,21 @@ export function ProformaInvoiceDetailPage() {
                 <DetailItem label="Customer" value={customerLink(proformaInvoice)} />
                 <DetailItem label="Phone" value={proformaInvoice.customer?.phone ?? "-"} />
                 <DetailItem label="Email" value={proformaInvoice.customer?.email ?? "-"} />
-                <DetailItem label="GST Number" value={proformaInvoice.customer?.gst_number ?? "-"} />
-                <DetailItem label="Address" value={customerAddress(proformaInvoice)} />
+                <DetailItem
+                  label="GST Number"
+                  value={
+                    proformaInvoice.b2b_sale?.gst_number ||
+                    proformaInvoice.customer?.gst_number ||
+                    "-"
+                  }
+                />
+                <DetailItem label="Billing Address" value={customerAddress(proformaInvoice)} />
+                {proformaInvoice.b2b_sale?.delivery_address ? (
+                  <DetailItem
+                    label="Delivery Address"
+                    value={proformaInvoice.b2b_sale.delivery_address}
+                  />
+                ) : null}
               </DetailSection>
 
               <DetailSection title="Proforma Context">
@@ -800,6 +813,10 @@ function finalInvoiceLink(proformaInvoice: ProformaInvoiceWithRelations) {
 }
 
 function customerAddress(proformaInvoice: ProformaInvoiceWithRelations) {
+  if (proformaInvoice.b2b_sale?.billing_address) {
+    return proformaInvoice.b2b_sale.billing_address;
+  }
+
   return [
     proformaInvoice.customer?.address_line_1,
     proformaInvoice.customer?.address_line_2,

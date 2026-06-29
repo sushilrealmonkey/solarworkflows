@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -47,7 +48,6 @@ import {
 import {
   PriorityBadge,
   ProjectFormModal,
-  ProjectStatusBadge,
   ProjectStatusSelect,
 } from "./ProjectsPage";
 import type {
@@ -586,44 +586,19 @@ export function ProjectDetailPage() {
         <>
           <div className="flex flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
             <header className="min-w-0 space-y-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <h1 className="min-w-0 text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
-                  {project.project_name ?? project.project_code ?? "Project"}
-                </h1>
-                {canUpdate ? (
-                  <button
-                    aria-label="Edit project"
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
-                    onClick={() => {
-                      setFormErrors({});
-                      setEditing(projectToForm(project));
-                    }}
-                    title="Edit project"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      className="size-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5z" />
-                    </svg>
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                <span className="font-semibold text-slate-900">
-                  {project.project_code ?? "Project"}
-                </span>
-              </div>
+              <RecordTitle
+                recordType="Project"
+                name={project.project_name ?? contact.customerName ?? "Project"}
+                meta={[
+                  project.project_code ?? "Project",
+                  project.quotation?.quotation_code ??
+                    project.site_survey?.survey_code ??
+                    project.lead?.lead_code,
+                  labelize(project.project_status),
+                  contact.phone,
+                ]}
+              />
               <div className="flex flex-wrap items-center gap-2">
-                <ProjectStatusBadge value={project.project_status} />
                 {canUpdate ? (
                   <ProjectStatusSelect
                     disabled={updatingStatus}
@@ -634,6 +609,30 @@ export function ProjectDetailPage() {
               </div>
             </header>
             <div className="flex flex-wrap gap-2">
+              {canCreateInvoice ? (
+                <Button onClick={openProjectInvoiceForm}>
+                  Create Project Invoice
+                </Button>
+              ) : null}
+              {canUpdate ? (
+                <Button
+                  onClick={() => {
+                    setFormErrors({});
+                    setEditing(projectToForm(project));
+                  }}
+                  variant="secondary"
+                >
+                  Edit Project
+                </Button>
+              ) : null}
+              {canDelete ? (
+                <Button
+                  onClick={() => setConfirmingDelete(true)}
+                  variant="danger"
+                >
+                  Delete Project
+                </Button>
+              ) : null}
               {canCreateDocument ? (
                 <Button onClick={openDocumentForm} variant="secondary">
                   Upload Document
@@ -642,14 +641,6 @@ export function ProjectDetailPage() {
               {canCreateInventory ? (
                 <Button onClick={openMaterialIssueForm} variant="secondary">
                   Add Material Issue
-                </Button>
-              ) : null}
-              {canCreateInvoice ? (
-                <Button
-                  onClick={openProjectInvoiceForm}
-                  variant="secondary"
-                >
-                  Create Project Invoice
                 </Button>
               ) : null}
             </div>
@@ -797,24 +788,6 @@ export function ProjectDetailPage() {
               onAdd={openMaterialIssueForm}
               onCreateInvoice={openMaterialInvoiceForm}
             />
-          ) : null}
-
-          {canDelete ? (
-            <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-rose-900">
-                    Danger Zone
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Delete this project record from the installation workflow.
-                  </p>
-                </div>
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Project
-                </Button>
-              </div>
-            </section>
           ) : null}
         </>
       ) : null}

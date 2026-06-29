@@ -12,6 +12,9 @@ export type B2BSale = {
   customer_id: string;
   proforma_invoice_id: string | null;
   invoice_id: string | null;
+  billing_address: string | null;
+  delivery_address: string | null;
+  gst_number: string | null;
   sale_date: string | null;
   dispatch_date: string | null;
   status: B2BSaleStatus | null;
@@ -37,6 +40,7 @@ export type B2BSaleItem = {
   unit: string | null;
   unit_price: number | null;
   gst_percent: number | null;
+  discount_amount: number | null;
   line_total: number | null;
   sort_order: number | null;
   created_at: string | null;
@@ -101,13 +105,16 @@ export type B2BSaleFormItem = {
   quantity: string;
   unit: string;
   unit_price: string;
+  discount_amount: string;
   gst_percent: string;
 };
 
 export type B2BSaleFormValues = {
   customer_id: string;
+  billing_address: string;
+  delivery_address: string;
+  gst_number: string;
   sale_date: string;
-  discount_amount: string;
   notes: string;
   items: B2BSaleFormItem[];
 };

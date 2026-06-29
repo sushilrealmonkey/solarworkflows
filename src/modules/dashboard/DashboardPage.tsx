@@ -677,43 +677,38 @@ function SalesPipelinePanel({
       {loading ? <LoadingRows /> : null}
       {!loading && rows.every((row) => row.count === 0) ? (
         <GuidedEmptyState to="/leads" action="Add Lead">
-          No leads or quotations yet. Start by adding a lead so the funnel can show real movement.
+          No leads or quotations yet. Start by adding a lead so the pipeline can show real movement.
         </GuidedEmptyState>
       ) : null}
       {!loading && rows.some((row) => row.count > 0) ? (
-        <div className="grid gap-3 md:grid-cols-[minmax(9rem,0.8fr)_minmax(0,1.2fr)] md:items-start">
-          <div className="hidden md:block">
-            <FunnelChart rows={rows} />
-          </div>
-          <div className="space-y-2">
-            {rows.map((row) => (
-              <div
-                className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2 rounded-lg border border-stone-100 bg-stone-50 p-2.5 sm:grid-cols-[minmax(0,1fr)_3rem_5rem] sm:p-3"
-                key={row.label}
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-slate-800 sm:text-sm">
-                    {row.label}
-                  </p>
-                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
-                    <div
-                      className={`h-full rounded-full ${pipelineTone(row.tone)}`}
-                      style={{ width: `${Math.max((row.count / maxCount) * 100, 8)}%` }}
-                    />
-                  </div>
+        <div className="space-y-2">
+          {rows.map((row) => (
+            <div
+              className="grid grid-cols-[minmax(0,1fr)_2rem] gap-2 rounded-lg border border-stone-100 bg-stone-50 p-2.5 sm:grid-cols-[minmax(0,1fr)_3rem_5rem] sm:p-3"
+              key={row.label}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-xs font-semibold text-slate-800 sm:text-sm">
+                  {row.label}
+                </p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                  <div
+                    className={`h-full rounded-full ${pipelineTone(row.tone)}`}
+                    style={{ width: `${Math.max((row.count / maxCount) * 100, 8)}%` }}
+                  />
                 </div>
-                <p className="text-right text-sm font-semibold text-slate-950 sm:text-left">
-                  {row.count}
-                </p>
-                <p className="col-span-2 text-xs font-semibold text-slate-700 sm:col-span-1 sm:text-sm">
-                  {currencyFormatter.format(row.value)}
-                </p>
               </div>
-            ))}
-            <p className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-medium text-orange-900 sm:text-sm">
-              Bottleneck: {rows.find((row) => row.label === "Quotation Sent")?.count ?? 0} quotations need active follow-up.
-            </p>
-          </div>
+              <p className="text-right text-sm font-semibold text-slate-950 sm:text-left">
+                {row.count}
+              </p>
+              <p className="col-span-2 text-xs font-semibold text-slate-700 sm:col-span-1 sm:text-sm">
+                {currencyFormatter.format(row.value)}
+              </p>
+            </div>
+          ))}
+          <p className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-medium text-orange-900 sm:text-sm">
+            Bottleneck: {rows.find((row) => row.label === "Quotation Sent")?.count ?? 0} quotations need active follow-up.
+          </p>
         </div>
       ) : null}
     </AdminPanel>
@@ -1248,27 +1243,6 @@ function MiniDonut({
         strokeWidth="7"
       />
     </svg>
-  );
-}
-
-function FunnelChart({ rows }: { rows: EpcDashboardModel["pipelineRows"] }) {
-  const widths = [100, 86, 72, 58, 44, 30];
-
-  return (
-    <div className="flex min-h-44 flex-col items-center justify-center gap-1.5 rounded-lg bg-gradient-to-b from-stone-50 to-white p-3 sm:min-h-64 sm:gap-2 sm:p-4">
-      {rows.map((row, index) => (
-        <div
-          className={`h-7 rounded-md shadow-sm sm:h-9 ${pipelineTone(row.tone)}`}
-          key={row.label}
-          style={{
-            clipPath: "polygon(5% 0, 95% 0, 84% 100%, 16% 100%)",
-            opacity: row.count > 0 ? 1 : 0.35,
-            width: `${widths[index]}%`,
-          }}
-          title={`${row.label}: ${row.count}`}
-        />
-      ))}
-    </div>
   );
 }
 

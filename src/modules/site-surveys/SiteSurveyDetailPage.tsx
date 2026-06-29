@@ -1,7 +1,7 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { PageHeader } from "../../components/PageHeader";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -11,6 +11,8 @@ import {
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  NextStepLabel,
+  PencilIcon,
   PlaceholderAction,
 } from "../crm/CrmComponents";
 import {
@@ -41,7 +43,6 @@ import {
 } from "./surveyUtils";
 import {
   SiteSurveyFormModal,
-  SurveyStatusBadge,
   SurveyStatusSelect,
 } from "./SiteSurveysPage";
 import type {
@@ -74,6 +75,7 @@ export function SiteSurveyDetailPage() {
   const canView = hasPermission(profile, permissions, "site_surveys", "view");
   const canUpdate = hasPermission(profile, permissions, "site_surveys", "update");
   const canDelete = hasPermission(profile, permissions, "site_surveys", "delete");
+  const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateQuotation = hasPermission(
     profile,
     permissions,
@@ -279,47 +281,72 @@ export function SiteSurveyDetailPage() {
       {survey && contact ? (
         <>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <PageHeader
-              title={survey.survey_code ?? "Site Survey"}
-              description={`${contact.name} / ${contact.phone}`}
-            />
-            <div className="flex flex-wrap gap-2">
-              {canUpdate ? (
-                <>
-                  <Button
+            <RecordTitle
+              recordType="Site Survey"
+              name={contact.name}
+              meta={[
+                survey.survey_code ?? "Site Survey",
+                survey.customer?.customer_code ??
+                  survey.lead?.lead_code ??
+                  contact.sourceLabel,
+                labelize(survey.survey_status),
+                contact.phone,
+              ]}
+              action={
+                canUpdate ? (
+                  <button
+                    aria-label="Edit site survey"
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
                     onClick={() => {
                       setFormErrors({});
                       setEditing(surveyToForm(survey));
                     }}
-                    variant="secondary"
+                    title="Edit site survey"
+                    type="button"
                   >
-                    Edit Survey
-                  </Button>
+                    <PencilIcon />
+                  </button>
+                ) : null
+              }
+            />
+            <div className="space-y-3">
+              <NextStepLabel />
+              <div className="flex flex-wrap gap-2">
+                {canUpdate ? (
                   <SurveyStatusSelect
                     disabled={updatingStatus}
                     value={survey.survey_status ?? "scheduled"}
                     onChange={setStatusTarget}
                   />
-                </>
-              ) : null}
-              {canCreateQuotation ? (
-                <Link
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-                  to={`/quotations?new=1&siteSurveyId=${survey.id}`}
-                >
-                  Create Quotation
-                </Link>
-              ) : (
-                <PlaceholderAction>Create Quotation</PlaceholderAction>
-              )}
+                ) : null}
+                {surveyHasQuotation(survey) && canViewProjects ? (
+                  <Link
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                    to={survey.project_id ? `/projects/${survey.project_id}` : "/projects"}
+                  >
+                    Go to Project
+                  </Link>
+                ) : !surveyHasQuotation(survey) && canCreateQuotation ? (
+                  <Link
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                    to={`/quotations?new=1&siteSurveyId=${survey.id}`}
+                  >
+                    Create Quotation
+                  </Link>
+                ) : surveyHasQuotation(survey) ? (
+                  <PlaceholderAction>Go to Project</PlaceholderAction>
+                ) : (
+                  <PlaceholderAction>Create Quotation</PlaceholderAction>
+                )}
+              </div>
             </div>
           </div>
 
-          <DetailSection title="Lead and Customer Details">
+          <DetailSection title="Enquiry and Customer Details">
             <DetailItem label="Source" value={contact.sourceLabel} />
             <DetailItem label="Name" value={contact.name} />
             <DetailItem label="Phone" value={contact.phone} />
-            <DetailItem label="Lead" value={leadLink(survey)} />
+            <DetailItem label="Enquiry" value={leadLink(survey)} />
             <DetailItem label="Customer" value={customerLink(survey)} />
             <DetailItem
               label="Contact Email"
@@ -338,10 +365,6 @@ export function SiteSurveyDetailPage() {
           </DetailSection>
 
           <DetailSection title="Schedule Details">
-            <DetailItem
-              label="Status"
-              value={<SurveyStatusBadge value={survey.survey_status} />}
-            />
             <DetailItem
               label="Scheduled Date"
               value={formatDate(survey.scheduled_date)}
@@ -492,7 +515,7 @@ export function SiteSurveyDetailPage() {
                     rel="noreferrer"
                     target="_blank"
                   >
-                    Open Uploaded Document
+                    Open {surveyDocumentName(survey)}
                   </a>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">
@@ -502,17 +525,6 @@ export function SiteSurveyDetailPage() {
               </div>
             </div>
           </section>
-
-          <DetailSection title="Status Timeline">
-            <DetailItem
-              label="Current Status"
-              value={<SurveyStatusBadge value={survey.survey_status} />}
-            />
-            <DetailItem
-              label="Timeline"
-              value="Placeholder for scheduled, rescheduled, in-progress, completed, and cancelled events."
-            />
-          </DetailSection>
 
           {canDelete ? (
             <section className="rounded-xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
@@ -580,7 +592,7 @@ function leadLink(survey: SiteSurveyWithRelations) {
 
   return (
     <Link className="font-semibold text-[#06173f]" to={`/leads/${survey.lead_id}`}>
-      {survey.lead?.lead_code ?? survey.lead?.full_name ?? "Open lead"}
+      {survey.lead?.lead_code ?? survey.lead?.full_name ?? "Open enquiry"}
     </Link>
   );
 }
@@ -610,4 +622,18 @@ function fileSizeLabel(size: number | null | undefined) {
   }
 
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function surveyHasQuotation(survey: SiteSurveyWithRelations) {
+  return Boolean(survey.quotations && survey.quotations.length > 0);
+}
+
+function surveyDocumentName(survey: SiteSurveyWithRelations) {
+  if (!survey.electricity_bill_url) {
+    return "Uploaded Document";
+  }
+
+  const path = survey.electricity_bill_url.split("?")[0] ?? "";
+  const name = path.split("/").filter(Boolean).pop();
+  return name ? decodeURIComponent(name) : "Uploaded Document";
 }

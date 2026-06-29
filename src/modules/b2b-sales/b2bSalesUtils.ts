@@ -9,6 +9,7 @@ import type {
   B2BSaleItem,
   B2BSaleStatus,
 } from "./types";
+import type { SurveyCustomerSummary } from "../site-surveys/types";
 
 export const b2bSaleStatusOptions: B2BSaleStatus[] = [
   "draft",
@@ -31,6 +32,7 @@ export function emptyB2BSaleItem(): B2BSaleFormItem {
     quantity: "1",
     unit: "",
     unit_price: "",
+    discount_amount: "0",
     gst_percent: "0",
   };
 }
@@ -38,8 +40,10 @@ export function emptyB2BSaleItem(): B2BSaleFormItem {
 export function emptyB2BSaleForm(): B2BSaleFormValues {
   return {
     customer_id: "",
+    billing_address: "",
+    delivery_address: "",
+    gst_number: "",
     sale_date: todayInput(),
-    discount_amount: "0",
     notes: "",
     items: [emptyB2BSaleItem()],
   };
@@ -51,14 +55,70 @@ export function saleToForm(
 ): B2BSaleFormValues {
   return {
     customer_id: sale.customer_id,
+    billing_address: sale.billing_address ?? "",
+    delivery_address: sale.delivery_address ?? "",
+    gst_number: sale.gst_number ?? "",
     sale_date: sale.sale_date ?? todayInput(),
-    discount_amount: numberToInput(sale.discount_amount),
     notes: sale.notes ?? "",
     items:
       items.length > 0
         ? items.map(saleItemToForm)
         : [emptyB2BSaleItem()],
   };
+}
+
+export function customerAddressForSale(customer: SurveyCustomerSummary | undefined) {
+  if (!customer) {
+    return "";
+  }
+
+  return [
+    customer.address_line_1,
+    customer.address_line_2,
+    customer.city,
+    customer.district,
+    customer.state,
+    customer.pincode,
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+export function applyCustomerSnapshotToSaleForm(
+  values: B2BSaleFormValues,
+  customer: SurveyCustomerSummary | undefined,
+  options: { overwrite?: boolean } = {},
+): B2BSaleFormValues {
+  if (!customer) {
+    return values;
+  }
+
+  const address = customerAddressForSale(customer);
+  const overwrite = options.overwrite ?? false;
+
+  return {
+    ...values,
+    customer_id: customer.id,
+    billing_address: overwrite || !values.billing_address
+      ? address
+      : values.billing_address,
+    delivery_address: overwrite || !values.delivery_address
+      ? address
+      : values.delivery_address,
+    gst_number: overwrite || !values.gst_number
+      ? customer.gst_number ?? ""
+      : values.gst_number,
+  };
+}
+
+export function availableStockQuantity(item: B2BInventoryItemOption | undefined) {
+  if (!item) {
+    return null;
+  }
+
+  const value = item.available_qty ?? item.current_stock;
+  const quantity = Number(value ?? 0);
+  return Number.isFinite(quantity) ? quantity : null;
 }
 
 export function saleItemToForm(item: B2BSaleItem): B2BSaleFormItem {
@@ -70,6 +130,7 @@ export function saleItemToForm(item: B2BSaleItem): B2BSaleFormItem {
     quantity: numberToInput(item.quantity) || "1",
     unit: item.unit ?? "",
     unit_price: numberToInput(item.unit_price),
+    discount_amount: numberToInput(item.discount_amount) || "0",
     gst_percent: numberToInput(item.gst_percent) || "0",
   };
 }
@@ -138,12 +199,18 @@ export function saleStatusTone(value: string | null | undefined) {
 export function draftLineTotal(item: B2BSaleFormItem) {
   const quantity = Number(item.quantity || 0);
   const unitPrice = Number(item.unit_price || 0);
+  const discountAmount = Number(item.discount_amount || 0);
   const gstPercent = Number(item.gst_percent || 0);
-  const base = Number.isFinite(quantity * unitPrice) ? quantity * unitPrice : 0;
+  const grossBase = Number.isFinite(quantity * unitPrice) ? quantity * unitPrice : 0;
+  const discount = Number.isFinite(discountAmount)
+    ? Math.min(Math.max(discountAmount, 0), grossBase)
+    : 0;
+  const base = Math.max(grossBase - discount, 0);
   const gst = base * (Number.isFinite(gstPercent) ? gstPercent : 0) / 100;
 
   return {
     base,
+    discount,
     gst,
     gross: base + gst,
   };
@@ -170,20 +237,20 @@ export function emptyB2BPaymentForm(): B2BPaymentFormValues {
 }
 
 export function validateB2BSaleForm(values: B2BSaleFormValues) {
-  const discount = Number(values.discount_amount || 0);
   const errors: Record<string, string> = {
     customer_id: requiredError(values.customer_id, "Business customer"),
     sale_date: requiredError(values.sale_date, "Sale date"),
-    discount_amount:
-      Number.isFinite(discount) && discount >= 0
-        ? ""
-        : "Discount must be 0 or more.",
   };
 
   values.items.forEach((item, index) => {
     const quantity = Number(item.quantity);
     const unitPrice = Number(item.unit_price || 0);
+    const discountAmount = Number(item.discount_amount || 0);
     const gstPercent = Number(item.gst_percent || 0);
+    const baseAmount =
+      Number.isFinite(quantity) && Number.isFinite(unitPrice)
+        ? quantity * unitPrice
+        : 0;
 
     if (!item.item_name.trim()) {
       errors[`items.${index}.inventory_item_id`] = "Select an inventory item.";
@@ -195,6 +262,15 @@ export function validateB2BSaleForm(values: B2BSaleFormValues) {
 
     if (!Number.isFinite(unitPrice) || unitPrice < 0) {
       errors[`items.${index}.unit_price`] = "Unit price must be 0 or more.";
+    }
+
+    if (
+      !Number.isFinite(discountAmount) ||
+      discountAmount < 0 ||
+      discountAmount > Math.max(baseAmount, 0)
+    ) {
+      errors[`items.${index}.discount_amount`] =
+        "Discount must be 0 or less than the line amount.";
     }
 
     if (!Number.isFinite(gstPercent) || gstPercent < 0) {

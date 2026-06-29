@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -10,6 +11,8 @@ import {
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  NextStepLabel,
+  PlaceholderAction,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -18,13 +21,11 @@ import {
   labelize,
 } from "../crm/crmUtils";
 import {
-  acceptQuotation,
   deleteQuotation,
   fetchQuotation,
   fetchQuotationItems,
   fetchQuotationReservations,
-  markQuotationSent,
-  rejectQuotation,
+  updateQuotationStatus,
 } from "./quotationApi";
 import {
   amountInWordsFromTurnkeyCost,
@@ -41,6 +42,8 @@ import {
   formatMoneyWithPaise,
   getQuotationContact,
   hasTurnkeyGstAmount,
+  quotationStatusOptions,
+  quotationValidUntilFromDateInput,
   quotationSnapshotFormValues,
 } from "./quotationUtils";
 import { QuotationStatusBadge } from "./QuotationsPage";
@@ -50,23 +53,17 @@ import type {
   QuotationMaterialItem,
   QuotationItem,
   QuotationPaymentTerm,
+  QuotationStatus,
   QuotationWithRelations,
   QuotationWarranty,
 } from "./types";
-import {
-  createProjectFromQuotation,
-  fetchProjectByQuotation,
-} from "../projects/projectApi";
+import { fetchProjectByQuotation } from "../projects/projectApi";
 import { formatStock } from "../inventory/inventoryUtils";
 import type { ProjectWithRelations } from "../projects/types";
-import { buildQuotationPdf } from "../documents/businessPdf";
 import {
-  buildQuotationPdfPath,
-  fetchBusinessDocumentSettings,
-  uploadGeneratedPdf,
-} from "../documents/generatedPdfApi";
-
-type StatusAction = "sent" | "accepted" | "rejected";
+  fetchQuotationPdfPreviewUrl,
+  generateAndStoreQuotationPdf,
+} from "./quotationPdfWorkflow";
 
 export function QuotationDetailPage() {
   const { id } = useParams();
@@ -74,7 +71,6 @@ export function QuotationDetailPage() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [quotation, setQuotation] = useState<QuotationWithRelations | null>(null);
-  const [items, setItems] = useState<QuotationItem[]>([]);
   const [reservations, setReservations] = useState<
     QuotationInventoryReservation[]
   >([]);
@@ -82,31 +78,27 @@ export function QuotationDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [statusTarget, setStatusTarget] = useState<StatusAction | null>(null);
+  const [statusTarget, setStatusTarget] = useState<QuotationStatus | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [existingProject, setExistingProject] =
     useState<ProjectWithRelations | null>(null);
-  const [creatingProject, setCreatingProject] = useState(false);
-  const [localPdfPreviewUrl, setLocalPdfPreviewUrl] = useState<string | null>(null);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [previewingPdf, setPreviewingPdf] = useState(false);
-  const [actionsOpen, setActionsOpen] = useState(false);
-  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [preparingPdf, setPreparingPdf] = useState(false);
 
   const canView = hasPermission(profile, permissions, "quotations", "view");
   const canUpdate = hasPermission(profile, permissions, "quotations", "update");
   const canDelete = hasPermission(profile, permissions, "quotations", "delete");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
+  const canCreateSurvey = hasPermission(
+    profile,
+    permissions,
+    "site_surveys",
+    "create",
+  );
   const canCreateDocuments = hasPermission(
     profile,
     permissions,
     "documents",
-    "create",
-  );
-  const canCreateProject = hasPermission(
-    profile,
-    permissions,
-    "projects",
     "create",
   );
   async function loadQuotation() {
@@ -124,12 +116,16 @@ export function QuotationDetailPage() {
         fetchQuotationReservations(profile, id),
       ]);
       setQuotation(nextQuotation);
-      setItems(nextItems);
       setReservations(nextReservations);
       if (nextQuotation && canViewProjects) {
         setExistingProject(await fetchProjectByQuotation(profile, nextQuotation.id));
       } else {
         setExistingProject(null);
+      }
+      if (nextQuotation) {
+        await loadQuotationPdf(nextQuotation, nextItems);
+      } else {
+        setPdfPreviewUrl(null);
       }
     } catch (nextError) {
       setError(
@@ -147,31 +143,6 @@ export function QuotationDetailPage() {
     // loadQuotation closes over current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canView, id, profile?.id]);
-
-  useEffect(
-    () => () => {
-      if (localPdfPreviewUrl) {
-        URL.revokeObjectURL(localPdfPreviewUrl);
-      }
-    },
-    [localPdfPreviewUrl],
-  );
-
-  useEffect(() => {
-    function handleDocumentPointerDown(event: MouseEvent) {
-      if (
-        actionsMenuRef.current &&
-        !actionsMenuRef.current.contains(event.target as Node)
-      ) {
-        setActionsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleDocumentPointerDown);
-    return () => {
-      document.removeEventListener("mousedown", handleDocumentPointerDown);
-    };
-  }, []);
 
   if (!canView) {
     return (
@@ -211,13 +182,7 @@ export function QuotationDetailPage() {
 
     try {
       setUpdatingStatus(true);
-      if (statusTarget === "sent") {
-        await markQuotationSent(quotation.id);
-      } else if (statusTarget === "accepted") {
-        await acceptQuotation(quotation.id);
-      } else {
-        await rejectQuotation(quotation.id);
-      }
+      await updateQuotationStatus(quotation.id, statusTarget);
       showToast(
         statusTarget === "accepted"
           ? "Quotation accepted. Customer and project created."
@@ -238,176 +203,34 @@ export function QuotationDetailPage() {
     }
   }
 
-  async function handleCreateProject() {
-    if (!quotation) {
-      return;
-    }
-
-    if (existingProject) {
-      navigate(`/projects/${existingProject.id}`);
-      return;
-    }
-
+  async function loadQuotationPdf(
+    targetQuotation: QuotationWithRelations,
+    targetItems: QuotationItem[],
+  ) {
     try {
-      setCreatingProject(true);
-      const project = await createProjectFromQuotation(quotation.id);
-      showToast("Project created from accepted quotation.", "success");
-      navigate(`/projects/${project.id}`);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Project creation failed.",
-        "error",
-      );
-      await loadQuotation();
-    } finally {
-      setCreatingProject(false);
-    }
-  }
-
-  function validateQuotationPdfExport() {
-    if (!quotation) {
-      return ["Quotation could not be loaded."];
-    }
-
-    const errors: string[] = [];
-    const hasBomRows =
-      items.length > 0 ||
-      (quotation.material_items ?? []).some(
-        (item) =>
-          item.description.trim() ||
-          item.make_specification.trim() ||
-          item.quantity.trim() ||
-          item.unit.trim(),
-      );
-    const effectiveTotalAmount = Math.max(
-      Number(quotation.total_amount ?? 0),
-      Number(quotation.pricing_total_rate ?? 0),
-    );
-
-    if (!quotation.customer_id && !quotation.lead_id && !quotation.site_survey_id) {
-      errors.push("Select a lead, customer, or site survey before generating the quotation PDF.");
-    }
-
-    if (
-      quotation.system_capacity_kw === null ||
-      quotation.system_capacity_kw === undefined ||
-      Number(quotation.system_capacity_kw) <= 0
-    ) {
-      errors.push("Enter the system capacity before generating the PDF.");
-    }
-
-    if (!Number.isFinite(effectiveTotalAmount) || effectiveTotalAmount <= 0) {
-      errors.push("Add a total amount greater than 0 before generating the PDF.");
-    }
-
-    if (!hasBomRows) {
-      errors.push("Add at least one quotation item or BOM item before generating the PDF.");
-    }
-
-    return errors;
-  }
-
-  function showPdfValidationErrors(errors: string[]) {
-    showToast(errors.join(" "), "error");
-  }
-
-  async function handlePreviewPdf() {
-    if (!quotation) {
-      return;
-    }
-
-    const validationErrors = validateQuotationPdfExport();
-    if (validationErrors.length > 0) {
-      showPdfValidationErrors(validationErrors);
-      return;
-    }
-
-    try {
-      setPreviewingPdf(true);
-      const settings = await fetchBusinessDocumentSettings();
-      const pdfBlob = await buildQuotationPdf(
-        quotation,
-        items,
-        organization,
-        settings,
-      );
-      const nextPreviewUrl = URL.createObjectURL(pdfBlob);
-
-      setLocalPdfPreviewUrl((currentUrl) => {
-        if (currentUrl) {
-          URL.revokeObjectURL(currentUrl);
-        }
-        return nextPreviewUrl;
-      });
-      window.open(nextPreviewUrl, "_blank", "noopener,noreferrer");
-      showToast("Quotation PDF preview generated.", "success");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Quotation PDF preview failed.",
-        "error",
-      );
-    } finally {
-      setPreviewingPdf(false);
-    }
-  }
-
-  async function handleGeneratePdf() {
-    if (!quotation) {
-      return;
-    }
-
-    const validationErrors = validateQuotationPdfExport();
-    if (validationErrors.length > 0) {
-      showPdfValidationErrors(validationErrors);
-      return;
-    }
-
-    try {
-      setGeneratingPdf(true);
-      const settings = await fetchBusinessDocumentSettings();
-      const filePath = buildQuotationPdfPath(
-        quotation.organization_id,
-        quotation.quotation_code,
-        settings.quotation_prefix ?? "QUO",
-        quotation.id,
-      );
-
-      const pdfBlob = await buildQuotationPdf(
-        quotation,
-        items,
-        organization,
-        settings,
-      );
-      if (canCreateDocuments) {
-        await uploadGeneratedPdf(
-          profile,
-          {
-            document_type: "quotation_pdf",
-            document_name: `${quotation.quotation_code ?? "Quotation"} PDF`,
-            file_path: filePath,
-            customer_id: quotation.customer_id,
-            quotation_id: quotation.id,
-            notes: null,
-          },
-          pdfBlob,
-        );
+      setPreparingPdf(true);
+      const existingPreviewUrl = await fetchQuotationPdfPreviewUrl(targetQuotation);
+      if (existingPreviewUrl) {
+        setPdfPreviewUrl(existingPreviewUrl);
+        return;
       }
 
-      downloadBlob(pdfBlob, quotationPdfFileName(quotation));
-      showToast("Quotation PDF generated and downloaded.", "success");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Quotation PDF generation failed.",
-        "error",
+      if (!canCreateDocuments) {
+        setPdfPreviewUrl(null);
+        return;
+      }
+
+      const result = await generateAndStoreQuotationPdf(
+        profile,
+        organization,
+        targetQuotation,
+        targetItems,
       );
+      setPdfPreviewUrl(result.previewUrl);
+    } catch {
+      setPdfPreviewUrl(null);
     } finally {
-      setGeneratingPdf(false);
+      setPreparingPdf(false);
     }
   }
 
@@ -426,7 +249,7 @@ export function QuotationDetailPage() {
     ? deriveQuotationMaterialSummary(materialItems)
     : null;
   const validUntilDate =
-    oneMonthFromDateValue(quotation?.quotation_date) ||
+    quotationValidUntilFromDateInput(quotation?.quotation_date) ||
     quotation?.valid_until ||
     snapshotValues.valid_until ||
     null;
@@ -564,6 +387,9 @@ export function QuotationDetailPage() {
       defaultCommercialTerms.commercial_warranty_applicability,
   };
   const reservationSummary = summarizeReservations(reservations);
+  const relatedSiteSurveyId =
+    quotation?.related_site_survey_id ?? quotation?.site_survey_id ?? null;
+  const openProjectId = existingProject?.id ?? quotation?.project_id ?? null;
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/quotations">
@@ -583,129 +409,81 @@ export function QuotationDetailPage() {
         <>
           <div>
             <header className="space-y-3">
-              <p className="text-sm font-medium text-[#06173f]">SolarOS</p>
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
-                  {quotation.quotation_title ?? quotation.quotation_code ?? "Quotation"}
-                </h1>
-                <div className="flex flex-wrap items-start gap-2 lg:justify-end">
-                  {canUpdate ? (
-                    <button
-                      aria-label="Edit quotation"
-                      className="inline-flex min-h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => navigate(`/quotations/${quotation.id}/edit`)}
-                      title="Edit quotation"
-                      type="button"
-                    >
-                      <PencilIcon />
-                    </button>
-                  ) : null}
-                  <Button
-                    onClick={() => void handlePreviewPdf()}
-                    disabled={previewingPdf}
-                    variant="secondary"
-                  >
-                    {previewingPdf ? "Preparing..." : "Preview PDF"}
-                  </Button>
-                  {localPdfPreviewUrl ? (
-                    <a
-                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
-                      href={localPdfPreviewUrl}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      Open Preview
-                    </a>
-                  ) : null}
-                  <Button
-                    onClick={() => void handleGeneratePdf()}
-                    disabled={generatingPdf || previewingPdf}
-                    variant="secondary"
-                  >
-                    {generatingPdf ? "Generating..." : "Generate PDF"}
-                  </Button>
-                  <div className="relative" ref={actionsMenuRef}>
-                    <button
-                      aria-expanded={actionsOpen}
-                      aria-haspopup="menu"
-                      aria-label="Quotation actions"
-                      className="inline-flex min-h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
-                      onClick={() => setActionsOpen((current) => !current)}
-                      title="Quotation actions"
-                      type="button"
-                    >
-                      <VerticalDotsIcon />
-                    </button>
-                    {actionsOpen ? (
-                      <div
-                        className="absolute right-0 z-20 mt-2 w-52 overflow-hidden rounded-lg border border-stone-200 bg-white py-1 shadow-lg"
-                        role="menu"
+                <RecordTitle
+                  recordType="Quotation"
+                  name={contact.customerName}
+                  meta={[
+                    quotation.quotation_code ?? "Quotation",
+                    quotation.site_survey?.survey_code ??
+                      quotation.lead?.lead_code ??
+                      quotation.customer?.customer_code,
+                    labelize(quotation.status),
+                    contact.phone,
+                  ]}
+                  action={
+                    canUpdate ? (
+                      <button
+                        aria-label="Edit quotation"
+                        className="inline-flex min-h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => navigate(`/quotations/${quotation.id}/edit`)}
+                        title="Edit quotation"
+                        type="button"
                       >
-                        {canUpdate ? (
-                          <>
-                            <ActionMenuButton
-                              disabled={updatingStatus}
-                              onClick={() => {
-                                setStatusTarget("sent");
-                                setActionsOpen(false);
-                              }}
-                            >
-                              Mark Sent
-                            </ActionMenuButton>
-                            <ActionMenuButton
-                              disabled={updatingStatus}
-                              onClick={() => {
-                                setStatusTarget("accepted");
-                                setActionsOpen(false);
-                              }}
-                            >
-                              Accept
-                            </ActionMenuButton>
-                            <ActionMenuButton
-                              danger
-                              disabled={updatingStatus}
-                              onClick={() => {
-                                setStatusTarget("rejected");
-                                setActionsOpen(false);
-                              }}
-                            >
-                              Reject
-                            </ActionMenuButton>
-                          </>
-                        ) : null}
-                        {existingProject && canViewProjects ? (
-                          <Link
-                            className="block w-full px-4 py-2 text-left text-sm font-semibold text-slate-700 hover:bg-stone-50"
-                            onClick={() => setActionsOpen(false)}
-                            role="menuitem"
-                            to={`/projects/${existingProject.id}`}
-                          >
-                            Open Project
-                          </Link>
-                        ) : null}
-                        {!existingProject &&
-                        canCreateProject &&
-                        quotation.status === "accepted" ? (
-                          <ActionMenuButton
-                            disabled={creatingProject}
-                            onClick={() => {
-                              setActionsOpen(false);
-                              void handleCreateProject();
-                            }}
-                          >
-                            {creatingProject ? "Creating..." : "Create Project"}
-                          </ActionMenuButton>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
+                        <PencilIcon />
+                      </button>
+                    ) : null
+                  }
+                />
               </div>
-              <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-                {`${quotation.quotation_code ?? "Quotation"} / ${contact.customerName} / ${contact.phone}`}
-              </p>
               <QuotationStatusPill quotation={quotation} />
             </header>
+            <div className="mt-4 space-y-3">
+              <NextStepLabel />
+              <div className="flex flex-wrap gap-2">
+                {pdfPreviewUrl ? (
+                  <a
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                    download
+                    href={pdfPreviewUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Download Quotation
+                  </a>
+                ) : (
+                  <PlaceholderAction>
+                    {preparingPdf ? "Preparing Quotation" : "Download Quotation"}
+                  </PlaceholderAction>
+                )}
+                {canUpdate ? (
+                  <QuotationStatusSelect
+                    disabled={updatingStatus}
+                    value={quotation.status ?? "draft"}
+                    onChange={setStatusTarget}
+                  />
+                ) : null}
+                {openProjectId && canViewProjects ? (
+                  <Link
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                    to={`/projects/${openProjectId}`}
+                  >
+                    Open Project
+                  </Link>
+                ) : quotation.status === "accepted" ? (
+                  <PlaceholderAction>Open Project</PlaceholderAction>
+                ) : !relatedSiteSurveyId && canCreateSurvey && quotation.lead_id ? (
+                  <Link
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                    to={`/site-surveys?new=1&leadId=${quotation.lead_id}`}
+                  >
+                    Create Site Survey
+                  </Link>
+                ) : !relatedSiteSurveyId ? (
+                  <PlaceholderAction>Create Site Survey</PlaceholderAction>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -1233,32 +1011,38 @@ function ReservationStatusPill({
   );
 }
 
-function ActionMenuButton({
-  children,
-  danger = false,
-  disabled = false,
-  onClick,
+function QuotationStatusSelect({
+  value,
+  onChange,
+  disabled,
 }: {
-  children: string;
-  danger?: boolean;
-  disabled?: boolean;
-  onClick: () => void;
+  value: QuotationStatus;
+  onChange: (status: QuotationStatus) => void;
+  disabled: boolean;
 }) {
   return (
-    <button
-      className={`block w-full px-4 py-2 text-left text-sm font-semibold transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60 ${
-        danger ? "text-rose-700" : "text-slate-700"
-      }`}
-      disabled={disabled}
-      onClick={onClick}
-      role="menuitem"
-      type="button"
-    >
-      {children}
-    </button>
+    <label className="inline-flex">
+      <span className="sr-only">Update quotation status</span>
+      <select
+        className="min-h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-stone-50 focus:border-orange-600 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={disabled}
+        value={value}
+        onChange={(event) => {
+          const nextStatus = event.target.value as QuotationStatus;
+          if (nextStatus !== value) {
+            onChange(nextStatus);
+          }
+        }}
+      >
+        {quotationStatusOptions.map((status) => (
+          <option key={status} value={status}>
+            {labelize(status)}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
-
 
 function PencilIcon() {
   return (
@@ -1285,21 +1069,6 @@ function PencilIcon() {
   );
 }
 
-function VerticalDotsIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-4 w-4"
-      fill="currentColor"
-      viewBox="0 0 24 24"
-    >
-      <circle cx="12" cy="5" r="1.8" />
-      <circle cx="12" cy="12" r="1.8" />
-      <circle cx="12" cy="19" r="1.8" />
-    </svg>
-  );
-}
-
 function quotationStatusUpdatedAt(quotation: QuotationWithRelations) {
   if (quotation.status === "accepted") {
     return quotation.accepted_at ?? quotation.updated_at;
@@ -1314,27 +1083,6 @@ function quotationStatusUpdatedAt(quotation: QuotationWithRelations) {
   }
 
   return quotation.updated_at ?? quotation.created_at;
-}
-
-function quotationPdfFileName(quotation: QuotationWithRelations) {
-  const code = (quotation.quotation_code ?? "quotation")
-    .trim()
-    .replace(/[^a-z0-9-]+/gi, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return `${code || "quotation"}.pdf`;
-}
-
-function downloadBlob(blob: Blob, fileName: string) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.rel = "noreferrer";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function TotalsCard({
@@ -1369,7 +1117,7 @@ function TotalsCard({
     ? discountedTotals.totalAmount
     : Number(quotation.total_amount ?? 0);
   return (
-    <aside className="xl:sticky xl:top-6 xl:self-start">
+    <aside className="xl:sticky xl:top-24 xl:max-h-[calc(100vh-7rem)] xl:self-start xl:overflow-y-auto xl:pr-1">
       <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Totals</h2>
         <dl className="mt-4 space-y-3 text-sm">
@@ -1568,33 +1316,6 @@ function formatPaymentTermAmount(
   return formatMoney(total * percent / 100);
 }
 
-function oneMonthFromDateValue(value: string | null | undefined) {
-  if (!value) {
-    return null;
-  }
-
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) {
-    return null;
-  }
-
-  const [, year, month, day] = match;
-  const originalDay = Number(day);
-  const nextDate = new Date(Number(year), Number(month) - 1, 1);
-  nextDate.setMonth(nextDate.getMonth() + 1);
-  const lastDayOfTargetMonth = new Date(
-    nextDate.getFullYear(),
-    nextDate.getMonth() + 1,
-    0,
-  ).getDate();
-  nextDate.setDate(Math.min(originalDay, lastDayOfTargetMonth));
-
-  return [
-    String(nextDate.getFullYear()),
-    String(nextDate.getMonth() + 1).padStart(2, "0"),
-    String(nextDate.getDate()).padStart(2, "0"),
-  ].join("-");
-}
 
 function customerLink(quotation: QuotationWithRelations) {
   if (!quotation.customer_id) {

@@ -71,7 +71,6 @@ export function leadToSurveyForm(lead: Lead): SiteSurveyFormValues {
       ? ""
       : String(lead.estimated_load_kw);
   values.address_notes = formatLeadAddress(lead);
-  values.remarks = formatLeadSurveyRemarks(lead);
   return values;
 }
 
@@ -101,7 +100,7 @@ export function getSurveyContact(survey: SiteSurveyWithRelations) {
   return {
     name: primary?.full_name ?? "-",
     phone: primary?.phone ?? "-",
-    sourceLabel: survey.customer ? "Customer" : survey.lead ? "Lead" : "Unlinked",
+    sourceLabel: survey.customer ? "Customer" : survey.lead ? "Enquiry" : "Unlinked",
   };
 }
 
@@ -112,39 +111,6 @@ export function formatLeadAddress(lead: Pick<
   return [lead.address, lead.city, lead.district, lead.state, lead.pincode]
     .filter(Boolean)
     .join(", ");
-}
-
-export function formatLeadSurveyRemarks(
-  lead: Pick<
-    Lead,
-    | "full_name"
-    | "phone"
-    | "alternate_phone"
-    | "email"
-    | "lead_source"
-    | "requirement_type"
-    | "electricity_bill_amount"
-    | "property_type"
-    | "priority"
-    | "notes"
-  >,
-) {
-  return [
-    lead.full_name ? `Lead name: ${lead.full_name}` : "",
-    lead.phone ? `Phone: ${lead.phone}` : "",
-    lead.alternate_phone ? `Alternate phone: ${lead.alternate_phone}` : "",
-    lead.email ? `Email: ${lead.email}` : "",
-    lead.lead_source ? `Lead source: ${lead.lead_source}` : "",
-    lead.priority ? `Priority: ${lead.priority}` : "",
-    lead.requirement_type ? `Requirement: ${lead.requirement_type}` : "",
-    lead.property_type ? `Property type: ${lead.property_type}` : "",
-    lead.electricity_bill_amount === null ||
-    lead.electricity_bill_amount === undefined
-      ? ""
-      : `Electricity bill amount: ${lead.electricity_bill_amount}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
 }
 
 export function formatCustomerAddress(customer: SurveyCustomerSummary) {
@@ -161,7 +127,7 @@ export function formatCustomerAddress(customer: SurveyCustomerSummary) {
 }
 
 export function leadOptionLabel(lead: SurveyLeadSummary) {
-  return `${lead.lead_code ?? "Lead"} - ${lead.full_name} (${lead.phone})`;
+  return `${lead.lead_code ?? "Enq"} - ${lead.full_name} (${lead.phone})`;
 }
 
 export function customerOptionLabel(customer: SurveyCustomerSummary) {

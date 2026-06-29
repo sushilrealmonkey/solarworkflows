@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -39,9 +39,7 @@ import {
   updateSiteSurveyStatus,
 } from "./siteSurveyApi";
 import {
-  emptySurveyForm,
   formatLeadAddress,
-  formatLeadSurveyRemarks,
   formatSurveyTime,
   getSurveyContact,
   leadOptionLabel,
@@ -67,6 +65,7 @@ type SurveyFilters = {
 export function SiteSurveysPage() {
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [surveys, setSurveys] = useState<SiteSurveyWithRelations[]>([]);
   const [leads, setLeads] = useState<SurveyLeadSummary[]>([]);
@@ -100,6 +99,13 @@ export function SiteSurveysPage() {
   const canCreate = hasPermission(profile, permissions, "site_surveys", "create");
   const canUpdate = hasPermission(profile, permissions, "site_surveys", "update");
   const canDelete = hasPermission(profile, permissions, "site_surveys", "delete");
+  const canViewProjects = hasPermission(profile, permissions, "projects", "view");
+  const canCreateQuotation = hasPermission(
+    profile,
+    permissions,
+    "quotations",
+    "create",
+  );
 
   async function loadData() {
     if (!canView) {
@@ -217,14 +223,23 @@ export function SiteSurveysPage() {
     );
   }
 
-  function openCreateForm() {
-    setFormErrors({});
-    setFormState({ mode: "create", survey: null, values: emptySurveyForm() });
-  }
-
   function openEditForm(survey: SiteSurveyWithRelations) {
     setFormErrors({});
     setFormState({ mode: "edit", survey, values: surveyToForm(survey) });
+  }
+
+  function openSurveyDetail(surveyId: string) {
+    navigate(`/site-surveys/${surveyId}`);
+  }
+
+  function handleSurveyRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    surveyId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openSurveyDetail(surveyId);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -322,9 +337,8 @@ export function SiteSurveysPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
           title="Site Surveys"
-          description="Schedule inspections, capture technical observations, and keep the survey handoff ready for future quotations."
+          description="Review inspections created from enquiries and keep the survey handoff ready for future quotations."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Add Survey</Button> : null}
       </div>
 
       <Toolbar className="md:grid-cols-3">
@@ -377,34 +391,37 @@ export function SiteSurveysPage() {
       {!loading && !error && filteredSurveys.length === 0 ? (
         <EmptyState
           title="No site surveys found"
-          description="Schedule a survey from this module or from a lead profile when an enquiry is ready for inspection."
-          action={canCreate ? <Button onClick={openCreateForm}>Add Survey</Button> : null}
+          description="Site surveys will appear here after they are scheduled from an enquiry."
         />
       ) : null}
 
       {!loading && !error && filteredSurveys.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm 2xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Survey</th>
-                  <th className="px-4 py-3">Customer / Lead</th>
+                  <th className="px-4 py-3">Customer / Enquiry</th>
                   <th className="px-4 py-3">Phone</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Time</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned</th>
-                  <th className="px-4 py-3">Capacity</th>
                   <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3 text-right">Next Step</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filteredSurveys.map((survey) => {
                   const contact = getSurveyContact(survey);
                   return (
-                    <tr key={survey.id}>
+                    <tr
+                      key={survey.id}
+                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                      onClick={() => openSurveyDetail(survey.id)}
+                      onKeyDown={(event) => handleSurveyRowKeyDown(event, survey.id)}
+                      role="link"
+                      tabIndex={0}
+                    >
                       <td className="px-4 py-3 font-semibold text-slate-950">
                         {survey.survey_code ?? "-"}
                       </td>
@@ -418,54 +435,20 @@ export function SiteSurveysPage() {
                       </td>
                       <td className="px-4 py-3">{contact.phone}</td>
                       <td className="px-4 py-3">
-                        {formatDate(survey.scheduled_date)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {formatSurveyTime(survey.scheduled_time)}
-                      </td>
-                      <td className="px-4 py-3">
                         <SurveyStatusBadge value={survey.survey_status} />
                       </td>
                       <td className="px-4 py-3">
                         {staffName(staff, survey.assigned_to)}
                       </td>
                       <td className="px-4 py-3">
-                        {survey.recommended_capacity_kw
-                          ? `${survey.recommended_capacity_kw} kW`
-                          : "-"}
-                      </td>
-                      <td className="px-4 py-3">
                         {formatDate(survey.created_at)}
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <ViewLink to={`/site-surveys/${survey.id}`}>View</ViewLink>
-                          {canUpdate ? (
-                            <>
-                              <Button
-                                onClick={() => openEditForm(survey)}
-                                variant="secondary"
-                              >
-                                Edit
-                              </Button>
-                              <SurveyStatusSelect
-                                disabled={updatingStatus}
-                                value={survey.survey_status ?? "scheduled"}
-                                onChange={(status) =>
-                                  setStatusTarget({ survey, status })
-                                }
-                              />
-                            </>
-                          ) : null}
-                          {canDelete ? (
-                            <Button
-                              onClick={() => setDeleteTarget(survey)}
-                              variant="danger"
-                            >
-                              Delete
-                            </Button>
-                          ) : null}
-                        </div>
+                      <td className="w-44 px-4 py-3">
+                        <SurveyNextStepActions
+                          canCreateQuotation={canCreateQuotation}
+                          canViewProjects={canViewProjects}
+                          survey={survey}
+                        />
                       </td>
                     </tr>
                   );
@@ -474,13 +457,17 @@ export function SiteSurveysPage() {
             </table>
           </div>
 
-          <div className="grid gap-3 2xl:hidden">
+          <div className="grid gap-3 xl:hidden">
             {filteredSurveys.map((survey) => {
               const contact = getSurveyContact(survey);
               return (
                 <article
                   key={survey.id}
-                  className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+                  className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                  onClick={() => openSurveyDetail(survey.id)}
+                  onKeyDown={(event) => handleSurveyRowKeyDown(event, survey.id)}
+                  role="link"
+                  tabIndex={0}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -525,7 +512,21 @@ export function SiteSurveysPage() {
                       </dd>
                     </div>
                   </dl>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <SurveyNextStepActions
+                      canCreateQuotation={canCreateQuotation}
+                      canViewProjects={canViewProjects}
+                      survey={survey}
+                    />
+                  </div>
+                  <div
+                    className="mt-4 flex flex-wrap gap-2"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <ViewLink to={`/site-surveys/${survey.id}`}>View</ViewLink>
                     {canUpdate ? (
                       <>
@@ -657,8 +658,6 @@ export function SiteSurveyFormModal({
           : String(lead.estimated_load_kw));
       nextValues.address_notes =
         nextValues.address_notes || formatLeadAddress(lead);
-      nextValues.remarks =
-        nextValues.remarks || formatLeadSurveyRemarks(lead);
     }
 
     setValues(nextValues);
@@ -673,11 +672,11 @@ export function SiteSurveyFormModal({
       submitting={saving}
     >
       <SelectInput
-        label="Lead"
+        label="Enquiry"
         value={values.lead_id}
         onChange={handleLeadChange}
         options={[
-          { value: "", label: "No lead linked" },
+          { value: "", label: "No enquiry linked" },
           ...lookups.leads.map((lead) => ({
             value: lead.id,
             label: leadOptionLabel(lead),
@@ -772,6 +771,49 @@ export function SiteSurveyFormModal({
         onChange={(value) => update("remarks", value)}
       />
     </Modal>
+  );
+}
+
+function surveyHasQuotation(survey: SiteSurveyWithRelations) {
+  return Boolean(survey.quotations && survey.quotations.length > 0);
+}
+
+function SurveyNextStepActions({
+  survey,
+  canCreateQuotation,
+  canViewProjects,
+}: {
+  survey: SiteSurveyWithRelations;
+  canCreateQuotation: boolean;
+  canViewProjects: boolean;
+}) {
+  const className =
+    "inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700";
+  const projectPath = survey.project_id ? `/projects/${survey.project_id}` : "/projects";
+
+  return (
+    <div
+      className="flex flex-col items-stretch gap-2"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {surveyHasQuotation(survey) && canViewProjects ? (
+        <Link className={className} to={projectPath}>
+          Go to Project
+        </Link>
+      ) : !surveyHasQuotation(survey) && canCreateQuotation ? (
+        <Link
+          className={className}
+          to={`/quotations?new=1&siteSurveyId=${survey.id}`}
+        >
+          Create Quotation
+        </Link>
+      ) : (
+        <span className="text-right text-sm font-medium text-slate-500">
+          {surveyHasQuotation(survey) ? "Project ready" : "No next step available"}
+        </span>
+      )}
+    </div>
   );
 }
 

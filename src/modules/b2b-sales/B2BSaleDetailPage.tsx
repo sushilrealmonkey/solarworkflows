@@ -379,7 +379,9 @@ export function B2BSaleDetailPage() {
                 />
                 <DetailItem label="Contact Person" value={sale.customer?.contact_person_name ?? "-"} />
                 <DetailItem label="Phone" value={sale.customer?.phone ?? "-"} />
-                <DetailItem label="GST Number" value={sale.customer?.gst_number ?? "-"} />
+                <DetailItem label="GST Number" value={sale.gst_number || sale.customer?.gst_number || "-"} />
+                <DetailItem label="Billing Address" value={sale.billing_address ?? "-"} />
+                <DetailItem label="Delivery Address" value={sale.delivery_address ?? "-"} />
               </DetailSection>
 
               <DetailSection title="Sale Details">

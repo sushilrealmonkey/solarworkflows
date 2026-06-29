@@ -292,6 +292,8 @@ export type QuotationWithRelations = Quotation & {
   customer?: SurveyCustomerSummary | null;
   lead?: SurveyLeadSummary | null;
   site_survey?: SiteSurveyWithRelations | null;
+  related_site_survey_id?: string | null;
+  project_id?: string | null;
   created_by_profile?: {
     id: string;
     full_name: string | null;

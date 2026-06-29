@@ -45,8 +45,11 @@ function nullableNumber(value: string) {
 function salePayload(values: B2BSaleFormValues) {
   return {
     customer_id: values.customer_id,
+    billing_address: nullable(values.billing_address),
+    delivery_address: nullable(values.delivery_address),
+    gst_number: nullable(values.gst_number),
     sale_date: nullable(values.sale_date),
-    discount_amount: nullableNumber(values.discount_amount) ?? 0,
+    discount_amount: 0,
     notes: nullable(values.notes),
   };
 }
@@ -59,6 +62,7 @@ function itemPayload(values: B2BSaleFormItem, sortOrder?: number) {
     quantity: nullableNumber(values.quantity) ?? 1,
     unit: nullable(values.unit),
     unit_price: nullableNumber(values.unit_price) ?? 0,
+    discount_amount: nullableNumber(values.discount_amount) ?? 0,
     gst_percent: nullableNumber(values.gst_percent) ?? 0,
     ...(sortOrder === undefined ? {} : { sort_order: sortOrder }),
   };

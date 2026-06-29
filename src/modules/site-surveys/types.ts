@@ -16,6 +16,12 @@ export type SiteSurveyFile = {
   uploaded_at?: string;
 };
 
+export type SiteSurveyQuotationSummary = {
+  id: string;
+  quotation_code: string | null;
+  status: string | null;
+};
+
 export type SiteSurvey = {
   id: string;
   organization_id: string;
@@ -97,6 +103,8 @@ export type SurveyCustomerSummary = Pick<
 export type SiteSurveyWithRelations = SiteSurvey & {
   lead?: SurveyLeadSummary | null;
   customer?: SurveyCustomerSummary | null;
+  quotations?: SiteSurveyQuotationSummary[] | null;
+  project_id?: string | null;
 };
 
 export type SiteSurveyFormValues = {

@@ -68,11 +68,13 @@ export type Lead = {
   converted_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  action_state?: LeadActionState;
 };
 
 export type LeadActionState = {
   hasSiteSurvey: boolean;
   hasQuotation: boolean;
+  projectId?: string | null;
 };
 
 export type LeadFollowup = {

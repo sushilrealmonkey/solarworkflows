@@ -57,6 +57,7 @@ export type ProformaInvoiceItem = {
   unit: string | null;
   unit_price: number | null;
   gst_percent: number | null;
+  discount_amount: number | null;
   line_total: number | null;
   sort_order: number | null;
   created_at: string | null;
@@ -70,6 +71,9 @@ export type ProformaInvoiceWithRelations = ProformaInvoice & {
   b2b_sale?: {
     id: string;
     sale_code: string | null;
+    billing_address: string | null;
+    delivery_address: string | null;
+    gst_number: string | null;
     total_amount: number | null;
     status: string | null;
   } | null;

@@ -99,9 +99,9 @@ export function CompanyLogoUploader({
     : null;
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 md:col-span-2">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-white sm:w-40">
+    <div className="h-full rounded-lg border border-stone-200 bg-stone-50 p-3">
+      <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-stretch lg:justify-center">
+        <div className="flex h-20 w-full items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-white sm:w-36 lg:h-24 lg:w-full">
           {currentUrl ? (
             <img className="h-full w-full object-contain p-2" src={currentUrl} alt="Current company logo" />
           ) : (
@@ -113,7 +113,7 @@ export function CompanyLogoUploader({
           <p className="mt-1 text-xs leading-5 text-slate-600">
             PNG, JPG, SVG, and other image formats are supported. Maximum file size: 1 MB.
           </p>
-          <label className="mt-3 inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50">
+          <label className="mt-2 inline-flex min-h-9 cursor-pointer items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50">
             {currentUrl ? "Replace logo" : "Choose logo"}
             <input
               ref={inputRef}

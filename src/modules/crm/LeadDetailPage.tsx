@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
-  convertLeadToCustomer,
   deleteLead,
   fetchLead,
   fetchLeadActionState,
@@ -14,6 +14,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatEnquiryCode,
   hasPermission,
   labelize,
   leadToForm,
@@ -29,6 +30,8 @@ import {
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  NextStepLabel,
+  PencilIcon,
   PlaceholderAction,
   StatusBadge,
 } from "./CrmComponents";
@@ -53,14 +56,12 @@ export function LeadDetailPage() {
   const [saving, setSaving] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [converting, setConverting] = useState(false);
-  const [conversionLink, setConversionLink] = useState<string | null>(null);
 
   const canView = hasPermission(profile, permissions, "leads", "view");
   const canCreate = hasPermission(profile, permissions, "leads", "create");
   const canUpdate = hasPermission(profile, permissions, "leads", "update");
   const canDelete = hasPermission(profile, permissions, "leads", "delete");
-  const canCreateCustomer = hasPermission(profile, permissions, "customers", "create");
+  const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canViewSurvey = hasPermission(
     profile,
     permissions,
@@ -77,13 +78,8 @@ export function LeadDetailPage() {
   const canViewQuotation = hasPermission(profile, permissions, "quotations", "view");
   const canCreateQuotation =
     canViewQuotation && hasPermission(profile, permissions, "quotations", "create");
-  const canConvert = canUpdate && canCreateCustomer;
   const primaryActionClass =
     "inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700";
-  const disabledActionClass =
-    "inline-flex min-h-10 cursor-not-allowed items-center justify-center rounded-lg border border-stone-200 bg-stone-100 px-3 py-2 text-sm font-semibold text-slate-500 opacity-75 shadow-sm";
-  const convertActionClass =
-    "inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 disabled:cursor-not-allowed disabled:border-orange-200 disabled:bg-orange-100 disabled:text-orange-700 disabled:opacity-75";
 
   async function loadLead() {
     if (!canView || !id) {
@@ -106,11 +102,6 @@ export function LeadDetailPage() {
       setLead(nextLead);
       setStaff(nextStaff);
       setLeadActionState(nextActionState);
-      if (nextLead?.converted_customer_id) {
-        setConversionLink(`/customers/${nextLead.converted_customer_id}`);
-      } else {
-        setConversionLink(null);
-      }
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load lead.",
@@ -129,8 +120,8 @@ export function LeadDetailPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="Lead profile is not available"
-        description="Your role needs leads:view access to open lead details."
+        title="Enquiry profile is not available"
+        description="Your role needs leads:view access to open enquiry details."
       />
     );
   }
@@ -157,10 +148,10 @@ export function LeadDetailPage() {
       const updatedLead = await updateLead(lead.id, editing);
       setLead(updatedLead);
       setEditing(null);
-      showToast("Lead updated.", "success");
+      showToast("Enquiry updated.", "success");
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Lead update failed.",
+        nextError instanceof Error ? nextError.message : "Enquiry update failed.",
         "error",
       );
     } finally {
@@ -176,47 +167,15 @@ export function LeadDetailPage() {
     try {
       setDeleting(true);
       await deleteLead(lead.id);
-      showToast("Lead deleted.", "success");
+      showToast("Enquiry deleted.", "success");
       navigate("/leads");
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Lead delete failed.",
+        nextError instanceof Error ? nextError.message : "Enquiry delete failed.",
         "error",
       );
     } finally {
       setDeleting(false);
-    }
-  }
-
-  async function handleConvert() {
-    if (!lead) {
-      return;
-    }
-
-    if (lead.converted_customer_id) {
-      setConversionLink(`/customers/${lead.converted_customer_id}`);
-      showToast("Lead is already converted.", "info");
-      return;
-    }
-
-    if (lead.status === "converted") {
-      showToast("Lead is marked converted but has no customer link.", "error");
-      return;
-    }
-
-    try {
-      setConverting(true);
-      const customer = await convertLeadToCustomer(lead.id);
-      setConversionLink(`/customers/${customer.id}`);
-      showToast("Lead converted to customer.", "success");
-      navigate(`/customers/${customer.id}`);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Lead conversion failed.",
-        "error",
-      );
-    } finally {
-      setConverting(false);
     }
   }
 
@@ -232,25 +191,29 @@ export function LeadDetailPage() {
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/leads">
-        Back to leads
+        Back to enquiries
       </Link>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load lead" description={error} /> : null}
+      {error ? <EmptyState title="Could not load enquiry" description={error} /> : null}
       {!loading && !error && !lead ? (
-        <EmptyState title="Lead not found" description="This lead may have been deleted or is outside your organization access." />
+        <EmptyState title="Enquiry not found" description="This enquiry may have been deleted or is outside your organization access." />
       ) : null}
 
       {lead ? (
         <>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <header className="space-y-2">
-              <p className="text-sm font-medium text-[#06173f]">SolarOS</p>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
-                  {lead.full_name}
-                </h1>
-                {canUpdate ? (
+            <RecordTitle
+              recordType="Enquiry"
+              name={lead.full_name}
+              meta={[
+                formatEnquiryCode(lead.lead_code),
+                lead.lead_source,
+                labelize(lead.status),
+                lead.phone,
+              ]}
+              action={
+                canUpdate ? (
                   <button
                     aria-label="Edit lead"
                     className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
@@ -258,89 +221,62 @@ export function LeadDetailPage() {
                     title="Edit lead"
                     type="button"
                   >
-                    <svg
-                      aria-hidden="true"
-                      className="size-4"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="m16.5 3.5 4 4L7 21H3v-4L16.5 3.5z" />
-                    </svg>
+                    <PencilIcon />
                   </button>
+                ) : null
+              }
+            />
+            <div className="space-y-3">
+              <NextStepLabel />
+              <div className="flex flex-wrap gap-2">
+                {leadActionState.hasSiteSurvey &&
+                leadActionState.hasQuotation &&
+                canViewProjects ? (
+                  <Link
+                    className={primaryActionClass}
+                    to={
+                      leadActionState.projectId
+                        ? `/projects/${leadActionState.projectId}`
+                        : "/projects"
+                    }
+                  >
+                    Go to Project
+                  </Link>
                 ) : null}
-              </div>
-              <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-                {lead.lead_code ?? "Lead"} / {lead.phone}
-              </p>
-            </header>
-            <div className="flex flex-wrap gap-2">
-              {canCreateSurvey ? (
-                leadActionState.hasSiteSurvey ? (
-                  <button className={disabledActionClass} disabled type="button">
-                    Schedule Site Survey
-                  </button>
-                ) : (
+                {!leadActionState.hasSiteSurvey && canCreateSurvey ? (
                   <Link
                     className={primaryActionClass}
                     to={`/site-surveys?new=1&leadId=${lead.id}`}
                   >
-                    Schedule Site Survey
+                    Create Site Survey
                   </Link>
-                )
-              ) : (
-                <PlaceholderAction>Schedule Site Survey</PlaceholderAction>
-              )}
-              {canCreateQuotation ? (
-                leadActionState.hasQuotation ? (
-                  <button className={disabledActionClass} disabled type="button">
-                    Create Quotation
-                  </button>
-                ) : (
+                ) : !leadActionState.hasSiteSurvey ? (
+                  <PlaceholderAction>Create Site Survey</PlaceholderAction>
+                ) : null}
+                {!leadActionState.hasQuotation && canCreateQuotation ? (
                   <Link
                     className={primaryActionClass}
                     to={`/quotations?new=1&leadId=${lead.id}`}
                   >
                     Create Quotation
                   </Link>
-                )
-              ) : (
-                <PlaceholderAction>Create Quotation</PlaceholderAction>
-              )}
-              {canConvert ? (
-                <button
-                  className={convertActionClass}
-                  disabled={converting || Boolean(lead.converted_customer_id)}
-                  onClick={handleConvert}
-                  type="button"
-                >
-                  {converting ? "Converting..." : "Convert to Customer"}
-                </button>
-              ) : null}
+                ) : !leadActionState.hasQuotation ? (
+                  <PlaceholderAction>Create Quotation</PlaceholderAction>
+                ) : null}
+                {leadActionState.hasSiteSurvey &&
+                leadActionState.hasQuotation &&
+                !canViewProjects ? (
+                  <PlaceholderAction>Go to Project</PlaceholderAction>
+                ) : null}
+              </div>
             </div>
           </div>
 
-          {conversionLink ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-[#06173f] sm:flex-row sm:items-center sm:justify-between">
-              <span className="font-medium">This lead has a customer profile.</span>
-              <Link
-                className="inline-flex rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-orange-700"
-                to={conversionLink}
-              >
-                Open Customer
-              </Link>
-            </div>
-          ) : null}
-
-          <DetailSection title="Lead Basic Details">
-            <DetailItem label="Lead Code" value={lead.lead_code ?? "-"} />
+          <DetailSection title="Enquiry Basic Details">
+            <DetailItem label="Enq Code" value={formatEnquiryCode(lead.lead_code)} />
             <DetailItem label="Status" value={<StatusBadge value={lead.status} />} />
             <DetailItem label="Priority" value={<StatusBadge value={lead.priority} />} />
-            <DetailItem label="Lead Source" value={lead.lead_source ?? "-"} />
+            <DetailItem label="Enquiry Source" value={lead.lead_source ?? "-"} />
             <DetailItem label="Offered Price" value={formatCurrency(lead.offered_price)} />
             <DetailItem
               label="Offered Price Updated"
@@ -403,11 +339,11 @@ export function LeadDetailPage() {
                     Danger Zone
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Delete this lead from the organization pipeline.
+                    Delete this enquiry from the organization pipeline.
                   </p>
                 </div>
                 <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Lead
+                  Delete Enquiry
                 </Button>
               </div>
             </section>
@@ -417,7 +353,7 @@ export function LeadDetailPage() {
 
       {editing ? (
         <LeadFormModal
-          title="Edit Lead"
+          title="Edit Enquiry"
           values={editing}
           setValues={setEditing}
           errors={formErrors}
@@ -430,8 +366,8 @@ export function LeadDetailPage() {
 
       {confirmingDelete ? (
         <ConfirmDialog
-          title="Delete lead?"
-          description="This lead record will be removed from the organization pipeline."
+          title="Delete enquiry?"
+          description="This enquiry record will be removed from the organization pipeline."
           confirming={deleting}
           onCancel={() => setConfirmingDelete(false)}
           onConfirm={handleDelete}

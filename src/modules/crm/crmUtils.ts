@@ -51,6 +51,14 @@ export const leadRequirementTypeOptions = [
   "AMC",
   "Battery Upgrade",
 ];
+export const leadSourceOptions = [
+  "Referral",
+  "Direct",
+  "Online",
+  "Phone Call",
+  "Field Visit",
+  "Others",
+];
 export const leadPropertyTypeOptions = [
   "Independent House",
   "Apartment",
@@ -147,6 +155,14 @@ export function formatCurrency(value: number | null | undefined) {
     currency: "INR",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+export function formatEnquiryCode(value: string | null | undefined) {
+  if (!value) {
+    return "-";
+  }
+
+  return value.replace(/^lead-/i, "Enq-");
 }
 
 export function toDateTimeInputValue(value: string | null) {
@@ -256,6 +272,34 @@ export function customerToForm(customer: Customer): CustomerFormValues {
     status: customer.status ?? "active",
     assigned_to: customer.assigned_to ?? "",
     notes: customer.notes ?? "",
+  };
+}
+
+export function normalizeCustomerSubmitValues(
+  values: CustomerFormValues,
+  segment: CustomerSegment = values.customer_segment,
+): CustomerFormValues {
+  if (segment === "project_based") {
+    return {
+      ...values,
+      customer_segment: "project_based",
+      business_name: "",
+      gst_number: "",
+      contact_person_name: "",
+    };
+  }
+
+  return {
+    ...values,
+    customer_segment: "b2b_direct",
+    customer_type: "b2b_installer",
+    status: "active",
+    full_name:
+      values.contact_person_name.trim() ||
+      values.full_name.trim() ||
+      values.business_name.trim(),
+    lead_source: "",
+    assigned_to: "",
   };
 }
 
