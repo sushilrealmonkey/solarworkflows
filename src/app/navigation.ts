@@ -45,6 +45,12 @@ export const navigationItems: NavigationItem[] = [
     children: [
       navigationRoute("/customers/b2b-direct"),
       navigationRoute("/b2b-sales"),
+    ],
+  },
+  {
+    label: "Invoices & Payments",
+    path: "/invoice-payments",
+    children: [
       navigationRoute("/proforma-invoices"),
       navigationRoute("/invoices"),
       navigationRoute("/payments"),

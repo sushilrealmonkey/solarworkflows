@@ -420,6 +420,7 @@ function NavigationIcon({ item }: { item: NavigationItem }) {
 function navigationIconId(item: NavigationItem) {
   if (item.path === "/project-sales") return "sales";
   if (item.path === "/product-sales") return "b2b_sales";
+  if (item.path === "/invoice-payments") return "finance";
   if (item.path === "/stock-purchasing") return "stock";
   if (item.path === "/masters") return "product_master";
 
