@@ -159,6 +159,16 @@ export type InvoiceFormValues = {
   items: InvoiceItemFormValues[];
 };
 
+export type InvoicePaymentFormValues = {
+  amount: string;
+  payment_date: string;
+  payment_mode: string;
+  reference_number: string;
+  bank_name: string;
+  notes: string;
+  status: string;
+};
+
 export type InvoiceDetailData = {
   invoice: InvoiceWithRelations | null;
   items: InvoiceItem[];

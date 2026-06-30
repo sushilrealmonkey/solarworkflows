@@ -106,12 +106,6 @@ export const routes: AppRoute[] = [
     description: "Purchase orders and stock receiving workflows will live here.",
   },
   {
-    path: "/material-receive",
-    label: "Material Receive",
-    moduleKey: "inventory",
-    description: "Material receiving workflows will live here.",
-  },
-  {
     path: "/invoices",
     label: "Tax Invoices",
     moduleKey: "invoices",

@@ -36,14 +36,12 @@ export type SiteSurvey = {
   roof_type: string | null;
   roof_area_sqft: number | null;
   shadow_free_area_sqft: number | null;
-  structure_type: string | null;
   electricity_bill_url: string | null;
   site_photos: SiteSurveyFile[] | null;
   latitude: number | null;
   longitude: number | null;
   address_notes: string | null;
   recommended_capacity_kw: number | null;
-  existing_meter_type: string | null;
   sanctioned_load_kw: number | null;
   phase_type: string | null;
   remarks: string | null;
@@ -116,12 +114,10 @@ export type SiteSurveyFormValues = {
   roof_type: string;
   roof_area_sqft: string;
   shadow_free_area_sqft: string;
-  structure_type: string;
   latitude: string;
   longitude: string;
   address_notes: string;
   recommended_capacity_kw: string;
-  existing_meter_type: string;
   sanctioned_load_kw: string;
   phase_type: string;
   remarks: string;

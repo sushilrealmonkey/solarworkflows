@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { formatDisplayDate } from "../../utils/dateFormat";
+import type { B2BSaleWithRelations } from "../b2b-sales/types";
 import {
   classifyFollowupDueDate,
   formatDate,
@@ -32,6 +34,7 @@ import {
   fetchDashboardLowStockItems,
   fetchDashboardPendingDocuments,
   fetchDashboardRecentLeads,
+  fetchDashboardRecentB2BSales,
   fetchDashboardRecentPayments,
   fetchDashboardSummary,
   fetchDashboardUpcomingSurveys,
@@ -57,10 +60,11 @@ function isTenantAdmin(roleNames: string[]) {
 }
 
 function EpcAdminDashboard() {
-  const { profile, organization } = useAuth();
+  const { profile, permissions, organization } = useAuth();
   const [snapshot, setSnapshot] = useState<EpcAdminDashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canViewB2BSales = hasPermission(profile, permissions, "b2b_sales", "view");
 
   useEffect(() => {
     let isMounted = true;
@@ -69,7 +73,9 @@ function EpcAdminDashboard() {
       try {
         setLoading(true);
         setError(null);
-        const nextSnapshot = await fetchEpcAdminDashboardSnapshot(profile);
+        const nextSnapshot = await fetchEpcAdminDashboardSnapshot(profile, {
+          includeB2BSales: canViewB2BSales,
+        });
         if (isMounted) {
           setSnapshot(nextSnapshot);
         }
@@ -93,7 +99,7 @@ function EpcAdminDashboard() {
     return () => {
       isMounted = false;
     };
-  }, [profile]);
+  }, [canViewB2BSales, profile]);
 
   const summary = useMemo(
     () =>
@@ -118,11 +124,7 @@ function EpcAdminDashboard() {
     () => buildEpcDashboardModel(snapshot, summary),
     [snapshot, summary],
   );
-  const reportDate = new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  }).format(new Date());
+  const reportDate = formatDisplayDate(new Date().toISOString());
 
   return (
     <div className="space-y-3 sm:space-y-5">
@@ -141,11 +143,12 @@ function EpcAdminDashboard() {
               {reportDate}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <QuickAction to="/leads" label="Add Lead" />
+              <QuickAction to="/leads" label="Add Enquiry" />
               <QuickAction to="/site-surveys" label="Site Survey" />
               <QuickAction to="/quotations" label="Quotation" />
               <QuickAction to="/payments" label="Payment" />
               <QuickAction to="/inventory" label="Material" />
+              <QuickAction to="/b2b-sales" label="B2B Sale" />
             </div>
           </div>
           <SolarOperationsBrandGraphic
@@ -184,11 +187,11 @@ function EpcAdminDashboard() {
 
       {error ? <ErrorPanel message={error} /> : null}
 
-      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-5">
+      <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <CommandMetricCard
           label="Pipeline Value"
           value={compactCurrencyFormatter.format(adminData.pipelineValue)}
-          detail={`${adminData.activeLeads.length} active leads`}
+          detail={`${adminData.activeLeads.length} active enquiries`}
           trend={`${adminData.newLeadsThisMonth} new this month`}
           visual={
             <MiniSparkline
@@ -246,6 +249,28 @@ function EpcAdminDashboard() {
           }
           loading={loading}
         />
+        <CommandMetricCard
+          label="B2B Customers"
+          value={summary.b2b_customers}
+          detail={`${summary.active_b2b_customers} active business customers`}
+          trend="Direct product sales"
+          visual={<MiniDonut percent={b2bCustomerActivePercent(summary)} tone="green" />}
+          loading={loading}
+        />
+        <CommandMetricCard
+          label="B2B Sales Value"
+          value={compactCurrencyFormatter.format(summary.b2b_sales_value)}
+          detail={`${summary.b2b_sales_count} non-cancelled sales`}
+          trend={`${compactCurrencyFormatter.format(summary.b2b_sales_balance_due)} balance`}
+          warning={summary.b2b_sales_balance_due > 0}
+          visual={
+            <MiniSparkline
+              color="#0f766e"
+              values={adminData.b2bMonthlyRows.map((row) => row.salesValue)}
+            />
+          }
+          loading={loading}
+        />
       </section>
 
       <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
@@ -264,7 +289,7 @@ function EpcAdminDashboard() {
         <SchedulePanel loading={loading} rows={adminData.scheduleRows} />
       </section>
 
-      <section className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+      <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
         <SalesPipelinePanel
           currencyFormatter={compactCurrencyFormatter}
           loading={loading}
@@ -273,6 +298,13 @@ function EpcAdminDashboard() {
         <ProjectExecutionPanel
           loading={loading}
           rows={adminData.projectStageRows}
+        />
+        <B2BSalesPanel
+          currencyFormatter={compactCurrencyFormatter}
+          loading={loading}
+          locked={!canViewB2BSales}
+          sales={snapshot?.recentB2BSales ?? []}
+          summary={summary}
         />
       </section>
 
@@ -329,6 +361,7 @@ function buildEpcDashboardModel(
   const surveys = snapshot?.upcomingSurveys ?? [];
   const reservations = snapshot?.inventoryReservations ?? [];
   const purchaseOrders = snapshot?.purchaseOrders ?? [];
+  const b2bSales = snapshot?.recentB2BSales ?? [];
   const activeLeadStatuses = new Set([
     "new",
     "contacted",
@@ -458,6 +491,7 @@ function buildEpcDashboardModel(
     snapshot?.recentPayments ?? [],
     paymentSummaries,
   );
+  const b2bMonthlyRows = buildB2BMonthlyRows(b2bSales);
   const activeProjectValue =
     paymentSummaries.reduce(
       (total, row) => total + Number(row.total_project_amount ?? 0),
@@ -509,6 +543,8 @@ function buildEpcDashboardModel(
     activeProjectValue,
     acceptedQuotations,
     awaitingQuotations,
+    b2bMonthlyRows,
+    b2bSales,
     collectionEfficiency,
     decisionQuotationCount,
     delayedProjects,
@@ -676,8 +712,8 @@ function SalesPipelinePanel({
     >
       {loading ? <LoadingRows /> : null}
       {!loading && rows.every((row) => row.count === 0) ? (
-        <GuidedEmptyState to="/leads" action="Add Lead">
-          No leads or quotations yet. Start by adding a lead so the pipeline can show real movement.
+        <GuidedEmptyState to="/leads" action="Add Enquiry">
+          No enquiries or quotations yet. Start by adding an enquiry so the pipeline can show real movement.
         </GuidedEmptyState>
       ) : null}
       {!loading && rows.some((row) => row.count > 0) ? (
@@ -764,6 +800,89 @@ function ProjectExecutionPanel({
   );
 }
 
+function B2BSalesPanel({
+  sales,
+  loading,
+  locked,
+  currencyFormatter,
+  summary,
+}: {
+  sales: B2BSaleWithRelations[];
+  loading: boolean;
+  locked: boolean;
+  currencyFormatter: Intl.NumberFormat;
+  summary: DashboardSummaryRow;
+}) {
+  return (
+    <AdminPanel
+      title="B2B Sales"
+      action={
+        !locked ? (
+          <Link className="text-sm font-semibold text-[#06173f]" to="/b2b-sales">
+            View all
+          </Link>
+        ) : null
+      }
+    >
+      {locked ? (
+        <p className="text-sm leading-6 text-slate-600">
+          You do not have permission to view B2B sales.
+        </p>
+      ) : null}
+      {!locked && loading ? <LoadingRows count={4} /> : null}
+      {!locked && !loading ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-stone-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-slate-500">
+                Received
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-950">
+                {currencyFormatter.format(summary.b2b_sales_received_amount)}
+              </p>
+            </div>
+            <div className="rounded-lg bg-stone-50 p-3">
+              <p className="text-[11px] font-semibold uppercase text-slate-500">
+                Balance
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-950">
+                {currencyFormatter.format(summary.b2b_sales_balance_due)}
+              </p>
+            </div>
+          </div>
+          {sales.length === 0 ? (
+            <GuidedEmptyState to="/b2b-sales" action="Open B2B Sales">
+              No direct product sales yet.
+            </GuidedEmptyState>
+          ) : (
+            <div className="space-y-2">
+              {sales.slice(0, 5).map((sale) => (
+                <Link
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-lg border border-stone-100 bg-stone-50 p-2.5 hover:bg-orange-50 sm:p-3"
+                  key={sale.id}
+                  to={`/b2b-sales/${sale.id}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-slate-950">
+                      {b2bSaleCustomerName(sale)}
+                    </span>
+                    <span className="mt-1 block truncate text-xs text-slate-500">
+                      {sale.sale_code ?? "B2B Sale"} - {labelize(sale.status)}
+                    </span>
+                  </span>
+                  <span className="text-right text-sm font-semibold text-slate-700">
+                    {currencyFormatter.format(Number(sale.total_amount ?? 0))}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </AdminPanel>
+  );
+}
+
 function RevenueCollectionPanel({
   rows,
   loading,
@@ -820,7 +939,7 @@ function TodaysWorkPanel({
       {loading ? <LoadingRows count={3} /> : null}
       {!loading && followups.length === 0 ? (
         <GuidedEmptyState to="/leads" action="Review Enquiries">
-          Nothing due today. Schedule follow-ups on active leads to keep sales moving.
+          Nothing due today. Schedule follow-ups on active enquiries to keep sales moving.
         </GuidedEmptyState>
       ) : null}
       {!loading && followups.length > 0 ? (
@@ -867,7 +986,7 @@ function OverduePanel({
   currencyFormatter: Intl.NumberFormat;
 }) {
   const alerts = [
-    [`${overdueFollowups} lead follow-ups overdue`, "/leads"],
+    [`${overdueFollowups} Enquiry follow-ups overdue`, "/leads"],
     [`${pendingSurveyReports} site survey reports pending`, "/site-surveys"],
     [`${currencyFormatter.format(overdueAmount)} payment overdue`, "/payments"],
     [`${delayedProjects} installation/project delayed`, "/projects"],
@@ -1582,10 +1701,7 @@ function buildMonthlyRows(
 
   return Array.from({ length: 6 }, (_, index) => {
     const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-    const label = new Intl.DateTimeFormat("en-IN", {
-      month: "short",
-      year: "2-digit",
-    }).format(monthDate);
+    const label = formatDisplayDate(monthDate.toISOString());
 
     return {
       label,
@@ -1608,6 +1724,37 @@ function buildMonthlyRows(
         .reduce((total, summaryRow) => total + Number(summaryRow.balance_due ?? 0), 0),
     };
   });
+}
+
+function buildB2BMonthlyRows(sales: B2BSaleWithRelations[]) {
+  const now = new Date();
+
+  return Array.from({ length: 6 }, (_, index) => {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+    const label = formatDisplayDate(monthDate.toISOString());
+
+    return {
+      label,
+      salesValue: sales
+        .filter((sale) => isSameMonth(sale.sale_date ?? sale.created_at, monthDate))
+        .reduce((total, sale) => total + Number(sale.total_amount ?? 0), 0),
+    };
+  });
+}
+
+function b2bCustomerActivePercent(summary: DashboardSummaryRow) {
+  return summary.b2b_customers > 0
+    ? Math.round((summary.active_b2b_customers / summary.b2b_customers) * 100)
+    : 0;
+}
+
+function b2bSaleCustomerName(sale: B2BSaleWithRelations) {
+  return (
+    sale.customer?.business_name ??
+    sale.customer?.full_name ??
+    sale.sale_code ??
+    "B2B Sale"
+  );
 }
 
 function materialReservationLabel(
@@ -1678,10 +1825,7 @@ function scheduleDateLabel(value: string | null | undefined, today: Date) {
     return "Tomorrow";
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-  }).format(date);
+  return formatDisplayDate(date.toISOString());
 }
 
 function TenantDashboard() {
@@ -1695,6 +1839,7 @@ function TenantDashboard() {
   );
   const [recentLeads, setRecentLeads] = useState<Lead[]>([]);
   const [recentPayments, setRecentPayments] = useState<PaymentWithRelations[]>([]);
+  const [recentB2BSales, setRecentB2BSales] = useState<B2BSaleWithRelations[]>([]);
   const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
   const [pendingDocuments, setPendingDocuments] = useState<
     OrganizationDocumentWithRelations[]
@@ -1710,6 +1855,7 @@ function TenantDashboard() {
     "view",
   );
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
+  const canViewB2BSales = hasPermission(profile, permissions, "b2b_sales", "view");
   const canViewInventory = hasPermission(
     profile,
     permissions,
@@ -1769,6 +1915,7 @@ function TenantDashboard() {
           nextSurveys,
           nextLeads,
           nextPayments,
+          nextB2BSales,
           nextLowStock,
           nextDocuments,
         ] = await Promise.all([
@@ -1779,6 +1926,9 @@ function TenantDashboard() {
           canViewLeads ? fetchDashboardRecentLeads(profile) : Promise.resolve([]),
           canViewPayments
             ? fetchDashboardRecentPayments(profile)
+            : Promise.resolve([]),
+          canViewB2BSales
+            ? fetchDashboardRecentB2BSales(profile)
             : Promise.resolve([]),
           canViewInventory
             ? fetchDashboardLowStockItems(profile)
@@ -1793,6 +1943,7 @@ function TenantDashboard() {
           setUpcomingSurveys(nextSurveys);
           setRecentLeads(nextLeads);
           setRecentPayments(nextPayments);
+          setRecentB2BSales(nextB2BSales);
           setLowStockItems(nextLowStock);
           setPendingDocuments(nextDocuments);
         }
@@ -1819,6 +1970,7 @@ function TenantDashboard() {
   }, [
     canViewDocuments,
     canViewInventory,
+    canViewB2BSales,
     canViewLeads,
     canViewPayments,
     canViewSurveys,
@@ -1871,6 +2023,10 @@ function TenantDashboard() {
     ["Total Project Value", currencyFormatter.format(summary.total_project_value)],
     ["Amount Received", currencyFormatter.format(summary.total_received_amount)],
     ["Balance Due", currencyFormatter.format(summary.total_balance_due)],
+    ["B2B Customers", summary.b2b_customers],
+    ["Active B2B Customers", summary.active_b2b_customers],
+    ["B2B Sales", summary.b2b_sales_count],
+    ["B2B Sales Value", currencyFormatter.format(summary.b2b_sales_value)],
     ["Low Stock Items", summary.low_stock_items],
     ["Pending Documents", summary.pending_documents],
   ] satisfies Array<[string, ReactNode]>;
@@ -1929,6 +2085,12 @@ function TenantDashboard() {
           loading={operationalLoading}
           locked={!canViewPayments}
           payments={recentPayments}
+        />
+        <RecentB2BSalesWidget
+          currencyFormatter={currencyFormatter}
+          loading={operationalLoading}
+          locked={!canViewB2BSales}
+          sales={recentB2BSales}
         />
         <LowStockWidget
           items={lowStockItems}
@@ -2323,6 +2485,50 @@ function RecentPaymentsWidget({
               payment.payment_date,
             )}`,
             value: currencyFormatter.format(Number(payment.amount ?? 0)),
+          }))}
+        />
+      ) : null}
+    </WidgetFrame>
+  );
+}
+
+function RecentB2BSalesWidget({
+  sales,
+  loading,
+  locked,
+  currencyFormatter,
+}: {
+  sales: B2BSaleWithRelations[];
+  loading: boolean;
+  locked: boolean;
+  currencyFormatter: Intl.NumberFormat;
+}) {
+  return (
+    <WidgetFrame
+      title="Recent B2B Sales"
+      locked={locked}
+      action={
+        !locked ? (
+          <Link className="text-sm font-semibold text-[#06173f]" to="/b2b-sales">
+            Open
+          </Link>
+        ) : null
+      }
+    >
+      {loading ? <LoadingRows /> : null}
+      {!loading && sales.length === 0 ? (
+        <EmptyState>No B2B sales yet.</EmptyState>
+      ) : null}
+      {!loading && sales.length > 0 ? (
+        <ListTable
+          rows={sales.map((sale) => ({
+            key: sale.id,
+            to: `/b2b-sales/${sale.id}`,
+            title: b2bSaleCustomerName(sale),
+            meta: `${sale.sale_code ?? "B2B Sale"} - ${labelize(sale.status)} - ${formatDate(
+              sale.sale_date ?? sale.created_at,
+            )}`,
+            value: currencyFormatter.format(Number(sale.total_amount ?? 0)),
           }))}
         />
       ) : null}

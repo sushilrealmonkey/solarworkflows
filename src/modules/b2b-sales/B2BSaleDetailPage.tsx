@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { PageHeader } from "../../components/PageHeader";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -11,6 +11,8 @@ import {
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  PencilIcon,
+  PlaceholderAction,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -23,8 +25,6 @@ import { formatMoney } from "../quotations/quotationUtils";
 import { PaymentStatusBadge } from "../payments/PaymentComponents";
 import type { PaymentWithRelations } from "../payments/types";
 import {
-  cancelB2BSale,
-  confirmB2BSale,
   createB2BSalePayment,
   dispatchB2BSale,
   fetchB2BSale,
@@ -35,8 +35,16 @@ import {
 } from "./b2bSalesApi";
 import {
   createInvoiceFromProformaInvoice,
+  fetchProformaInvoice,
+  fetchProformaInvoiceItems,
   createProformaInvoiceFromB2BSale,
 } from "../proforma-invoices/proformaInvoiceApi";
+import {
+  fetchProformaInvoicePdfPreviewUrl,
+  generateAndStoreProformaInvoicePdf,
+} from "../proforma-invoices/proformaInvoicePdfWorkflow";
+import { fetchInvoice, fetchInvoiceItems } from "../invoices/invoiceApi";
+import { generateAndStoreInvoicePdf } from "../invoices/invoicePdfWorkflow";
 import {
   B2BPaymentFormModal,
   B2BSaleFormModal,
@@ -59,13 +67,10 @@ import type {
   B2BSaleWithRelations,
 } from "./types";
 
-type StatusAction = "confirm" | "dispatch" | "cancel";
-
 export function B2BSaleDetailPage() {
   const { id } = useParams();
-  const { profile, permissions, roleNames } = useAuth();
+  const { profile, permissions, roleNames, organization } = useAuth();
   const { showToast } = useToast();
-  const navigate = useNavigate();
   const [sale, setSale] = useState<B2BSaleWithRelations | null>(null);
   const [items, setItems] = useState<B2BSaleItem[]>([]);
   const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
@@ -78,10 +83,12 @@ export function B2BSaleDetailPage() {
   const [editing, setEditing] = useState<B2BSaleFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [statusAction, setStatusAction] = useState<StatusAction | null>(null);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [confirmingDispatch, setConfirmingDispatch] = useState(false);
+  const [dispatchingStock, setDispatchingStock] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [creatingProforma, setCreatingProforma] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [preparingPdf, setPreparingPdf] = useState(false);
   const [paymentForm, setPaymentForm] = useState<B2BPaymentFormValues | null>(
     null,
   );
@@ -93,6 +100,12 @@ export function B2BSaleDetailPage() {
   const canDelete = hasPermission(profile, permissions, "b2b_sales", "delete");
   const canCreateInvoice = hasPermission(profile, permissions, "invoices", "create");
   const canViewInvoices = hasPermission(profile, permissions, "invoices", "view");
+  const canCreateDocuments = hasPermission(
+    profile,
+    permissions,
+    "documents",
+    "create",
+  );
   const canCreatePayments = hasPermission(profile, permissions, "payments", "create");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canDispatchInventory =
@@ -124,6 +137,11 @@ export function B2BSaleDetailPage() {
       setItems(nextItems);
       setOptions(nextOptions);
       setPayments(nextPayments);
+      if (nextSale?.proforma_invoice_id) {
+        await loadProformaPdfPreview(nextSale.proforma_invoice_id);
+      } else {
+        setPdfPreviewUrl(null);
+      }
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load sales order.",
@@ -180,32 +198,26 @@ export function B2BSaleDetailPage() {
     }
   }
 
-  async function confirmStatusAction() {
-    if (!sale || !statusAction) {
+  async function confirmDispatchStock() {
+    if (!sale) {
       return;
     }
 
     try {
-      setUpdatingStatus(true);
-      if (statusAction === "confirm") {
-        await confirmB2BSale(sale.id);
-      } else if (statusAction === "dispatch") {
-        await dispatchB2BSale(sale.id);
-      } else {
-        await cancelB2BSale(sale.id);
-      }
-      showToast("Sales order status updated.", "success");
-      setStatusAction(null);
+      setDispatchingStock(true);
+      await dispatchB2BSale(sale.id);
+      showToast("Sales order stock dispatched.", "success");
+      setConfirmingDispatch(false);
       await loadSale();
     } catch (nextError) {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "Sales order status update failed.",
+          : "Stock dispatch failed.",
         "error",
       );
     } finally {
-      setUpdatingStatus(false);
+      setDispatchingStock(false);
     }
   }
 
@@ -217,9 +229,29 @@ export function B2BSaleDetailPage() {
     try {
       setCreatingProforma(true);
       const proformaInvoice = await createProformaInvoiceFromB2BSale(sale.id);
-      showToast("Proforma invoice created from sales order.", "success");
+      let pdfGenerated = false;
+
+      if (canCreateDocuments) {
+        try {
+          await prepareProformaPdf(proformaInvoice.id);
+          pdfGenerated = true;
+        } catch (pdfError) {
+          showToast(
+            pdfError instanceof Error
+              ? `Proforma created, but PDF generation failed: ${pdfError.message}`
+              : "Proforma created, but PDF generation failed.",
+            "error",
+          );
+        }
+      }
+
+      showToast(
+        pdfGenerated
+          ? "Proforma invoice created and PDF generated."
+          : "Proforma invoice created.",
+        "success",
+      );
       await loadSale();
-      navigate(`/proforma-invoices/${proformaInvoice.id}`);
     } catch (nextError) {
       showToast(
         nextError instanceof Error
@@ -240,9 +272,41 @@ export function B2BSaleDetailPage() {
     try {
       setCreatingInvoice(true);
       const invoice = await createInvoiceFromProformaInvoice(sale.proforma_invoice_id);
-      showToast("Final invoice created from paid proforma invoice.", "success");
+      let pdfGenerated = false;
+
+      if (canCreateDocuments) {
+        try {
+          const [invoiceForPdf, invoiceItems] = await Promise.all([
+            fetchInvoice(profile, invoice.id),
+            fetchInvoiceItems(profile, invoice.id),
+          ]);
+
+          if (invoiceForPdf) {
+            await generateAndStoreInvoicePdf(
+              profile,
+              organization,
+              invoiceForPdf,
+              invoiceItems,
+            );
+            pdfGenerated = true;
+          }
+        } catch (pdfError) {
+          showToast(
+            pdfError instanceof Error
+              ? `Final invoice created, but PDF generation failed: ${pdfError.message}`
+              : "Final invoice created, but PDF generation failed.",
+            "error",
+          );
+        }
+      }
+
+      showToast(
+        pdfGenerated
+          ? "Final invoice created and PDF generated."
+          : "Final invoice created from paid proforma invoice.",
+        "success",
+      );
       await loadSale();
-      navigate(`/invoices/${invoice.id}`);
     } catch (nextError) {
       showToast(
         nextError instanceof Error
@@ -285,6 +349,116 @@ export function B2BSaleDetailPage() {
     }
   }
 
+  function openEditForm() {
+    if (!sale) {
+      return;
+    }
+
+    setFormErrors({});
+    setEditing(saleToForm(sale, items));
+  }
+
+  function openPaymentForm() {
+    setPaymentErrors({});
+    setPaymentForm(emptyB2BPaymentForm());
+  }
+
+  async function prepareProformaPdf(proformaInvoiceId: string) {
+    if (!canCreateDocuments) {
+      setPdfPreviewUrl(null);
+      return;
+    }
+
+    try {
+      setPreparingPdf(true);
+      const proformaInvoice = await fetchProformaInvoice(profile, proformaInvoiceId);
+
+      if (!proformaInvoice) {
+        throw new Error("Proforma invoice was created but could not be loaded.");
+      }
+
+      const existingPreviewUrl =
+        await fetchProformaInvoicePdfPreviewUrl(proformaInvoice);
+      if (existingPreviewUrl) {
+        setPdfPreviewUrl(existingPreviewUrl);
+        return;
+      }
+
+      const proformaItems = await fetchProformaInvoiceItems(
+        profile,
+        proformaInvoice.id,
+      );
+      const result = await generateAndStoreProformaInvoicePdf(
+        profile,
+        organization,
+        proformaInvoice,
+        proformaItems,
+      );
+      setPdfPreviewUrl(result.previewUrl);
+    } finally {
+      setPreparingPdf(false);
+    }
+  }
+
+  async function loadProformaPdfPreview(proformaInvoiceId: string) {
+    try {
+      setPreparingPdf(true);
+      const proformaInvoice = await fetchProformaInvoice(profile, proformaInvoiceId);
+
+      if (!proformaInvoice) {
+        setPdfPreviewUrl(null);
+        return;
+      }
+
+      const existingPreviewUrl =
+        await fetchProformaInvoicePdfPreviewUrl(proformaInvoice);
+      if (existingPreviewUrl) {
+        setPdfPreviewUrl(existingPreviewUrl);
+        return;
+      }
+
+      if (!canCreateDocuments) {
+        setPdfPreviewUrl(null);
+        return;
+      }
+
+      const proformaItems = await fetchProformaInvoiceItems(
+        profile,
+        proformaInvoice.id,
+      );
+      const result = await generateAndStoreProformaInvoicePdf(
+        profile,
+        organization,
+        proformaInvoice,
+        proformaItems,
+      );
+      setPdfPreviewUrl(result.previewUrl);
+    } catch {
+      setPdfPreviewUrl(null);
+    } finally {
+      setPreparingPdf(false);
+    }
+  }
+
+  const hasProforma = Boolean(sale?.proforma_invoice_id);
+  const hasInvoice = Boolean(sale?.invoice_id);
+  const canRecordPayment =
+    canCreatePayments &&
+    hasProforma &&
+    !hasInvoice &&
+    sale?.status !== "cancelled" &&
+    Number(sale?.proforma_invoice?.balance_due ?? 0) > 0;
+  const canCreateFinalInvoice =
+    canCreateInvoice &&
+    hasProforma &&
+    !hasInvoice &&
+    sale?.proforma_invoice?.status === "paid";
+  const canDispatch =
+    canUpdate &&
+    canDispatchInventory &&
+    sale?.status !== "dispatched" &&
+    sale?.status !== "cancelled";
+
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/b2b-sales">
@@ -302,63 +476,30 @@ export function B2BSaleDetailPage() {
 
       {sale ? (
         <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <PageHeader
-              title={sale.sale_code ?? "Sales Order"}
-              description={`${sale.customer?.business_name || sale.customer?.full_name || "Customer"} / ${formatDate(sale.sale_date)}`}
+          <div className="border-b border-stone-200 pb-5">
+            <RecordTitle
+              recordType="Sales Order"
+              name={sale.sale_code ?? "Sales Order"}
+              action={
+                canUpdate && sale.status !== "dispatched" && sale.status !== "cancelled" ? (
+                  <button
+                    aria-label="Edit sales order"
+                    className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
+                    onClick={openEditForm}
+                    title="Edit sales order"
+                    type="button"
+                  >
+                    <PencilIcon />
+                  </button>
+                ) : null
+              }
+              meta={[
+                sale.customer?.business_name || sale.customer?.full_name || "Customer",
+                labelize(sale.status),
+                formatDate(sale.sale_date),
+                formatMoney(sale.total_amount),
+              ]}
             />
-            <div className="flex flex-wrap gap-2">
-              {canUpdate && sale.status !== "dispatched" && sale.status !== "cancelled" ? (
-                <Button
-                  onClick={() => {
-                    setFormErrors({});
-                    setEditing(saleToForm(sale, items));
-                  }}
-                  variant="secondary"
-                >
-                  Edit Sale
-                </Button>
-              ) : null}
-              {canUpdate && sale.status === "draft" ? (
-                <Button onClick={() => setStatusAction("confirm")} variant="secondary">
-                  Confirm Sale
-                </Button>
-              ) : null}
-              {canCreateInvoice ? (
-                <Button
-                  onClick={() => void handleCreateProformaInvoice()}
-                  disabled={creatingProforma || Boolean(sale.proforma_invoice_id)}
-                  variant="secondary"
-                >
-                  {sale.proforma_invoice_id ? "Proforma Created" : "Create Proforma"}
-                </Button>
-              ) : null}
-              {canCreateInvoice ? (
-                <Button
-                  onClick={() => void handleCreateInvoice()}
-                  disabled={
-                    creatingInvoice ||
-                    Boolean(sale.invoice_id) ||
-                    sale.proforma_invoice?.status !== "paid"
-                  }
-                  variant="secondary"
-                >
-                  {sale.invoice_id ? "Invoice Created" : "Create Invoice"}
-                </Button>
-              ) : null}
-              {canUpdate &&
-              canDispatchInventory &&
-              sale.status === "confirmed" ? (
-                <Button onClick={() => setStatusAction("dispatch")}>
-                  Dispatch Stock
-                </Button>
-              ) : null}
-              {canUpdate && sale.status !== "dispatched" && sale.status !== "cancelled" ? (
-                <Button onClick={() => setStatusAction("cancel")} variant="danger">
-                  Cancel Sale
-                </Button>
-              ) : null}
-            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -405,7 +546,7 @@ export function B2BSaleDetailPage() {
                   <div className="mt-4">
                     <EmptyState
                       title="No sale items"
-                      description="Add product line items before confirming this sales order."
+                      description="Add product line items before dispatching this sales order."
                     />
                   </div>
                 ) : (
@@ -416,21 +557,32 @@ export function B2BSaleDetailPage() {
               {canViewPayments ? (
                 <RelatedPaymentsSection
                   payments={payments}
-                  canCreatePayment={
-                    canCreatePayments &&
-                    Boolean(sale.proforma_invoice_id) &&
-                    !sale.invoice_id &&
-                    sale.status !== "cancelled"
-                  }
-                  onAddPayment={() => {
-                    setPaymentErrors({});
-                    setPaymentForm(emptyB2BPaymentForm());
-                  }}
+                  canCreatePayment={canRecordPayment}
+                  onAddPayment={openPaymentForm}
                 />
               ) : null}
             </div>
 
-            <B2BSaleTotalsCard sale={sale} />
+            <aside className="space-y-6">
+              <B2BSaleNextStepSection
+                canCreateInvoice={canCreateInvoice}
+                canCreateFinalInvoice={canCreateFinalInvoice}
+                canDispatch={canDispatch}
+                canRecordPayment={canRecordPayment}
+                creatingInvoice={creatingInvoice}
+                creatingProforma={creatingProforma}
+                dispatchingStock={dispatchingStock}
+                hasInvoice={hasInvoice}
+                hasProforma={hasProforma}
+                preparingPdf={preparingPdf}
+                proformaDownloadUrl={pdfPreviewUrl}
+                onCreateInvoice={() => void handleCreateInvoice()}
+                onCreateProforma={() => void handleCreateProformaInvoice()}
+                onDispatch={() => setConfirmingDispatch(true)}
+                onRecordPayment={openPaymentForm}
+              />
+              <B2BSaleTotalsCard sale={sale} />
+            </aside>
           </div>
         </>
       ) : null}
@@ -460,16 +612,16 @@ export function B2BSaleDetailPage() {
         />
       ) : null}
 
-      {statusAction && sale ? (
+      {confirmingDispatch && sale ? (
         <ConfirmDialog
-          title={statusTitle(statusAction)}
-          description={statusDescription(statusAction, sale.sale_code)}
-          confirmLabel={statusConfirmLabel(statusAction)}
-          confirmingLabel="Updating..."
-          confirmVariant={statusAction === "cancel" ? "danger" : "primary"}
-          confirming={updatingStatus}
-          onCancel={() => setStatusAction(null)}
-          onConfirm={confirmStatusAction}
+          title="Dispatch sales order?"
+          description={`This will reduce inventory stock for ${sale.sale_code ?? "this sales order"}.`}
+          confirmLabel="Dispatch Stock"
+          confirmingLabel="Dispatching..."
+          confirmVariant="primary"
+          confirming={dispatchingStock}
+          onCancel={() => setConfirmingDispatch(false)}
+          onConfirm={confirmDispatchStock}
         />
       ) : null}
     </div>
@@ -607,6 +759,107 @@ function RelatedPaymentsSection({
   );
 }
 
+function B2BSaleNextStepSection({
+  canCreateInvoice,
+  canCreateFinalInvoice,
+  canDispatch,
+  canRecordPayment,
+  creatingInvoice,
+  creatingProforma,
+  dispatchingStock,
+  hasInvoice,
+  hasProforma,
+  preparingPdf,
+  proformaDownloadUrl,
+  onCreateInvoice,
+  onCreateProforma,
+  onDispatch,
+  onRecordPayment,
+}: {
+  canCreateInvoice: boolean;
+  canCreateFinalInvoice: boolean;
+  canDispatch: boolean;
+  canRecordPayment: boolean;
+  creatingInvoice: boolean;
+  creatingProforma: boolean;
+  dispatchingStock: boolean;
+  hasInvoice: boolean;
+  hasProforma: boolean;
+  preparingPdf: boolean;
+  proformaDownloadUrl: string | null;
+  onCreateInvoice: () => void;
+  onCreateProforma: () => void;
+  onDispatch: () => void;
+  onRecordPayment: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-950">Next Step</h2>
+      <div className="mt-4 grid gap-2">
+        {canCreateInvoice && !hasProforma ? (
+          <Button disabled={creatingProforma} onClick={onCreateProforma}>
+            {creatingProforma ? "Creating Proforma" : "Create Proforma"}
+          </Button>
+        ) : null}
+        {hasProforma ? (
+          <DownloadProformaAction preparing={preparingPdf} url={proformaDownloadUrl} />
+        ) : null}
+        {canRecordPayment ? (
+          <Button onClick={onRecordPayment} variant="secondary">
+            Add Payment
+          </Button>
+        ) : null}
+        {hasProforma && !hasInvoice ? (
+          <Button
+            disabled={!canCreateFinalInvoice || creatingInvoice}
+            onClick={onCreateInvoice}
+            variant="secondary"
+          >
+            {creatingInvoice ? "Creating Invoice" : "Create Invoice"}
+          </Button>
+        ) : null}
+        {canDispatch ? (
+          <Button
+            disabled={dispatchingStock}
+            onClick={onDispatch}
+            variant="secondary"
+          >
+            {dispatchingStock ? "Dispatching Stock" : "Dispatch Stock"}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function DownloadProformaAction({
+  url,
+  preparing,
+}: {
+  url: string | null;
+  preparing: boolean;
+}) {
+  if (!url) {
+    return (
+      <PlaceholderAction>
+        {preparing ? "Preparing Proforma" : "Download Proforma"}
+      </PlaceholderAction>
+    );
+  }
+
+  return (
+    <a
+      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+      download
+      href={url}
+      rel="noreferrer"
+      target="_blank"
+    >
+      Download Proforma
+    </a>
+  );
+}
+
 function invoiceLink(sale: B2BSaleWithRelations, canViewInvoices: boolean) {
   if (!sale.invoice_id) {
     return "-";
@@ -640,40 +893,4 @@ function proformaInvoiceLink(sale: B2BSaleWithRelations, canViewInvoices: boolea
       {sale.proforma_invoice?.proforma_code ?? "Open proforma"}
     </Link>
   );
-}
-
-function statusTitle(action: StatusAction) {
-  if (action === "dispatch") {
-    return "Dispatch sales order?";
-  }
-
-  if (action === "cancel") {
-    return "Cancel sales order?";
-  }
-
-  return "Confirm sales order?";
-}
-
-function statusDescription(action: StatusAction, code: string | null) {
-  if (action === "dispatch") {
-    return `This will reduce inventory stock for ${code ?? "this sales order"}.`;
-  }
-
-  if (action === "cancel") {
-    return `This will cancel ${code ?? "this sales order"} before dispatch.`;
-  }
-
-  return `This will lock ${code ?? "this sales order"} for invoice and dispatch steps.`;
-}
-
-function statusConfirmLabel(action: StatusAction) {
-  if (action === "dispatch") {
-    return "Dispatch Stock";
-  }
-
-  if (action === "cancel") {
-    return "Cancel Sale";
-  }
-
-  return "Confirm Sale";
 }

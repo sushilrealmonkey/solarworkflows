@@ -15,6 +15,7 @@ import {
   Button,
   EmptyState,
   LoadingSkeleton,
+  PlaceholderAction,
   SearchInput,
   SelectInput,
   TextInput,
@@ -28,32 +29,39 @@ import {
 } from "../crm/crmUtils";
 import { formatMoney } from "../quotations/quotationUtils";
 import {
+  recordPaletteCardClassName,
+  recordPaletteTableRowClassName,
+} from "../shared/recordOriginStyles";
+import {
   createB2BSale,
+  createB2BSalePayment,
+  dispatchB2BSale,
   fetchB2BSaleOptions,
   fetchB2BSales,
 } from "./b2bSalesApi";
 import {
+  B2BPaymentFormModal,
   B2BSaleFormModal,
   B2BSaleReviewModal,
   B2BSaleStatusBadge,
 } from "./B2BSalesComponents";
 import { createCustomer } from "../crm/crmApi";
 import { CustomerFormModal } from "../crm/CustomersPage";
-import { buildProformaInvoicePdf } from "../documents/businessPdf";
-import {
-  buildProformaInvoicePdfPath,
-  fetchBusinessDocumentSettings,
-  uploadGeneratedPdf,
-} from "../documents/generatedPdfApi";
 import {
   createProformaInvoiceFromB2BSale,
   fetchProformaInvoice,
   fetchProformaInvoiceItems,
 } from "../proforma-invoices/proformaInvoiceApi";
 import {
+  fetchProformaInvoicePdfPreviewUrl,
+  generateAndStoreProformaInvoicePdf,
+} from "../proforma-invoices/proformaInvoicePdfWorkflow";
+import {
   applyCustomerSnapshotToSaleForm,
   b2bSaleStatusOptions,
+  emptyB2BPaymentForm,
   emptyB2BSaleForm,
+  validateB2BPaymentForm,
   validateB2BSaleForm,
 } from "./b2bSalesUtils";
 import {
@@ -63,6 +71,7 @@ import {
 } from "../crm/crmUtils";
 import type { CustomerFormValues } from "../crm/types";
 import type {
+  B2BPaymentFormValues,
   B2BSaleFormValues,
   B2BSaleOptions,
   B2BSaleWithRelations,
@@ -101,6 +110,21 @@ export function B2BSalesPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [generatingProforma, setGeneratingProforma] = useState(false);
+  const [creatingProformaSaleId, setCreatingProformaSaleId] =
+    useState<string | null>(null);
+  const [dispatchingSaleId, setDispatchingSaleId] = useState<string | null>(null);
+  const [preparingProformaId, setPreparingProformaId] = useState<string | null>(
+    null,
+  );
+  const [paymentForm, setPaymentForm] = useState<{
+    sale: B2BSaleWithRelations;
+    values: B2BPaymentFormValues;
+  } | null>(null);
+  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [proformaPdfUrls, setProformaPdfUrls] = useState<Record<string, string>>(
+    {},
+  );
   const [customerFormValues, setCustomerFormValues] =
     useState<CustomerFormValues | null>(null);
   const [customerFormErrors, setCustomerFormErrors] = useState<Record<string, string>>({});
@@ -108,8 +132,13 @@ export function B2BSalesPage() {
 
   const canView = hasPermission(profile, permissions, "b2b_sales", "view");
   const canCreate = hasPermission(profile, permissions, "b2b_sales", "create");
+  const canUpdate = hasPermission(profile, permissions, "b2b_sales", "update");
   const canCreateInvoices = hasPermission(profile, permissions, "invoices", "create");
   const canCreateDocuments = hasPermission(profile, permissions, "documents", "create");
+  const canCreatePayments = hasPermission(profile, permissions, "payments", "create");
+  const canDispatchInventory =
+    hasPermission(profile, permissions, "inventory", "create") ||
+    hasPermission(profile, permissions, "inventory", "update");
   const canCreateCustomers = hasPermission(
     profile,
     permissions,
@@ -376,42 +405,20 @@ export function B2BSalesPage() {
       }
 
       const proformaSummary = await createProformaInvoiceFromB2BSale(sale.id);
-      const [proformaInvoice, proformaItems, settings] = await Promise.all([
+      const [proformaInvoice, proformaItems] = await Promise.all([
         fetchProformaInvoice(profile, proformaSummary.id),
         fetchProformaInvoiceItems(profile, proformaSummary.id),
-        fetchBusinessDocumentSettings(),
       ]);
 
       if (!proformaInvoice) {
         throw new Error("Proforma invoice was created but could not be loaded.");
       }
 
-      const filePath = buildProformaInvoicePdfPath(
-        proformaInvoice.organization_id,
-        proformaInvoice.proforma_code,
-        "PI",
-        proformaInvoice.id,
-      );
-      const pdfBlob = await buildProformaInvoicePdf(
+      await generateAndStoreProformaInvoicePdf(
+        profile,
+        organization,
         proformaInvoice,
         proformaItems,
-        organization,
-        settings,
-      );
-
-      await uploadGeneratedPdf(
-        profile,
-        {
-          document_type: "proforma_invoice_pdf",
-          document_name: `${proformaInvoice.proforma_code ?? "Proforma Invoice"} PDF`,
-          file_path: filePath,
-          customer_id: proformaInvoice.customer_id,
-          project_id: proformaInvoice.project_id,
-          quotation_id: proformaInvoice.quotation_id,
-          proforma_invoice_id: proformaInvoice.id,
-          notes: "Generated proforma invoice PDF",
-        },
-        pdfBlob,
       );
 
       showToast("Proforma invoice and PDF generated.", "success");
@@ -425,6 +432,173 @@ export function B2BSalesPage() {
       );
     } finally {
       setGeneratingProforma(false);
+    }
+  }
+
+  async function handleCreateProformaFromSale(sale: B2BSaleWithRelations) {
+    if (!canCreateInvoices) {
+      return;
+    }
+
+    try {
+      setCreatingProformaSaleId(sale.id);
+      const proformaSummary = await createProformaInvoiceFromB2BSale(sale.id);
+      let pdfGenerated = false;
+
+      if (canCreateDocuments) {
+        try {
+          await prepareProformaPdf(proformaSummary.id);
+          pdfGenerated = true;
+        } catch (pdfError) {
+          showToast(
+            pdfError instanceof Error
+              ? `Proforma created, but PDF generation failed: ${pdfError.message}`
+              : "Proforma created, but PDF generation failed.",
+            "error",
+          );
+        }
+      }
+
+      showToast(
+        pdfGenerated
+          ? "Proforma invoice created and PDF generated."
+          : "Proforma invoice created.",
+        "success",
+      );
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Proforma invoice creation failed.",
+        "error",
+      );
+    } finally {
+      setCreatingProformaSaleId(null);
+    }
+  }
+
+  async function handleDownloadProforma(sale: B2BSaleWithRelations) {
+    if (!sale.proforma_invoice_id) {
+      return;
+    }
+
+    const knownUrl = proformaPdfUrls[sale.proforma_invoice_id];
+    if (knownUrl) {
+      window.open(knownUrl, "_blank", "noreferrer");
+      return;
+    }
+
+    if (!canCreateDocuments) {
+      showToast(
+        "Download needs documents:create access for generated proforma PDFs.",
+        "error",
+      );
+      return;
+    }
+
+    try {
+      setPreparingProformaId(sale.proforma_invoice_id);
+      const previewUrl = await prepareProformaPdf(sale.proforma_invoice_id);
+      if (previewUrl) {
+        window.open(previewUrl, "_blank", "noreferrer");
+      }
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Proforma PDF download failed.",
+        "error",
+      );
+    } finally {
+      setPreparingProformaId(null);
+    }
+  }
+
+  async function prepareProformaPdf(proformaInvoiceId: string) {
+    const proformaInvoice = await fetchProformaInvoice(profile, proformaInvoiceId);
+
+    if (!proformaInvoice) {
+      throw new Error("Proforma invoice could not be loaded.");
+    }
+
+    const existingUrl = await fetchProformaInvoicePdfPreviewUrl(proformaInvoice);
+    if (existingUrl) {
+      setProformaPdfUrls((current) => ({
+        ...current,
+        [proformaInvoice.id]: existingUrl,
+      }));
+      return existingUrl;
+    }
+
+    const proformaItems = await fetchProformaInvoiceItems(
+      profile,
+      proformaInvoice.id,
+    );
+    const result = await generateAndStoreProformaInvoicePdf(
+      profile,
+      organization,
+      proformaInvoice,
+      proformaItems,
+    );
+    setProformaPdfUrls((current) => ({
+      ...current,
+      [proformaInvoice.id]: result.previewUrl,
+    }));
+    return result.previewUrl;
+  }
+
+  async function handleDispatchStock(sale: B2BSaleWithRelations) {
+    try {
+      setDispatchingSaleId(sale.id);
+      await dispatchB2BSale(sale.id);
+      showToast("Sales order stock dispatched.", "success");
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Stock dispatch failed.",
+        "error",
+      );
+    } finally {
+      setDispatchingSaleId(null);
+    }
+  }
+
+  function openPaymentForm(sale: B2BSaleWithRelations) {
+    setPaymentErrors({});
+    setPaymentForm({
+      sale,
+      values: emptyB2BPaymentForm(),
+    });
+  }
+
+  async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!paymentForm) {
+      return;
+    }
+
+    const nextErrors = validateB2BPaymentForm(paymentForm.values);
+    setPaymentErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setSavingPayment(true);
+      await createB2BSalePayment(profile, paymentForm.sale, paymentForm.values);
+      setPaymentForm(null);
+      showToast("Payment added.", "success");
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Payment save failed.",
+        "error",
+      );
+    } finally {
+      setSavingPayment(false);
     }
   }
 
@@ -580,13 +754,14 @@ export function B2BSalesPage() {
                   <th className="px-4 py-3">Final Invoice</th>
                   <th className="px-4 py-3">Total</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 text-right">Next Step</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filteredSales.map((sale) => (
                   <tr
                     key={sale.id}
-                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                    className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("b2bFlow")}`}
                     onClick={() => openSaleDetail(sale.id)}
                     onKeyDown={(event) => handleSaleRowKeyDown(event, sale.id)}
                     role="link"
@@ -618,6 +793,36 @@ export function B2BSalesPage() {
                     <td className="px-4 py-3">
                       <B2BSaleStatusBadge value={sale.status} />
                     </td>
+                    <td className="px-4 py-3">
+                      <B2BSaleNextStepActions
+                        canAddPayment={
+                          canCreatePayments && canAddB2BPayment(sale)
+                        }
+                        canCreateProforma={canCreateInvoices}
+                        canDispatch={
+                          canUpdate &&
+                          canDispatchInventory &&
+                          sale.status !== "dispatched" &&
+                          sale.status !== "cancelled"
+                        }
+                        creatingProforma={creatingProformaSaleId === sale.id}
+                        dispatching={dispatchingSaleId === sale.id}
+                        downloadUrl={
+                          sale.proforma_invoice_id
+                            ? proformaPdfUrls[sale.proforma_invoice_id]
+                            : undefined
+                        }
+                        hasProforma={Boolean(sale.proforma_invoice_id)}
+                        preparing={
+                          Boolean(sale.proforma_invoice_id) &&
+                          preparingProformaId === sale.proforma_invoice_id
+                        }
+                        onAddPayment={() => openPaymentForm(sale)}
+                        onCreateProforma={() => void handleCreateProformaFromSale(sale)}
+                        onDispatch={() => void handleDispatchStock(sale)}
+                        onDownload={() => void handleDownloadProforma(sale)}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -628,7 +833,7 @@ export function B2BSalesPage() {
             {filteredSales.map((sale) => (
               <article
                 key={sale.id}
-                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("b2bFlow")}`}
                 onClick={() => openSaleDetail(sale.id)}
                 onKeyDown={(event) => handleSaleRowKeyDown(event, sale.id)}
                 role="link"
@@ -666,6 +871,34 @@ export function B2BSalesPage() {
                     value={formatDate(sale.dispatch_date)}
                   />
                 </dl>
+                <div className="mt-4">
+                  <B2BSaleNextStepActions
+                    canAddPayment={canCreatePayments && canAddB2BPayment(sale)}
+                    canCreateProforma={canCreateInvoices}
+                    canDispatch={
+                      canUpdate &&
+                      canDispatchInventory &&
+                      sale.status !== "dispatched" &&
+                      sale.status !== "cancelled"
+                    }
+                    creatingProforma={creatingProformaSaleId === sale.id}
+                    dispatching={dispatchingSaleId === sale.id}
+                    downloadUrl={
+                      sale.proforma_invoice_id
+                        ? proformaPdfUrls[sale.proforma_invoice_id]
+                        : undefined
+                    }
+                    hasProforma={Boolean(sale.proforma_invoice_id)}
+                    preparing={
+                      Boolean(sale.proforma_invoice_id) &&
+                      preparingProformaId === sale.proforma_invoice_id
+                    }
+                    onAddPayment={() => openPaymentForm(sale)}
+                    onCreateProforma={() => void handleCreateProformaFromSale(sale)}
+                    onDispatch={() => void handleDispatchStock(sale)}
+                    onDownload={() => void handleDownloadProforma(sale)}
+                  />
+                </div>
               </article>
             ))}
           </div>
@@ -725,6 +958,19 @@ export function B2BSalesPage() {
           saving={savingCustomer}
         />
       ) : null}
+
+      {paymentForm ? (
+        <B2BPaymentFormModal
+          values={paymentForm.values}
+          setValues={(values) =>
+            setPaymentForm((current) => (current ? { ...current, values } : current))
+          }
+          errors={paymentErrors}
+          onClose={() => setPaymentForm(null)}
+          onSubmit={handlePaymentSubmit}
+          saving={savingPayment}
+        />
+      ) : null}
     </div>
   );
 }
@@ -750,5 +996,105 @@ function CardItem({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-slate-500">{label}</dt>
       <dd className="font-medium text-slate-900">{value}</dd>
     </div>
+  );
+}
+
+function B2BSaleNextStepActions({
+  canAddPayment,
+  canCreateProforma,
+  canDispatch,
+  creatingProforma,
+  dispatching,
+  downloadUrl,
+  hasProforma,
+  preparing,
+  onAddPayment,
+  onCreateProforma,
+  onDispatch,
+  onDownload,
+}: {
+  canAddPayment: boolean;
+  canCreateProforma: boolean;
+  canDispatch: boolean;
+  creatingProforma: boolean;
+  dispatching: boolean;
+  downloadUrl: string | undefined;
+  hasProforma: boolean;
+  preparing: boolean;
+  onAddPayment: () => void;
+  onCreateProforma: () => void;
+  onDispatch: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col items-stretch gap-2"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {!hasProforma && canCreateProforma ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={creatingProforma}
+          onClick={onCreateProforma}
+          type="button"
+        >
+          {creatingProforma ? "Creating Proforma" : "Create Proforma"}
+        </button>
+      ) : hasProforma && downloadUrl ? (
+        <a
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+          download
+          href={downloadUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Download Proforma
+        </a>
+      ) : hasProforma && canCreateProforma ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={preparing}
+          onClick={onDownload}
+          type="button"
+        >
+          {preparing ? "Preparing Proforma" : "Download Proforma"}
+        </button>
+      ) : (
+        <PlaceholderAction>Create Proforma</PlaceholderAction>
+      )}
+
+      {canAddPayment ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+          onClick={onAddPayment}
+          type="button"
+        >
+          Add Payment
+        </button>
+      ) : null}
+
+      {canDispatch ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={dispatching}
+          onClick={onDispatch}
+          type="button"
+        >
+          {dispatching ? "Dispatching Stock" : "Dispatch Stock"}
+        </button>
+      ) : (
+        <PlaceholderAction>Dispatch Stock</PlaceholderAction>
+      )}
+    </div>
+  );
+}
+
+function canAddB2BPayment(sale: B2BSaleWithRelations) {
+  return (
+    Boolean(sale.proforma_invoice_id) &&
+    !sale.invoice_id &&
+    sale.status !== "cancelled" &&
+    Number(sale.proforma_invoice?.balance_due ?? 0) > 0
   );
 }

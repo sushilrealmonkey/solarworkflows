@@ -401,20 +401,12 @@ export function SiteSurveyDetailPage() {
               }
             />
             <DetailItem
-              label="Structure Type"
-              value={survey.structure_type ?? "-"}
-            />
-            <DetailItem
               label="Recommended Capacity"
               value={
                 survey.recommended_capacity_kw
                   ? `${survey.recommended_capacity_kw} kW`
                   : "-"
               }
-            />
-            <DetailItem
-              label="Existing Meter Type"
-              value={survey.existing_meter_type ?? "-"}
             />
             <DetailItem
               label="Sanctioned Load"

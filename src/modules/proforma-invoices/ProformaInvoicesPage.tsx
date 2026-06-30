@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -8,11 +15,11 @@ import {
   ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
+  PlaceholderAction,
   SearchInput,
   SelectInput,
   TextInput,
   Toolbar,
-  ViewLink,
 } from "../crm/CrmComponents";
 import { formatDate, hasPermission, labelize } from "../crm/crmUtils";
 import { formatMoney, numberToInput } from "../quotations/quotationUtils";
@@ -22,32 +29,48 @@ import {
   emptyInvoiceForm,
   emptyInvoiceItemForm,
 } from "../invoices/invoiceUtils";
+import {
+  recordPaletteCardClassName,
+  recordPaletteTableRowClassName,
+} from "../shared/recordOriginStyles";
 import type {
   InvoiceCreationMode,
   InvoiceQuotationSummary,
 } from "../invoices/types";
 import {
+  createProformaInvoicePayment,
   createProformaInvoice,
   deleteProformaInvoice,
   fetchProformaInvoiceItems,
   fetchProformaInvoiceLinkOptions,
   fetchProformaInvoices,
   fetchQuotationItemsForProformaInvoice,
+  markProformaInvoiceSent,
   updateProformaInvoice,
 } from "./proformaInvoiceApi";
-import { ProformaInvoiceStatusBadge } from "./ProformaInvoiceComponents";
 import {
+  ProformaInvoiceStatusBadge,
+  ProformaPaymentFormModal,
+} from "./ProformaInvoiceComponents";
+import {
+  emptyProformaPaymentForm,
   proformaInvoiceContextLabel,
   proformaInvoiceItemToForm,
   proformaInvoiceStatusOptions,
   proformaInvoiceToForm,
   validateProformaInvoiceForm,
+  validateProformaPaymentForm,
 } from "./proformaInvoiceUtils";
 import type {
   ProformaInvoiceFormValues,
   ProformaInvoiceLinkOptions,
   ProformaInvoiceWithRelations,
+  ProformaPaymentFormValues,
 } from "./types";
+import {
+  fetchProformaInvoicePdfPreviewUrl,
+  generateAndStoreProformaInvoicePdf,
+} from "./proformaInvoicePdfWorkflow";
 
 type ProformaFilters = {
   search: string;
@@ -57,11 +80,13 @@ type ProformaFilters = {
 };
 
 export function ProformaInvoicesPage() {
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, organization } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [proformaInvoices, setProformaInvoices] = useState<
     ProformaInvoiceWithRelations[]
   >([]);
+  const [proformaPdfUrls, setProformaPdfUrls] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<ProformaInvoiceLinkOptions>({
     customers: [],
     projects: [],
@@ -86,11 +111,28 @@ export function ProformaInvoicesPage() {
   const [deleteTarget, setDeleteTarget] =
     useState<ProformaInvoiceWithRelations | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [sendingProformaId, setSendingProformaId] = useState<string | null>(null);
+  const [preparingProformaId, setPreparingProformaId] = useState<string | null>(
+    null,
+  );
+  const [paymentTarget, setPaymentTarget] =
+    useState<ProformaInvoiceWithRelations | null>(null);
+  const [paymentForm, setPaymentForm] =
+    useState<ProformaPaymentFormValues | null>(null);
+  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const canView = hasPermission(profile, permissions, "invoices", "view");
   const canCreate = hasPermission(profile, permissions, "invoices", "create");
   const canUpdate = hasPermission(profile, permissions, "invoices", "update");
   const canDelete = hasPermission(profile, permissions, "invoices", "delete");
+  const canCreatePayments = hasPermission(profile, permissions, "payments", "create");
+  const canCreateDocuments = hasPermission(
+    profile,
+    permissions,
+    "documents",
+    "create",
+  );
 
   async function loadData() {
     if (!canView) {
@@ -107,6 +149,29 @@ export function ProformaInvoicesPage() {
       ]);
       setProformaInvoices(nextProformaInvoices);
       setOptions(nextOptions);
+      if (canCreateDocuments && nextProformaInvoices.length > 0) {
+        const pdfEntries = await Promise.all(
+          nextProformaInvoices.map(async (proformaInvoice) => {
+            try {
+              return [
+                proformaInvoice.id,
+                await fetchProformaInvoicePdfPreviewUrl(proformaInvoice),
+              ] as const;
+            } catch {
+              return [proformaInvoice.id, null] as const;
+            }
+          }),
+        );
+        setProformaPdfUrls(
+          Object.fromEntries(
+            pdfEntries.filter(
+              (entry): entry is readonly [string, string] => Boolean(entry[1]),
+            ),
+          ),
+        );
+      } else {
+        setProformaPdfUrls({});
+      }
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -208,6 +273,100 @@ export function ProformaInvoicesPage() {
         "error",
       );
     }
+  }
+
+  function openProformaDetail(proformaInvoiceId: string) {
+    navigate(`/proforma-invoices/${proformaInvoiceId}`);
+  }
+
+  function handleProformaRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    proformaInvoiceId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openProformaDetail(proformaInvoiceId);
+    }
+  }
+
+  async function handleMarkSent(proformaInvoice: ProformaInvoiceWithRelations) {
+    try {
+      setSendingProformaId(proformaInvoice.id);
+      await markProformaInvoiceSent(proformaInvoice.id);
+      showToast("Proforma invoice marked sent.", "success");
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Proforma invoice status update failed.",
+        "error",
+      );
+    } finally {
+      setSendingProformaId(null);
+    }
+  }
+
+  async function handleDownloadProforma(
+    proformaInvoice: ProformaInvoiceWithRelations,
+  ) {
+    const knownUrl = proformaPdfUrls[proformaInvoice.id];
+    if (knownUrl) {
+      window.open(knownUrl, "_blank", "noreferrer");
+      return;
+    }
+
+    if (!canCreateDocuments) {
+      showToast(
+        "Download needs documents:create access for generated proforma PDFs.",
+        "error",
+      );
+      return;
+    }
+
+    try {
+      setPreparingProformaId(proformaInvoice.id);
+      const existingUrl = await fetchProformaInvoicePdfPreviewUrl(proformaInvoice);
+      if (existingUrl) {
+        setProformaPdfUrls((current) => ({
+          ...current,
+          [proformaInvoice.id]: existingUrl,
+        }));
+        window.open(existingUrl, "_blank", "noreferrer");
+        return;
+      }
+
+      const proformaItems = await fetchProformaInvoiceItems(
+        profile,
+        proformaInvoice.id,
+      );
+      const result = await generateAndStoreProformaInvoicePdf(
+        profile,
+        organization,
+        proformaInvoice,
+        proformaItems,
+      );
+      setProformaPdfUrls((current) => ({
+        ...current,
+        [proformaInvoice.id]: result.previewUrl,
+      }));
+      window.open(result.previewUrl, "_blank", "noreferrer");
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Proforma PDF download failed.",
+        "error",
+      );
+    } finally {
+      setPreparingProformaId(null);
+    }
+  }
+
+  function openPaymentForm(proformaInvoice: ProformaInvoiceWithRelations) {
+    setPaymentErrors({});
+    setPaymentTarget(proformaInvoice);
+    setPaymentForm(emptyProformaPaymentForm());
   }
 
   function handleCreationModeChange(creationMode: InvoiceCreationMode) {
@@ -329,6 +488,37 @@ export function ProformaInvoicesPage() {
     }
   }
 
+  async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!paymentTarget || !paymentForm) {
+      return;
+    }
+
+    const nextErrors = validateProformaPaymentForm(paymentForm);
+    setPaymentErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setSavingPayment(true);
+      await createProformaInvoicePayment(profile, paymentTarget, paymentForm);
+      setPaymentForm(null);
+      setPaymentTarget(null);
+      showToast("Proforma payment recorded.", "success");
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Payment save failed.",
+        "error",
+      );
+    } finally {
+      setSavingPayment(false);
+    }
+  }
+
   async function prefillItemsFromQuotation(
     quotation: InvoiceQuotationSummary | null | undefined,
   ) {
@@ -426,25 +616,32 @@ export function ProformaInvoicesPage() {
 
       {!loading && !error && filteredProformaInvoices.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm 2xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Proforma</th>
                   <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Context</th>
-                  <th className="px-4 py-3">PI Date</th>
                   <th className="px-4 py-3">Due Date</th>
                   <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3">Paid</th>
-                  <th className="px-4 py-3">Balance</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3 text-right">Next Step</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filteredProformaInvoices.map((proformaInvoice) => (
-                  <tr key={proformaInvoice.id}>
+                  <tr
+                    className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("b2bFlow")}`}
+                    key={proformaInvoice.id}
+                    onClick={() => openProformaDetail(proformaInvoice.id)}
+                    onKeyDown={(event) =>
+                      handleProformaRowKeyDown(event, proformaInvoice.id)
+                    }
+                    role="link"
+                    tabIndex={0}
+                  >
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {proformaInvoice.proforma_code ?? "Proforma Invoice"}
                     </td>
@@ -454,51 +651,34 @@ export function ProformaInvoicesPage() {
                           proformaInvoice.customer?.full_name ||
                           "-"}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        {proformaInvoice.customer?.phone ?? "-"}
-                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {proformaInvoice.customer?.phone ?? "-"}
                     </td>
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {proformaInvoiceContextLabel(proformaInvoice)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {formatDate(proformaInvoice.proforma_date)}
                     </td>
                     <td className="px-4 py-3">{formatDate(proformaInvoice.due_date)}</td>
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {formatMoney(proformaInvoice.total_amount)}
                     </td>
                     <td className="px-4 py-3">
-                      {formatMoney(proformaInvoice.amount_paid)}
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatMoney(proformaInvoice.balance_due)}
-                    </td>
-                    <td className="px-4 py-3">
                       <ProformaInvoiceStatusBadge value={proformaInvoice.status} />
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <ViewLink to={`/proforma-invoices/${proformaInvoice.id}`}>
-                          View
-                        </ViewLink>
-                        {canUpdate && !["converted", "cancelled"].includes(proformaInvoice.status ?? "") ? (
-                          <Button
-                            onClick={() => void openEditForm(proformaInvoice)}
-                            variant="secondary"
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canDelete ? (
-                          <Button
-                            onClick={() => setDeleteTarget(proformaInvoice)}
-                            variant="danger"
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
+                    <td className="w-52 px-4 py-3">
+                      <ProformaNextStepActions
+                        canCreateDocuments={canCreateDocuments}
+                        canMarkSent={canUpdate && canMarkProformaSent(proformaInvoice)}
+                        canRecordPayment={
+                          canCreatePayments && canRecordProformaPayment(proformaInvoice)
+                        }
+                        downloadUrl={proformaPdfUrls[proformaInvoice.id]}
+                        preparing={preparingProformaId === proformaInvoice.id}
+                        sending={sendingProformaId === proformaInvoice.id}
+                        onDownload={() => void handleDownloadProforma(proformaInvoice)}
+                        onMarkSent={() => void handleMarkSent(proformaInvoice)}
+                        onRecordPayment={() => openPaymentForm(proformaInvoice)}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -506,11 +686,17 @@ export function ProformaInvoicesPage() {
             </table>
           </div>
 
-          <div className="grid gap-3 2xl:hidden">
+          <div className="grid gap-3 xl:hidden">
             {filteredProformaInvoices.map((proformaInvoice) => (
               <article
                 key={proformaInvoice.id}
-                className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+                className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("b2bFlow")}`}
+                onClick={() => openProformaDetail(proformaInvoice.id)}
+                onKeyDown={(event) =>
+                  handleProformaRowKeyDown(event, proformaInvoice.id)
+                }
+                role="link"
+                tabIndex={0}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -534,26 +720,24 @@ export function ProformaInvoicesPage() {
                   <CardItem label="Balance" value={formatMoney(proformaInvoice.balance_due)} />
                   <CardItem label="Due" value={formatDate(proformaInvoice.due_date)} />
                 </dl>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <ViewLink to={`/proforma-invoices/${proformaInvoice.id}`}>
-                    View
-                  </ViewLink>
-                  {canUpdate && !["converted", "cancelled"].includes(proformaInvoice.status ?? "") ? (
-                    <Button
-                      onClick={() => void openEditForm(proformaInvoice)}
-                      variant="secondary"
-                    >
-                      Edit
-                    </Button>
-                  ) : null}
-                  {canDelete ? (
-                    <Button
-                      onClick={() => setDeleteTarget(proformaInvoice)}
-                      variant="danger"
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
+                <div
+                  className="mt-4"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <ProformaNextStepActions
+                    canCreateDocuments={canCreateDocuments}
+                    canMarkSent={canUpdate && canMarkProformaSent(proformaInvoice)}
+                    canRecordPayment={
+                      canCreatePayments && canRecordProformaPayment(proformaInvoice)
+                    }
+                    downloadUrl={proformaPdfUrls[proformaInvoice.id]}
+                    preparing={preparingProformaId === proformaInvoice.id}
+                    sending={sendingProformaId === proformaInvoice.id}
+                    onDownload={() => void handleDownloadProforma(proformaInvoice)}
+                    onMarkSent={() => void handleMarkSent(proformaInvoice)}
+                    onRecordPayment={() => openPaymentForm(proformaInvoice)}
+                  />
                 </div>
               </article>
             ))}
@@ -592,6 +776,20 @@ export function ProformaInvoicesPage() {
         />
       ) : null}
 
+      {paymentForm ? (
+        <ProformaPaymentFormModal
+          values={paymentForm}
+          setValues={setPaymentForm}
+          errors={paymentErrors}
+          onClose={() => {
+            setPaymentForm(null);
+            setPaymentTarget(null);
+          }}
+          onSubmit={handlePaymentSubmit}
+          saving={savingPayment}
+        />
+      ) : null}
+
       {deleteTarget ? (
         <ConfirmDialog
           title="Delete proforma invoice?"
@@ -622,6 +820,97 @@ function CardItem({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs text-slate-500">{label}</dt>
       <dd className="font-medium text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
+function canMarkProformaSent(proformaInvoice: ProformaInvoiceWithRelations) {
+  return ![
+    "sent",
+    "partially_paid",
+    "paid",
+    "converted",
+    "cancelled",
+  ].includes(proformaInvoice.status ?? "");
+}
+
+function canRecordProformaPayment(
+  proformaInvoice: ProformaInvoiceWithRelations,
+) {
+  return (
+    ["sent", "partially_paid"].includes(proformaInvoice.status ?? "") &&
+    Number(proformaInvoice.balance_due ?? 0) > 0
+  );
+}
+
+function ProformaNextStepActions({
+  canCreateDocuments,
+  canMarkSent,
+  canRecordPayment,
+  downloadUrl,
+  preparing,
+  sending,
+  onDownload,
+  onMarkSent,
+  onRecordPayment,
+}: {
+  canCreateDocuments: boolean;
+  canMarkSent: boolean;
+  canRecordPayment: boolean;
+  downloadUrl: string | undefined;
+  preparing: boolean;
+  sending: boolean;
+  onDownload: () => void;
+  onMarkSent: () => void;
+  onRecordPayment: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col items-stretch gap-2"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {canMarkSent ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={sending}
+          onClick={onMarkSent}
+          type="button"
+        >
+          {sending ? "Marking Sent" : "Mark Sent"}
+        </button>
+      ) : null}
+      {downloadUrl ? (
+        <a
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+          download
+          href={downloadUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Download Proforma
+        </a>
+      ) : canCreateDocuments ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={preparing}
+          onClick={onDownload}
+          type="button"
+        >
+          {preparing ? "Preparing Proforma" : "Download Proforma"}
+        </button>
+      ) : (
+        <PlaceholderAction>Download Proforma</PlaceholderAction>
+      )}
+      {canRecordPayment ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-stone-50"
+          onClick={onRecordPayment}
+          type="button"
+        >
+          Record Payment
+        </button>
+      ) : null}
     </div>
   );
 }

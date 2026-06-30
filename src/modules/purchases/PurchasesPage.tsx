@@ -18,6 +18,7 @@ import {
   EmptyState,
   LoadingSkeleton,
   Modal,
+  PlaceholderAction,
   SearchInput,
   SelectInput,
   TextArea,
@@ -36,6 +37,7 @@ import type { InventoryItem } from "../inventory/types";
 import type { Vendor } from "../vendors/types";
 import {
   createPurchaseOrder,
+  fetchPurchaseOrder,
   fetchPurchasePriceDefaults,
   fetchPurchaseVendorOptions,
   fetchPurchaseOrders,
@@ -55,6 +57,10 @@ import {
   validatePurchaseOrderForm,
   validatePurchaseReceiveForm,
 } from "./purchaseUtils";
+import {
+  fetchPurchaseOrderPdfPreviewUrl,
+  generateAndStorePurchaseOrderPdf,
+} from "./purchasePdfWorkflow";
 import type {
   PurchaseOrderFormValues,
   PurchaseOrderItemFormValues,
@@ -68,6 +74,7 @@ type PurchaseFilters = {
   search: string;
   status: string;
   vendorId: string;
+  pendingReceive: boolean;
 };
 
 type PurchaseFormErrors = ReturnType<typeof validatePurchaseOrderForm>;
@@ -78,9 +85,10 @@ type PurchaseVendorOption = Pick<
 >;
 
 export function PurchasesPage() {
-  const { profile, permissions, roleNames } = useAuth();
+  const { profile, permissions, roleNames, organization } = useAuth();
   const { showToast } = useToast();
   const [orders, setOrders] = useState<PurchaseOrderWithRelations[]>([]);
+  const [purchasePdfUrls, setPurchasePdfUrls] = useState<Record<string, string>>({});
   const [vendors, setVendors] = useState<PurchaseVendorOption[]>([]);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [priceDefaults, setPriceDefaults] = useState(
@@ -92,6 +100,7 @@ export function PurchasesPage() {
     search: "",
     status: "",
     vendorId: "",
+    pendingReceive: false,
   });
   const [form, setForm] = useState<PurchaseOrderFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<PurchaseFormErrors | null>(null);
@@ -108,6 +117,9 @@ export function PurchasesPage() {
   const [receiveFormErrors, setReceiveFormErrors] =
     useState<PurchaseReceiveFormErrors | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [preparingPurchasePdfId, setPreparingPurchasePdfId] = useState<string | null>(
+    null,
+  );
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
   const canViewPricing = hasAdminPricingAccess(
@@ -137,6 +149,13 @@ export function PurchasesPage() {
   const canReceive =
     hasPermission(profile, permissions, "inventory", "create") &&
     hasPermission(profile, permissions, "inventory", "update");
+  const canCreateDocuments = hasPermission(
+    profile,
+    permissions,
+    "documents",
+    "create",
+  );
+  const canDownloadPurchasePdf = canCreateDocuments && canViewPricing;
 
   async function loadData() {
     if (!canView) {
@@ -155,6 +174,26 @@ export function PurchasesPage() {
       setOrders(nextOrders);
       setVendors(nextVendors);
       setItems(nextItems);
+      if (canDownloadPurchasePdf && nextOrders.length > 0) {
+        const pdfEntries = await Promise.all(
+          nextOrders.map(async (order) => {
+            try {
+              return [order.id, await fetchPurchaseOrderPdfPreviewUrl(order)] as const;
+            } catch {
+              return [order.id, null] as const;
+            }
+          }),
+        );
+        setPurchasePdfUrls(
+          Object.fromEntries(
+            pdfEntries.filter(
+              (entry): entry is readonly [string, string] => Boolean(entry[1]),
+            ),
+          ),
+        );
+      } else {
+        setPurchasePdfUrls({});
+      }
       setPriceDefaults(
         canViewPricing ? await fetchPurchasePriceDefaults(nextItems) : new Map(),
       );
@@ -179,6 +218,8 @@ export function PurchasesPage() {
     const search = filters.search.trim().toLowerCase();
 
     return orders.filter((order) => {
+      const matchesPendingReceive =
+        !filters.pendingReceive || isReceivablePurchaseOrder(order);
       const matchesSearch =
         !search ||
         [
@@ -186,15 +227,24 @@ export function PurchasesPage() {
           order.vendor?.vendor_name,
           order.vendor?.vendor_code,
           order.vendor?.phone,
+          ...(order.items ?? []).map((item) => item.item?.item_name),
+          ...(order.items ?? []).map((item) => item.item?.item_code),
+          ...(order.items ?? []).map((item) => item.item?.brand),
+          ...(order.items ?? []).map((item) => item.item?.model),
         ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(search));
       const matchesStatus = !filters.status || order.status === filters.status;
       const matchesVendor = !filters.vendorId || order.vendor_id === filters.vendorId;
 
-      return matchesSearch && matchesStatus && matchesVendor;
+      return matchesPendingReceive && matchesSearch && matchesStatus && matchesVendor;
     });
   }, [orders, filters]);
+
+  const pendingReceiveCount = useMemo(
+    () => orders.filter(isReceivablePurchaseOrder).length,
+    [orders],
+  );
 
   if (!canView) {
     return (
@@ -226,9 +276,38 @@ export function PurchasesPage() {
 
     try {
       setSaving(true);
-      await createPurchaseOrder(profile, form);
+      const createdOrder = await createPurchaseOrder(profile, form);
+      let pdfGenerated = false;
+      let pdfGenerationFailed = false;
+
+      if (canDownloadPurchasePdf) {
+        try {
+          const orderForPdf = await fetchPurchaseOrder(profile, createdOrder.id);
+          await generateAndStorePurchaseOrderPdf(
+            profile,
+            organization,
+            orderForPdf,
+          );
+          pdfGenerated = true;
+        } catch (pdfError) {
+          pdfGenerationFailed = true;
+          showToast(
+            pdfError instanceof Error
+              ? `Purchase order created, but PDF generation failed: ${pdfError.message}`
+              : "Purchase order created, but PDF generation failed.",
+            "error",
+          );
+        }
+      }
+
       setForm(null);
-      showToast("Purchase order created.", "success");
+      if (pdfGenerated) {
+        showToast("Purchase order created and PDF generated.", "success");
+      } else if (!canDownloadPurchasePdf) {
+        showToast("Purchase order created. PDF generation needs documents:create and purchase pricing access.", "success");
+      } else if (!pdfGenerationFailed) {
+        showToast("Purchase order created.", "success");
+      }
       await loadData();
     } catch (nextError) {
       showToast(
@@ -305,6 +384,55 @@ export function PurchasesPage() {
     }
   }
 
+  async function handleDownloadPurchaseOrder(order: PurchaseOrderWithRelations) {
+    const knownUrl = purchasePdfUrls[order.id];
+    if (knownUrl) {
+      window.open(knownUrl, "_blank", "noreferrer");
+      return;
+    }
+
+    if (!canDownloadPurchasePdf) {
+      showToast(
+        "Download needs documents:create access and purchase pricing access.",
+        "error",
+      );
+      return;
+    }
+
+    try {
+      setPreparingPurchasePdfId(order.id);
+      const existingUrl = await fetchPurchaseOrderPdfPreviewUrl(order);
+      if (existingUrl) {
+        setPurchasePdfUrls((current) => ({
+          ...current,
+          [order.id]: existingUrl,
+        }));
+        window.open(existingUrl, "_blank", "noreferrer");
+        return;
+      }
+
+      const result = await generateAndStorePurchaseOrderPdf(
+        profile,
+        organization,
+        order,
+      );
+      setPurchasePdfUrls((current) => ({
+        ...current,
+        [order.id]: result.previewUrl,
+      }));
+      window.open(result.previewUrl, "_blank", "noreferrer");
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Purchase order PDF download failed.",
+        "error",
+      );
+    } finally {
+      setPreparingPurchasePdfId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -324,7 +452,13 @@ export function PurchasesPage() {
         <SelectInput
           label="Status"
           value={filters.status}
-          onChange={(status) => setFilters((current) => ({ ...current, status }))}
+          onChange={(status) =>
+            setFilters((current) => ({
+              ...current,
+              status,
+              pendingReceive: false,
+            }))
+          }
           options={[
             { value: "", label: "All statuses" },
             ...purchaseStatusOptions.map((status) => ({
@@ -333,6 +467,18 @@ export function PurchasesPage() {
             })),
           ]}
         />
+        <Button
+          onClick={() =>
+            setFilters((current) => ({
+              ...current,
+              status: current.pendingReceive ? current.status : "",
+              pendingReceive: !current.pendingReceive,
+            }))
+          }
+          variant={filters.pendingReceive ? "primary" : "secondary"}
+        >
+          Pending Receive ({pendingReceiveCount})
+        </Button>
         <SelectInput
           label="Supplier"
           value={filters.vendorId}
@@ -353,8 +499,16 @@ export function PurchasesPage() {
       {error ? <EmptyState title="Could not load purchases" description={error} /> : null}
       {!loading && !error && filteredOrders.length === 0 ? (
         <EmptyState
-          title="No purchase orders found"
-          description="Create a purchase order to track supplier procurement and received stock."
+          title={
+            filters.pendingReceive
+              ? "No pending material receipts"
+              : "No purchase orders found"
+          }
+          description={
+            filters.pendingReceive
+              ? "Ordered and partially received purchase orders will appear here."
+              : "Create a purchase order to track supplier procurement and received stock."
+          }
           action={canCreate ? <Button onClick={openCreateForm}>Create Purchase Order</Button> : null}
         />
       ) : null}
@@ -364,7 +518,11 @@ export function PurchasesPage() {
           orders={filteredOrders}
           canManageStatus={canManageStatus}
           canReceive={canReceive}
+          canDownloadPdf={canDownloadPurchasePdf}
+          pdfUrls={purchasePdfUrls}
+          preparingPdfId={preparingPurchasePdfId}
           showPricing={canViewPricing}
+          onDownload={(order) => void handleDownloadPurchaseOrder(order)}
           onStatusChange={(order, status) => setStatusTarget({ order, status })}
           onReceive={openReceiveForm}
         />
@@ -430,7 +588,11 @@ export function PurchaseOrdersSection({
   orders,
   canManageStatus = false,
   canReceive = false,
+  canDownloadPdf = false,
+  pdfUrls = {},
+  preparingPdfId = null,
   showPricing = true,
+  onDownload,
   onStatusChange,
   onReceive,
   emptyTitle = "No purchase orders",
@@ -438,7 +600,11 @@ export function PurchaseOrdersSection({
   orders: PurchaseOrderWithRelations[];
   canManageStatus?: boolean;
   canReceive?: boolean;
+  canDownloadPdf?: boolean;
+  pdfUrls?: Record<string, string>;
+  preparingPdfId?: string | null;
   showPricing?: boolean;
+  onDownload?: (order: PurchaseOrderWithRelations) => void;
   onStatusChange?: (
     order: PurchaseOrderWithRelations,
     status: PurchaseStatus,
@@ -511,133 +677,156 @@ export function PurchaseOrdersSection({
               <th className="px-4 py-3">Expected</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Items</th>
+              <th className="px-4 py-3">Receipt</th>
               {showPricing ? <th className="px-4 py-3">Total</th> : null}
-              <th className="px-4 py-3">Actions</th>
+              <th className="px-4 py-3">Next Step</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
-            {orders.map((order) => (
-              <tr
-                key={order.id}
-                className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
-                onClick={(event) => handlePurchaseRowClick(event, order.id)}
-                onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
-                role="link"
-                tabIndex={0}
-              >
-                <td className="px-4 py-3 font-semibold text-slate-950">
-                  <Link
-                    className="font-semibold text-[#06173f]"
-                    onClick={(event) => event.stopPropagation()}
-                    to={`/purchases/${order.id}`}
-                  >
-                    {formatPurchaseCode(order.purchase_code)}
-                  </Link>
-                </td>
-                <td className="px-4 py-3">
-                  <span className="font-semibold text-slate-950">
-                    {order.vendor?.vendor_name ?? "Supplier"}
-                  </span>
-                  <div className="text-xs text-slate-500">
-                    {order.vendor?.phone ?? ""}
-                  </div>
-                </td>
-                <td className="px-4 py-3">{formatDate(order.order_date)}</td>
-                <td
-                  className="px-4 py-3"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
+            {orders.map((order) => {
+              const progress = purchaseReceiveProgress(order);
+
+              return (
+                <tr
+                  key={order.id}
+                  className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                  onClick={(event) => handlePurchaseRowClick(event, order.id)}
+                  onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
+                  role="link"
+                  tabIndex={0}
                 >
-                  {formatDate(order.expected_delivery_date)}
-                </td>
-                <td className="px-4 py-3">
-                  <PurchaseStatusBadge value={order.status} />
-                </td>
-                <td className="px-4 py-3">{order.items?.length ?? 0}</td>
-                {showPricing ? (
                   <td className="px-4 py-3 font-semibold text-slate-950">
-                    {formatCurrency(order.total_amount)}
+                    <Link
+                      className="font-semibold text-[#06173f]"
+                      onClick={(event) => event.stopPropagation()}
+                      to={`/purchases/${order.id}`}
+                    >
+                      {formatPurchaseCode(order.purchase_code)}
+                    </Link>
                   </td>
-                ) : null}
-                <td
-                  className="px-4 py-3"
-                  onClick={(event) => event.stopPropagation()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                >
-                  <PurchaseStatusActions
-                    order={order}
-                    canManageStatus={canManageStatus}
-                    canReceive={canReceive}
-                    onStatusChange={onStatusChange}
-                    onReceive={onReceive}
-                  />
-                </td>
-              </tr>
-            ))}
+                  <td className="px-4 py-3">
+                    <span className="font-semibold text-slate-950">
+                      {order.vendor?.vendor_name ?? "Supplier"}
+                    </span>
+                    <div className="text-xs text-slate-500">
+                      {order.vendor?.phone ?? ""}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">{formatDate(order.order_date)}</td>
+                  <td
+                    className="px-4 py-3"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    {formatDate(order.expected_delivery_date)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <PurchaseStatusBadge value={order.status} />
+                  </td>
+                  <td className="px-4 py-3">{order.items?.length ?? 0}</td>
+                  <td className="px-4 py-3">
+                    <PurchaseReceiveProgress progress={progress} />
+                  </td>
+                  {showPricing ? (
+                    <td className="px-4 py-3 font-semibold text-slate-950">
+                      {formatCurrency(order.total_amount)}
+                    </td>
+                  ) : null}
+                  <td
+                    className="px-4 py-3"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <PurchaseStatusActions
+                      order={order}
+                      canManageStatus={canManageStatus}
+                      canReceive={canReceive}
+                      canDownloadPdf={canDownloadPdf}
+                      pdfUrl={pdfUrls[order.id]}
+                      preparingPdf={preparingPdfId === order.id}
+                      onDownload={onDownload}
+                      onStatusChange={onStatusChange}
+                      onReceive={onReceive}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
       <div className="mt-4 grid gap-3 xl:hidden">
-        {orders.map((order) => (
-          <article
-            key={order.id}
-            className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
-            onClick={(event) => handlePurchaseRowClick(event, order.id)}
-            onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
-            role="link"
-            tabIndex={0}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  <Link
-                    className="text-[#06173f]"
-                    onClick={(event) => event.stopPropagation()}
-                    to={`/purchases/${order.id}`}
-                  >
-                    {formatPurchaseCode(order.purchase_code)}
-                  </Link>
-                </p>
-                <span className="mt-1 block text-base font-semibold text-slate-950">
-                  {order.vendor?.vendor_name ?? "Supplier"}
-                </span>
-                <p className="mt-1 text-sm text-slate-600">
-                  {formatDate(order.order_date)} / {order.items?.length ?? 0} items
-                </p>
-              </div>
-              <PurchaseStatusBadge value={order.status} />
-            </div>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-xs text-slate-500">Expected</dt>
-                <dd className="font-medium text-slate-900">
-                  {formatDate(order.expected_delivery_date)}
-                </dd>
-              </div>
-              {showPricing ? (
+        {orders.map((order) => {
+          const progress = purchaseReceiveProgress(order);
+
+          return (
+            <article
+              key={order.id}
+              className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+              onClick={(event) => handlePurchaseRowClick(event, order.id)}
+              onKeyDown={(event) => handlePurchaseRowKeyDown(event, order.id)}
+              role="link"
+              tabIndex={0}
+            >
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <dt className="text-xs text-slate-500">Total</dt>
-                  <dd className="font-semibold text-slate-950">
-                    {formatCurrency(order.total_amount)}
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    <Link
+                      className="text-[#06173f]"
+                      onClick={(event) => event.stopPropagation()}
+                      to={`/purchases/${order.id}`}
+                    >
+                      {formatPurchaseCode(order.purchase_code)}
+                    </Link>
+                  </p>
+                  <span className="mt-1 block text-base font-semibold text-slate-950">
+                    {order.vendor?.vendor_name ?? "Supplier"}
+                  </span>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {formatDate(order.order_date)} / {order.items?.length ?? 0} items
+                  </p>
+                </div>
+                <PurchaseStatusBadge value={order.status} />
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt className="text-xs text-slate-500">Expected</dt>
+                  <dd className="font-medium text-slate-900">
+                    {formatDate(order.expected_delivery_date)}
                   </dd>
                 </div>
-              ) : null}
-            </dl>
-            <div
-              className="mt-4"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
-              <PurchaseStatusActions
-                order={order}
-                canManageStatus={canManageStatus}
-                canReceive={canReceive}
-                onStatusChange={onStatusChange}
-                onReceive={onReceive}
-              />
-            </div>
-          </article>
-        ))}
+                {showPricing ? (
+                  <div>
+                    <dt className="text-xs text-slate-500">Total</dt>
+                    <dd className="font-semibold text-slate-950">
+                      {formatCurrency(order.total_amount)}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+              <div className="mt-4">
+                <PurchaseReceiveProgress progress={progress} />
+              </div>
+              <div
+                className="mt-4"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <PurchaseStatusActions
+                  order={order}
+                  canManageStatus={canManageStatus}
+                  canReceive={canReceive}
+                  canDownloadPdf={canDownloadPdf}
+                  pdfUrl={pdfUrls[order.id]}
+                  preparingPdf={preparingPdfId === order.id}
+                  onDownload={onDownload}
+                  onStatusChange={onStatusChange}
+                  onReceive={onReceive}
+                />
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
@@ -662,58 +851,150 @@ export function PurchaseStatusBadge({
   return <Badge tone={tone}>{labelize(value)}</Badge>;
 }
 
+function isReceivablePurchaseOrder(order: PurchaseOrderWithRelations) {
+  return order.status === "ordered" || order.status === "partially_received";
+}
+
+function purchaseReceiveProgress(order: PurchaseOrderWithRelations) {
+  const totals = (order.items ?? []).reduce(
+    (current, item) => ({
+      ordered: current.ordered + Number(item.quantity ?? 0),
+      received: current.received + Number(item.received_quantity ?? 0),
+    }),
+    { ordered: 0, received: 0 },
+  );
+  const percent =
+    totals.ordered > 0
+      ? Math.min(100, Math.round((totals.received / totals.ordered) * 100))
+      : 0;
+
+  return { ...totals, pending: Math.max(totals.ordered - totals.received, 0), percent };
+}
+
+function PurchaseReceiveProgress({
+  progress,
+}: {
+  progress: ReturnType<typeof purchaseReceiveProgress>;
+}) {
+  return (
+    <div className="min-w-36">
+      <div className="flex items-center justify-between gap-3 text-xs text-slate-600">
+        <span className="font-medium text-slate-700">
+          {progress.received} / {progress.ordered}
+        </span>
+        <span>{progress.percent}%</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-stone-100">
+        <div
+          className="h-full rounded-full bg-orange-500"
+          style={{ width: `${progress.percent}%` }}
+        />
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        Pending {progress.pending}
+      </p>
+    </div>
+  );
+}
+
 function PurchaseStatusActions({
   order,
   canManageStatus,
   canReceive,
+  canDownloadPdf,
+  pdfUrl,
+  preparingPdf,
+  onDownload,
   onStatusChange,
   onReceive,
 }: {
   order: PurchaseOrderWithRelations;
   canManageStatus: boolean;
   canReceive: boolean;
+  canDownloadPdf: boolean;
+  pdfUrl?: string;
+  preparingPdf: boolean;
+  onDownload?: (order: PurchaseOrderWithRelations) => void;
   onStatusChange?: (
     order: PurchaseOrderWithRelations,
     status: PurchaseStatus,
   ) => void;
   onReceive?: (order: PurchaseOrderWithRelations) => void;
 }) {
-  const canShowStatusActions = Boolean(
-    canManageStatus && onStatusChange && order.status !== "received",
+  const canMarkOrdered = Boolean(
+    canManageStatus && onStatusChange && order.status === "draft",
   );
   const canShowReceiveAction = Boolean(
     canReceive &&
       onReceive &&
-      order.status !== "received" &&
-      order.status !== "cancelled",
+      (order.status === "ordered" || order.status === "partially_received"),
   );
 
-  if (!canShowStatusActions && !canShowReceiveAction) {
+  if (!canDownloadPdf && !canMarkOrdered && !canShowReceiveAction) {
     return <span className="text-sm text-slate-500">-</span>;
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {canShowStatusActions && onStatusChange && order.status === "draft" ? (
+    <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap">
+      <DownloadPurchaseOrderAction
+        canDownload={canDownloadPdf}
+        preparing={preparingPdf}
+        url={pdfUrl}
+        onDownload={onDownload ? () => onDownload(order) : undefined}
+      />
+      {canMarkOrdered && onStatusChange ? (
         <Button onClick={() => onStatusChange(order, "ordered")} variant="secondary">
           Mark Ordered
         </Button>
       ) : null}
       {canShowReceiveAction && onReceive ? (
         <Button onClick={() => onReceive(order)}>
-          Material Receive
-        </Button>
-      ) : null}
-      {canShowStatusActions && onStatusChange && order.status !== "cancelled" ? (
-        <Button onClick={() => onStatusChange(order, "cancelled")} variant="danger">
-          Cancel
+          Material Received
         </Button>
       ) : null}
     </div>
   );
 }
 
-function PurchaseOrderFormModal({
+function DownloadPurchaseOrderAction({
+  canDownload,
+  url,
+  preparing,
+  onDownload,
+}: {
+  canDownload: boolean;
+  url?: string;
+  preparing: boolean;
+  onDownload?: () => void;
+}) {
+  if (url) {
+    return (
+      <a
+        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+        download
+        href={url}
+        rel="noreferrer"
+        target="_blank"
+      >
+        Download PO
+      </a>
+    );
+  }
+
+  if (!canDownload || !onDownload) {
+    return <PlaceholderAction>Download PO</PlaceholderAction>;
+  }
+
+  return (
+    <Button disabled={preparing} onClick={onDownload}>
+      {preparing ? "Preparing PO" : "Download PO"}
+    </Button>
+  );
+}
+
+export function PurchaseOrderFormModal({
+  title = "Create Purchase Order",
+  submitLabel = "Save Purchase Order",
   values,
   setValues,
   errors,
@@ -724,6 +1005,8 @@ function PurchaseOrderFormModal({
   onSubmit,
   saving,
 }: {
+  title?: string;
+  submitLabel?: string;
   values: PurchaseOrderFormValues;
   setValues: (values: PurchaseOrderFormValues) => void;
   errors: PurchaseFormErrors | null;
@@ -760,10 +1043,10 @@ function PurchaseOrderFormModal({
 
   return (
     <Modal
-      title="Create Purchase Order"
+      title={title}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Save Purchase Order"
+      submitLabel={submitLabel}
       submitting={saving}
     >
       <SelectInput
@@ -969,7 +1252,7 @@ export function PurchaseReceiveFormModal({
       title={`Receive ${formatPurchaseCode(order.purchase_code)}`}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Material Receive"
+      submitLabel="Material Received"
       submitting={saving}
       maxWidthClass="sm:max-w-4xl"
     >

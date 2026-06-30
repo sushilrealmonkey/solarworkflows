@@ -39,7 +39,6 @@ export type Quotation = {
   summary_module_wattage: number | null;
   summary_plant_size_kw: number | null;
   summary_inverter_brand: string | null;
-  summary_structure_type: string | null;
   summary_dcdb_included: boolean | null;
   summary_acdb_included: boolean | null;
   summary_earthing_count: number | null;
@@ -49,7 +48,6 @@ export type Quotation = {
   summary_amount_in_words: string | null;
   panel_type: string | null;
   inverter_type: string | null;
-  structure_type: string | null;
   estimated_generation_units: number | null;
   base_amount: number | null;
   gst_amount: number | null;
@@ -332,7 +330,6 @@ export type QuotationFormValues = {
   summary_module_wattage: string;
   summary_plant_size_kw: string;
   summary_inverter_brand: string;
-  summary_structure_type: string;
   summary_dcdb_included: string;
   summary_acdb_included: string;
   summary_earthing_count: string;
@@ -342,7 +339,6 @@ export type QuotationFormValues = {
   summary_amount_in_words: string;
   panel_type: string;
   inverter_type: string;
-  structure_type: string;
   estimated_generation_units: string;
   discount_amount: string;
   subsidy_amount: string;

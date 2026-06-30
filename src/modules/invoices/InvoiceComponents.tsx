@@ -9,6 +9,10 @@ import {
   TextInput,
 } from "../crm/CrmComponents";
 import { labelize } from "../crm/crmUtils";
+import {
+  paymentModeOptions,
+  paymentStatusOptions,
+} from "../payments/paymentUtils";
 import { formatMoney } from "../quotations/quotationUtils";
 import {
   draftLineTotal,
@@ -23,6 +27,7 @@ import type {
   InvoiceCreationMode,
   InvoiceItemFormValues,
   InvoiceLinkOptions,
+  InvoicePaymentFormValues,
   InvoiceWithRelations,
 } from "./types";
 
@@ -46,7 +51,6 @@ export function InvoiceTotalsCard({
         <dl className="mt-4 space-y-3 text-sm">
           <TotalRow label="Base Amount" value={invoice.base_amount} />
           <TotalRow label="GST Amount" value={invoice.gst_amount} />
-          <TotalRow label="Discount" value={invoice.discount_amount} />
           <TotalRow label="Total Amount" value={invoice.total_amount} />
           <TotalRow label="Amount Paid" value={invoice.amount_paid} />
           <div className="border-t border-stone-200 pt-3">
@@ -114,6 +118,7 @@ export function InvoiceFormModal({
   const isCreateFlow = Boolean(onCreationModeChange);
   const activeCreationMode = creationMode ?? values.creation_mode;
   const isProjectMode = activeCreationMode === "project";
+  const hideItemGstPercent = isCreateFlow && isProjectMode;
   const selectedProject = options.projects.find(
     (project) => project.id === values.project_id,
   );
@@ -138,11 +143,7 @@ export function InvoiceFormModal({
       project_id: projectId,
       customer_id: project?.customer_id ?? values.customer_id,
       quotation_id: project?.quotation_id ?? "",
-      discount_amount:
-        project?.quotation?.discount_amount === null ||
-        project?.quotation?.discount_amount === undefined
-          ? values.discount_amount
-          : String(project.quotation.discount_amount),
+      discount_amount: "",
     });
   }
 
@@ -336,13 +337,6 @@ export function InvoiceFormModal({
         onChange={(value) => update("due_date", value)}
         type="date"
       />
-      <TextInput
-        label="Discount Amount"
-        value={values.discount_amount}
-        onChange={(value) => update("discount_amount", value)}
-        error={errors.discount_amount}
-        type="number"
-      />
       <TextArea
         label="Notes"
         value={values.notes}
@@ -370,6 +364,7 @@ export function InvoiceFormModal({
                 item={item}
                 inventoryItems={options.inventoryItems}
                 errors={errors}
+                hideGstPercent={hideItemGstPercent}
                 canRemove={
                   values.items.length > 1 && (canRemoveItems || !item.id)
                 }
@@ -388,17 +383,93 @@ export function InvoiceFormModal({
           </div>
           <div className="mt-3 grid gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm sm:grid-cols-3">
             <DraftTotal label="Base" value={draftTotals.base} />
-            <DraftTotal label="GST" value={draftTotals.gst} />
+            <DraftTotal label="GST Amount" value={draftTotals.gst} />
             <DraftTotal
               label="Gross"
-              value={Math.max(
-                draftTotals.gross - Number(values.discount_amount || 0),
-                0,
-              )}
+              value={draftTotals.gross}
             />
           </div>
         </div>
       ) : null}
+    </Modal>
+  );
+}
+
+export function InvoicePaymentFormModal({
+  values,
+  setValues,
+  errors,
+  onClose,
+  onSubmit,
+  saving,
+}: {
+  values: InvoicePaymentFormValues;
+  setValues: (values: InvoicePaymentFormValues) => void;
+  errors: Record<string, string>;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  saving: boolean;
+}) {
+  const update = (key: keyof InvoicePaymentFormValues, value: string) =>
+    setValues({ ...values, [key]: value });
+
+  return (
+    <Modal
+      title="Add Invoice Payment"
+      onClose={onClose}
+      onSubmit={onSubmit}
+      submitLabel="Save Payment"
+      submitting={saving}
+    >
+      <TextInput
+        label="Amount"
+        value={values.amount}
+        onChange={(value) => update("amount", value)}
+        error={errors.amount}
+        required
+        type="number"
+      />
+      <TextInput
+        label="Payment Date"
+        value={values.payment_date}
+        onChange={(value) => update("payment_date", value)}
+        error={errors.payment_date}
+        required
+        type="date"
+      />
+      <SelectInput
+        label="Payment Mode"
+        value={values.payment_mode}
+        onChange={(value) => update("payment_mode", value)}
+        options={paymentModeOptions.map((value) => ({
+          value,
+          label: labelize(value),
+        }))}
+      />
+      <TextInput
+        label="Reference Number"
+        value={values.reference_number}
+        onChange={(value) => update("reference_number", value)}
+      />
+      <TextInput
+        label="Bank Name"
+        value={values.bank_name}
+        onChange={(value) => update("bank_name", value)}
+      />
+      <SelectInput
+        label="Status"
+        value={values.status}
+        onChange={(value) => update("status", value)}
+        options={paymentStatusOptions.map((value) => ({
+          value,
+          label: labelize(value),
+        }))}
+      />
+      <TextArea
+        label="Notes"
+        value={values.notes}
+        onChange={(value) => update("notes", value)}
+      />
     </Modal>
   );
 }
@@ -425,6 +496,7 @@ function InvoiceItemEditor({
   item,
   inventoryItems,
   errors,
+  hideGstPercent,
   canRemove,
   onChange,
   onRemove,
@@ -433,6 +505,7 @@ function InvoiceItemEditor({
   item: InvoiceItemFormValues;
   inventoryItems: InvoiceLinkOptions["inventoryItems"];
   errors: Record<string, string>;
+  hideGstPercent?: boolean;
   canRemove: boolean;
   onChange: (item: InvoiceItemFormValues) => void;
   onRemove: () => void;
@@ -512,13 +585,15 @@ function InvoiceItemEditor({
           error={errors[`items.${index}.unit_price`]}
           type="number"
         />
-        <TextInput
-          label="GST Percent"
-          value={item.gst_percent}
-          onChange={(value) => update("gst_percent", value)}
-          error={errors[`items.${index}.gst_percent`]}
-          type="number"
-        />
+        {hideGstPercent ? null : (
+          <TextInput
+            label="GST Percent"
+            value={item.gst_percent}
+            onChange={(value) => update("gst_percent", value)}
+            error={errors[`items.${index}.gst_percent`]}
+            type="number"
+          />
+        )}
         <TextInput
           label="Description"
           value={item.description}

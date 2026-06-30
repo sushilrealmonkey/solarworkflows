@@ -126,6 +126,7 @@ export default function App() {
           <Route path="/vendors/:id" element={<VendorDetailPage />} />
           <Route path="/purchases" element={<PurchasesPage />} />
           <Route path="/purchases/:id" element={<PurchaseDetailPage />} />
+          <Route path="/material-receive" element={<Navigate to="/purchases" replace />} />
           <Route path="/proforma-invoices" element={<ProformaInvoicesPage />} />
           <Route path="/proforma-invoices/:id" element={<ProformaInvoiceDetailPage />} />
           <Route path="/invoices" element={<InvoicesPage />} />
@@ -154,6 +155,7 @@ export default function App() {
                   "/inventory",
                   "/vendors",
                   "/purchases",
+                  "/material-receive",
                   "/proforma-invoices",
                   "/invoices",
                   "/reports",

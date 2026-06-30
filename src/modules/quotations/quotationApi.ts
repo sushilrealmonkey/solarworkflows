@@ -26,6 +26,7 @@ import {
   calculateDiscountedTurnkeyTotals,
   calculateTurnkeyGstBreakdown,
   deriveQuotationMaterialSummary,
+  discountedTurnkeyAmount,
   hasTurnkeyGstAmount,
   normalizeQuotationCustomerType,
 } from "./quotationUtils";
@@ -202,11 +203,10 @@ function quotationPayload(values: QuotationFormValues) {
     ? calculateDiscountedTurnkeyTotals(inclusiveTurnkeyAmount, discountAmount)
     : null;
   const totalAmount = discountedTurnkeyTotals?.totalAmount ?? null;
-  const summaryStructureType =
-    values.summary_structure_type ||
-    values.structure_type ||
-    materialSummary.summary_structure_type ||
-    "";
+  const payableTurnkeyAmount = discountedTurnkeyAmount(
+    inclusiveTurnkeyAmount,
+    discountAmount,
+  );
   const summaryDcdbIncluded =
     nullableBoolean(values.summary_dcdb_included) ??
     materialSummary.summary_dcdb_included ??
@@ -269,7 +269,6 @@ function quotationPayload(values: QuotationFormValues) {
         materialSummary.summary_inverter_brand ||
         "",
     ),
-    summary_structure_type: nullable(summaryStructureType),
     summary_dcdb_included: summaryDcdbIncluded,
     summary_acdb_included: summaryAcdbIncluded,
     summary_earthing_count: nullableNumber(
@@ -282,13 +281,12 @@ function quotationPayload(values: QuotationFormValues) {
     summary_total_turnkey_cost: nullableNumber(values.summary_total_turnkey_cost),
     summary_amount_in_words: nullable(
       amountInWordsFromTurnkeyCost(
-        inclusiveTurnkeyAmount,
+        payableTurnkeyAmount ?? inclusiveTurnkeyAmount,
         values.summary_amount_in_words,
       ),
     ),
     panel_type: nullable(values.panel_type),
     inverter_type: nullable(values.inverter_type),
-    structure_type: nullable(values.structure_type || summaryStructureType),
     estimated_generation_units:
       nullableNumber(values.estimated_generation_units) ??
       nullableNumber(values.expected_annual_generation_kwh),
@@ -363,7 +361,6 @@ const requiredQuotationStorageColumns = new Set([
   "summary_module_wattage",
   "summary_plant_size_kw",
   "summary_inverter_brand",
-  "summary_structure_type",
   "summary_dcdb_included",
   "summary_acdb_included",
   "summary_earthing_count",

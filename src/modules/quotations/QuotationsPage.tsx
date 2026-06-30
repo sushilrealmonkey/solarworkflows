@@ -19,6 +19,10 @@ import {
 import { formatDate, hasPermission, labelize } from "../crm/crmUtils";
 import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
+import {
+  recordPaletteCardClassName,
+  recordPaletteTableRowClassName,
+} from "../shared/recordOriginStyles";
 import { deleteQuotation, fetchQuotations } from "./quotationApi";
 import {
   formatKw,
@@ -294,7 +298,7 @@ export function QuotationsPage() {
                   return (
                     <tr
                       key={quotation.id}
-                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                      className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("projectFlow")}`}
                       onClick={() => openQuotationDetail(quotation.id)}
                       onKeyDown={(event) =>
                         handleQuotationRowKeyDown(event, quotation.id)
@@ -348,7 +352,7 @@ export function QuotationsPage() {
               return (
                 <article
                   key={quotation.id}
-                  className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                  className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("projectFlow")}`}
                   onClick={() => openQuotationDetail(quotation.id)}
                   onKeyDown={(event) =>
                     handleQuotationRowKeyDown(event, quotation.id)

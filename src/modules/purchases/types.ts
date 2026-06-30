@@ -77,6 +77,7 @@ export type PurchaseOrderWithRelations = PurchaseOrder & {
 };
 
 export type PurchaseOrderItemFormValues = {
+  id?: string;
   item_id: string;
   quantity: string;
   unit_price: string;

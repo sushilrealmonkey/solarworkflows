@@ -30,6 +30,10 @@ import {
 import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
 import {
+  recordPaletteCardClassName,
+  recordPaletteTableRowClassName,
+} from "../shared/recordOriginStyles";
+import {
   createSiteSurvey,
   deleteSiteSurvey,
   fetchSiteSurveys,
@@ -61,6 +65,32 @@ type SurveyFilters = {
   assignedTo: string;
   scheduledDate: string;
 };
+
+const scheduledTimeOptions = [
+  { value: "", label: "Select scheduled time" },
+  ...Array.from({ length: 48 }, (_, index) => {
+    const hour = Math.floor(index / 2);
+    const minute = index % 2 === 0 ? "00" : "30";
+    const value = `${String(hour).padStart(2, "0")}:${minute}`;
+
+    return { value, label: formatTimeOptionLabel(value) };
+  }),
+];
+
+function formatTimeOptionLabel(value: string) {
+  const [hourValue, minuteValue = "00"] = value.split(":");
+  const hour = Number(hourValue);
+  const minute = Number(minuteValue);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return value;
+  }
+
+  const period = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+
+  return `${String(displayHour).padStart(2, "0")}:${String(minute).padStart(2, "0")} ${period}`;
+}
 
 export function SiteSurveysPage() {
   const { profile, permissions } = useAuth();
@@ -416,7 +446,7 @@ export function SiteSurveysPage() {
                   return (
                     <tr
                       key={survey.id}
-                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                      className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("projectFlow")}`}
                       onClick={() => openSurveyDetail(survey.id)}
                       onKeyDown={(event) => handleSurveyRowKeyDown(event, survey.id)}
                       role="link"
@@ -463,7 +493,7 @@ export function SiteSurveysPage() {
               return (
                 <article
                   key={survey.id}
-                  className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                  className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("projectFlow")}`}
                   onClick={() => openSurveyDetail(survey.id)}
                   onKeyDown={(event) => handleSurveyRowKeyDown(event, survey.id)}
                   role="link"
@@ -642,6 +672,18 @@ export function SiteSurveyFormModal({
       ? [{ value: values.phase_type, label: labelize(values.phase_type) }]
       : []),
   ];
+  const timeOptions = [
+    ...scheduledTimeOptions,
+    ...(values.scheduled_time &&
+    !scheduledTimeOptions.some((option) => option.value === values.scheduled_time)
+      ? [
+          {
+            value: values.scheduled_time,
+            label: formatTimeOptionLabel(values.scheduled_time),
+          },
+        ]
+      : []),
+  ];
 
   function handleLeadChange(leadId: string) {
     const lead = lookups.leads.find((option) => option.id === leadId);
@@ -691,11 +733,11 @@ export function SiteSurveyFormModal({
         type="date"
         required
       />
-      <TextInput
+      <SelectInput
         label="Scheduled Time"
         value={values.scheduled_time}
         onChange={(value) => update("scheduled_time", value)}
-        type="time"
+        options={timeOptions}
       />
       <StaffSelect
         staff={lookups.staff}
@@ -721,11 +763,6 @@ export function SiteSurveyFormModal({
         type="number"
       />
       <TextInput
-        label="Structure Type"
-        value={values.structure_type}
-        onChange={(value) => update("structure_type", value)}
-      />
-      <TextInput
         label="Latitude"
         value={values.latitude}
         onChange={(value) => update("latitude", value)}
@@ -742,11 +779,6 @@ export function SiteSurveyFormModal({
         value={values.recommended_capacity_kw}
         onChange={(value) => update("recommended_capacity_kw", value)}
         type="number"
-      />
-      <TextInput
-        label="Existing Meter Type"
-        value={values.existing_meter_type}
-        onChange={(value) => update("existing_meter_type", value)}
       />
       <TextInput
         label="Sanctioned Load (kW)"

@@ -311,6 +311,97 @@ export async function createPurchaseOrder(
   return order;
 }
 
+export async function updatePurchaseOrder(
+  id: string,
+  values: PurchaseOrderFormValues,
+) {
+  const client = requireSupabase();
+  const { data: orderData, error: orderError } = await client
+    .from("purchase_orders")
+    .update({
+      vendor_id: values.vendor_id,
+      order_date: values.order_date || new Date().toISOString().slice(0, 10),
+      expected_delivery_date: nullable(values.expected_delivery_date),
+      notes: nullable(values.notes),
+    })
+    .eq("id", id)
+    .eq("status", "draft")
+    .select("*")
+    .single();
+
+  if (orderError) {
+    throw new Error(
+      orderError.code === "PGRST116"
+        ? "Only draft purchase orders can be edited."
+        : orderError.message,
+    );
+  }
+
+  const order = orderData as PurchaseOrder;
+  const { data: existingItems, error: existingItemsError } = await client
+    .from("purchase_order_items")
+    .select("id")
+    .eq("purchase_order_id", id);
+
+  if (existingItemsError) {
+    throw new Error(existingItemsError.message);
+  }
+
+  const retainedItemIds = values.items
+    .map((item) => item.id)
+    .filter((itemId): itemId is string => Boolean(itemId));
+  const removedItemIds = ((existingItems ?? []) as Array<{ id: string }>)
+    .map((item) => item.id)
+    .filter((itemId) => !retainedItemIds.includes(itemId));
+
+  if (removedItemIds.length > 0) {
+    const { error: deleteError } = await client
+      .from("purchase_order_items")
+      .delete()
+      .eq("purchase_order_id", id)
+      .in("id", removedItemIds);
+
+    if (deleteError) {
+      throw new Error(deleteError.message);
+    }
+  }
+
+  for (const item of values.items) {
+    const payload = {
+      item_id: item.item_id,
+      quantity: numberValue(item.quantity),
+      unit_price: numberValue(item.unit_price),
+      gst_percent: numberValue(item.gst_percent),
+    };
+
+    if (item.id) {
+      const { error: itemError } = await client
+        .from("purchase_order_items")
+        .update(payload)
+        .eq("purchase_order_id", id)
+        .eq("id", item.id);
+
+      if (itemError) {
+        throw new Error(itemError.message);
+      }
+    } else {
+      const { error: itemError } = await client
+        .from("purchase_order_items")
+        .insert({
+          ...payload,
+          organization_id: order.organization_id,
+          purchase_order_id: id,
+        });
+
+      if (itemError) {
+        throw new Error(itemError.message);
+      }
+    }
+  }
+
+  return order;
+}
+
 export async function fetchPurchasePriceDefaults(items: InventoryItem[]) {
   const client = requireSupabase();
   const productIds = Array.from(

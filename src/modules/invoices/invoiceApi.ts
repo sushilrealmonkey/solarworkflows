@@ -10,6 +10,7 @@ import type {
   InvoiceItem,
   InvoiceItemFormValues,
   InvoiceLinkOptions,
+  InvoicePaymentFormValues,
   InvoiceProjectOption,
   InvoiceQuotationSummary,
   InvoiceWithRelations,
@@ -52,7 +53,7 @@ function invoicePayload(values: InvoiceFormValues) {
     quotation_id: nullable(values.quotation_id),
     invoice_date: nullable(values.invoice_date),
     due_date: nullable(values.due_date),
-    discount_amount: nullableNumber(values.discount_amount) ?? 0,
+    discount_amount: 0,
     notes: nullable(values.notes),
   };
 }
@@ -67,6 +68,21 @@ function itemPayload(values: InvoiceItemFormValues, sortOrder?: number) {
     unit_price: nullableNumber(values.unit_price) ?? 0,
     gst_percent: nullableNumber(values.gst_percent) ?? 0,
     ...(sortOrder === undefined ? {} : { sort_order: sortOrder }),
+  };
+}
+
+function paymentPayload(values: InvoicePaymentFormValues) {
+  return {
+    payment_source: "customer_direct",
+    payment_mode: nullable(values.payment_mode),
+    amount: nullableNumber(values.amount) ?? 0,
+    payment_date: nullable(values.payment_date),
+    reference_number: nullable(values.reference_number),
+    bank_name: nullable(values.bank_name),
+    loan_account_number: null,
+    receipt_url: null,
+    notes: nullable(values.notes),
+    status: values.status,
   };
 }
 
@@ -605,4 +621,33 @@ export async function fetchInvoicePayments(
   }
 
   return (data ?? []) as unknown as PaymentWithRelations[];
+}
+
+export async function createInvoicePayment(
+  profile: UserProfile | null,
+  invoice: InvoiceWithRelations,
+  values: InvoicePaymentFormValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("payments")
+    .insert({
+      organization_id: requireOrganization(profile),
+      customer_id: invoice.customer_id,
+      project_id: invoice.project_id,
+      quotation_id: invoice.quotation_id,
+      proforma_invoice_id: invoice.proforma_invoice_id,
+      invoice_id: invoice.id,
+      b2b_sale_id: invoice.b2b_sale_id,
+      created_by: profile?.id ?? null,
+      ...paymentPayload(values),
+    })
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data;
 }

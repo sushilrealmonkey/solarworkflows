@@ -21,7 +21,7 @@ import {
   amountInWordsFromTurnkeyCost,
   calculateDiscountedTurnkeyTotals,
   deriveQuotationMaterialSummary,
-  formatIndianCurrencyInWords,
+  discountedTurnkeyAmount,
   hasTurnkeyGstAmount,
   quotationValidUntilFromDateInput,
 } from "../quotations/quotationUtils";
@@ -29,6 +29,7 @@ import {
   isStaleDynamicImportError,
   reloadOnceForUpdatedAssets,
 } from "../../utils/staleAssetRecovery";
+import { formatDisplayDate } from "../../utils/dateFormat";
 
 type PdfDocumentKind = "quotation" | "proforma_invoice" | "invoice" | "purchase_order";
 type PdfDoc = InstanceType<typeof import("jspdf").jsPDF>;
@@ -222,6 +223,7 @@ async function buildTechnicalCommercialProposalPdf(
     settings,
     colors,
     y + 6,
+    totals.totalAmount,
   );
   y = drawTechnicalCommercialTerms(doc, quotation, colors, y + 6);
   y = drawTechnicalConsiderations(doc, quotation, colors, y + 6);
@@ -311,7 +313,7 @@ export async function buildInvoicePdf(
     totals: {
       baseAmount: invoice.base_amount,
       gstAmount: invoice.gst_amount,
-      discountAmount: invoice.discount_amount,
+      discountAmount: null,
       totalAmount: invoice.total_amount,
       amountPaid: invoice.amount_paid,
       netPayableAmount: invoice.balance_due,
@@ -875,16 +877,17 @@ function drawTechnicalQuotationSummary(
         "",
     ],
     ["Total Turnkey Cost", quotation.summary_total_turnkey_cost === null || quotation.summary_total_turnkey_cost === undefined ? "" : formatAmount(quotation.summary_total_turnkey_cost, settings.currency)],
+    ["Total Amount", totals.totalAmount === null || totals.totalAmount === undefined ? "" : formatAmount(totals.totalAmount, settings.currency)],
     [
-      "Final Taxable Amount In Words",
-      totals.baseAmount === null || totals.baseAmount === undefined
-        ? ""
-        : formatIndianCurrencyInWords(totals.baseAmount),
-    ],
-    [
-      "Amount In Words",
+      "Total Amount In Words",
       amountInWordsFromTurnkeyCost(
-        quotation.summary_total_turnkey_cost ?? quotation.pricing_total_rate,
+        totals.totalAmount ??
+          discountedTurnkeyAmount(
+            quotation.summary_total_turnkey_cost ?? quotation.pricing_total_rate,
+            quotation.discount_amount,
+          ) ??
+          quotation.summary_total_turnkey_cost ??
+          quotation.pricing_total_rate,
         quotation.summary_amount_in_words ?? "",
       ),
     ],
@@ -1026,6 +1029,7 @@ function drawTechnicalPaymentTerms(
   settings: OrganizationSettings,
   colors: Record<string, string>,
   y: number,
+  totalAmount: number | null | undefined,
 ) {
   const rows = paymentTerms
     .slice()
@@ -1041,9 +1045,7 @@ function drawTechnicalPaymentTerms(
       paymentTerm.percentage === null || paymentTerm.percentage === undefined
         ? ""
         : `${paymentTerm.percentage}%`,
-      paymentTerm.amount === null || paymentTerm.amount === undefined
-        ? ""
-        : formatAmount(paymentTerm.amount, settings.currency),
+      formatPaymentTermPdfAmount(paymentTerm, totalAmount, settings),
     ]);
 
   if (rows.length === 0) {
@@ -1052,6 +1054,23 @@ function drawTechnicalPaymentTerms(
 
   y = drawTechnicalSectionHeading(doc, "Payment Terms", colors, y);
   return drawTechnicalTable(doc, ["Sr.", "Milestone", "%", "Amount"], [14, 88, 28, 56], rows, colors, y) + 4;
+}
+
+function formatPaymentTermPdfAmount(
+  paymentTerm: QuotationPaymentTerm,
+  totalAmount: number | null | undefined,
+  settings: OrganizationSettings,
+) {
+  const percent = Number(paymentTerm.percentage ?? NaN);
+  const total = Number(totalAmount ?? NaN);
+
+  if (Number.isFinite(percent) && Number.isFinite(total) && total > 0) {
+    return formatAmount(total * percent / 100, settings.currency);
+  }
+
+  return paymentTerm.amount === null || paymentTerm.amount === undefined
+    ? ""
+    : formatAmount(paymentTerm.amount, settings.currency);
 }
 
 function drawTechnicalSignature(
@@ -1624,10 +1643,9 @@ function drawItemsTable(
       y + 5,
       { align: "right" },
     );
-    doc.text(
-      item.gstPercent === null || item.gstPercent === undefined
-        ? ""
-        : `${Number(item.gstPercent)}%`,
+    drawPdfText(
+      doc,
+      formatOptionalAmount(lineGstAmount(item), input.settings.currency),
       margin + widths[0] + widths[1] + widths[2] + 24,
       y + 5,
       { align: "right" },
@@ -1844,7 +1862,7 @@ function drawTotals(
 ) {
   y = ensureSpace(doc, y, input.kind === "quotation" ? 76 : 66, colors.primary);
   const gstRows =
-    input.kind === "invoice" || input.kind === "purchase_order"
+    input.kind === "purchase_order"
       ? gstBreakdown(input.items)
       : [];
   const hasLeftPanel = input.kind === "quotation" || gstRows.length > 0;
@@ -2333,6 +2351,14 @@ function lineGrossAmount(item: PdfLineItem) {
   return base + base * Number(item.gstPercent ?? 0) / 100;
 }
 
+function lineGstAmount(item: PdfLineItem) {
+  if (item.lineTotal === null || item.lineTotal === undefined) {
+    return null;
+  }
+
+  return Number(item.lineTotal ?? 0) * Number(item.gstPercent ?? 0) / 100;
+}
+
 function purchaseItemBaseAmount(
   item: NonNullable<PurchaseOrderWithRelations["items"]>[number],
 ) {
@@ -2509,28 +2535,9 @@ function formatOptionalAmount(
 }
 
 function formatDate(value: string | null | undefined, dateFormat: string | null) {
-  if (!value) {
-    return "-";
-  }
+  void dateFormat;
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "-";
-  }
-
-  const day = String(date.getDate()).padStart(2, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const year = String(date.getFullYear());
-
-  if (dateFormat === "MM/DD/YYYY") {
-    return `${month}/${day}/${year}`;
-  }
-
-  if (dateFormat === "YYYY-MM-DD") {
-    return `${year}-${month}-${day}`;
-  }
-
-  return `${day}/${month}/${year}`;
+  return formatDisplayDate(value);
 }
 
 function valueWithUnit(value: number | string | null | undefined, unit: string) {

@@ -58,6 +58,10 @@ import {
   Toolbar,
   ViewLink,
 } from "./CrmComponents";
+import {
+  recordPaletteCardClassName,
+  recordPaletteTableRowClassName,
+} from "../shared/recordOriginStyles";
 
 type CustomerFilters = {
   search: string;
@@ -406,7 +410,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                 {filteredCustomers.map((customer) => (
                   <tr
                     key={customer.id}
-                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                    className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName(segment === "b2b_direct" ? "b2bFlow" : "projectFlow")}`}
                     onClick={() => openCustomerDetail(customer.id)}
                     onKeyDown={(event) =>
                       handleCustomerRowKeyDown(event, customer.id)
@@ -451,7 +455,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
             {filteredCustomers.map((customer) => (
               <article
                 key={customer.id}
-                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName(segment === "b2b_direct" ? "b2bFlow" : "projectFlow")}`}
                 onClick={() => openCustomerDetail(customer.id)}
                 onKeyDown={(event) =>
                   handleCustomerRowKeyDown(event, customer.id)

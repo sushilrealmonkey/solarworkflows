@@ -50,6 +50,10 @@ import {
   Toolbar,
   ViewLink,
 } from "./CrmComponents";
+import {
+  recordPaletteCardClassName,
+  recordPaletteTableRowClassName,
+} from "../shared/recordOriginStyles";
 
 type LeadFilters = {
   search: string;
@@ -360,7 +364,7 @@ export function LeadsPage() {
                 {filteredLeads.map((lead) => (
                   <tr
                     key={lead.id}
-                    className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                    className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("projectFlow")}`}
                     onClick={() => openLeadDetail(lead.id)}
                     onKeyDown={(event) => handleLeadRowKeyDown(event, lead.id)}
                     role="link"
@@ -399,7 +403,7 @@ export function LeadsPage() {
             {filteredLeads.map((lead) => (
               <article
                 key={lead.id}
-                className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("projectFlow")}`}
                 onClick={() => openLeadDetail(lead.id)}
                 onKeyDown={(event) => handleLeadRowKeyDown(event, lead.id)}
                 role="link"

@@ -7,6 +7,7 @@ import type {
   InvoiceInventoryItemOption,
   InvoiceItem,
   InvoiceItemFormValues,
+  InvoicePaymentFormValues,
   InvoiceProjectOption,
   InvoiceStatus,
   InvoiceWithRelations,
@@ -57,7 +58,7 @@ export function emptyInvoiceForm(
     quotation_id: project?.quotation_id ?? "",
     invoice_date: todayInput(),
     due_date: defaultDueDateInput(),
-    discount_amount: numberToInput(project?.quotation?.discount_amount),
+    discount_amount: "",
     notes: "",
     items: [emptyInvoiceItemForm()],
   };
@@ -71,7 +72,7 @@ export function invoiceToForm(invoice: Invoice): InvoiceFormValues {
     quotation_id: invoice.quotation_id ?? "",
     invoice_date: invoice.invoice_date ?? todayInput(),
     due_date: invoice.due_date ?? "",
-    discount_amount: numberToInput(invoice.discount_amount),
+    discount_amount: "",
     notes: invoice.notes ?? "",
     items: [],
   };
@@ -217,21 +218,42 @@ export function invoiceDisplayBalance(invoice: InvoiceWithRelations) {
   );
 }
 
+export function emptyInvoicePaymentForm(): InvoicePaymentFormValues {
+  return {
+    amount: "",
+    payment_date: todayInput(),
+    payment_mode: "bank_transfer",
+    reference_number: "",
+    bank_name: "",
+    notes: "",
+    status: "received",
+  };
+}
+
+export function validateInvoicePaymentForm(values: InvoicePaymentFormValues) {
+  const amount = Number(values.amount);
+
+  return {
+    amount:
+      !values.amount.trim()
+        ? "Amount is required."
+        : !Number.isFinite(amount) || amount <= 0
+          ? "Amount must be greater than 0."
+          : "",
+    payment_date: values.payment_date.trim() ? "" : "Payment date is required.",
+  };
+}
+
 export function validateInvoiceForm(
   values: InvoiceFormValues,
   options: { includeItems: boolean; requireProject?: boolean },
 ) {
-  const discount = Number(values.discount_amount || 0);
   const nextErrors: Record<string, string> = {
     customer_id: requiredError(values.customer_id, "Customer"),
     project_id: options.requireProject
       ? requiredError(values.project_id, "Project")
       : "",
     invoice_date: requiredError(values.invoice_date, "Invoice date"),
-    discount_amount:
-      Number.isFinite(discount) && discount >= 0
-        ? ""
-        : "Discount must be 0 or more.",
   };
 
   if (options.includeItems) {

@@ -1,5 +1,6 @@
 import type { FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { formatDisplayDate } from "../../utils/dateFormat";
 import {
   Badge,
   Button,
@@ -459,7 +460,7 @@ export function B2BSaleReviewModal({
             <ReviewRow label="Customer" value={customer?.business_name || customer?.full_name || "-"} />
             <ReviewRow label="Phone" value={customer?.phone ?? "-"} />
             <ReviewRow label="GST" value={values.gst_number || "-"} />
-            <ReviewRow label="Sale Date" value={values.sale_date || "-"} />
+            <ReviewRow label="Sale Date" value={formatDisplayDate(values.sale_date)} />
           </ReviewBlock>
           <ReviewBlock title="Addresses">
             <ReviewRow label="Billing" value={values.billing_address || "-"} />

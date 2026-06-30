@@ -1,16 +1,15 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { PageHeader } from "../../components/PageHeader";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
-  Button,
-  ConfirmDialog,
   DetailItem,
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  PencilIcon,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -20,7 +19,6 @@ import {
 } from "../crm/crmUtils";
 import { formatMoney } from "../quotations/quotationUtils";
 import {
-  deletePayment,
   fetchPayment,
   fetchPaymentProjects,
   updatePayment,
@@ -37,7 +35,6 @@ export function PaymentDetailPage() {
   const { id } = useParams();
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
-  const navigate = useNavigate();
   const [payment, setPayment] = useState<PaymentWithRelations | null>(null);
   const [projects, setProjects] = useState<PaymentProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,12 +42,9 @@ export function PaymentDetailPage() {
   const [editing, setEditing] = useState<PaymentFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "payments", "view");
   const canUpdate = hasPermission(profile, permissions, "payments", "update");
-  const canDelete = hasPermission(profile, permissions, "payments", "delete");
 
   async function loadPayment() {
     if (!canView || !id) {
@@ -121,24 +115,13 @@ export function PaymentDetailPage() {
     }
   }
 
-  async function handleDelete() {
+  function openEditForm() {
     if (!payment) {
       return;
     }
 
-    try {
-      setDeleting(true);
-      await deletePayment(payment.id);
-      showToast("Payment deleted.", "success");
-      navigate("/payments");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Payment delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
+    setFormErrors({});
+    setEditing(paymentToForm(payment));
   }
 
   return (
@@ -158,29 +141,32 @@ export function PaymentDetailPage() {
 
       {payment ? (
         <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <PageHeader
-              title={formatMoney(payment.amount)}
-              description={`${paymentContextLabel(payment)} / ${payment.customer?.business_name || payment.customer?.full_name || "Customer"}`}
+          <div className="border-b border-stone-200 pb-5">
+            <RecordTitle
+              recordType="Payment"
+              name={formatMoney(payment.amount)}
+              action={
+                canUpdate ? (
+                  <button
+                    aria-label="Edit payment"
+                    className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
+                    onClick={openEditForm}
+                    title="Edit payment"
+                    type="button"
+                  >
+                    <PencilIcon />
+                  </button>
+                ) : null
+              }
+              meta={[
+                paymentContextLabel(payment),
+                payment.customer?.business_name ||
+                  payment.customer?.full_name ||
+                  "Customer",
+                labelize(payment.status),
+                formatDate(payment.payment_date),
+              ]}
             />
-            <div className="flex flex-wrap gap-2">
-              {canUpdate && payment.project_id ? (
-                <Button
-                  onClick={() => {
-                    setFormErrors({});
-                    setEditing(paymentToForm(payment));
-                  }}
-                  variant="secondary"
-                >
-                  Edit Payment
-                </Button>
-              ) : null}
-              {canDelete ? (
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Payment
-                </Button>
-              ) : null}
-            </div>
           </div>
 
           <DetailSection title="Payment Details">
@@ -340,15 +326,6 @@ export function PaymentDetailPage() {
         />
       ) : null}
 
-      {confirmingDelete && payment ? (
-        <ConfirmDialog
-          title="Delete payment?"
-          description={`This will remove the ${formatMoney(payment.amount)} payment from ${paymentContextLabel(payment)}.`}
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
-        />
-      ) : null}
     </div>
   );
 }

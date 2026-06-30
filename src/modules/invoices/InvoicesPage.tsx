@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -9,40 +15,54 @@ import {
   ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
+  PlaceholderAction,
   SearchInput,
   SelectInput,
   TextInput,
   Toolbar,
-  ViewLink,
 } from "../crm/CrmComponents";
 import { formatDate, hasPermission, labelize } from "../crm/crmUtils";
 import { formatMoney, numberToInput } from "../quotations/quotationUtils";
-import type { QuotationItem } from "../quotations/types";
 import {
   createInvoice,
+  createInvoicePayment,
   deleteInvoice,
+  fetchInvoice,
   fetchInvoiceItems,
   fetchInvoiceLinkOptions,
   fetchInvoices,
-  fetchQuotationItemsForInvoice,
   updateInvoice,
 } from "./invoiceApi";
-import { InvoiceFormModal, InvoiceStatusBadge } from "./InvoiceComponents";
 import {
+  InvoiceFormModal,
+  InvoicePaymentFormModal,
+  InvoiceStatusBadge,
+} from "./InvoiceComponents";
+import {
+  emptyInvoicePaymentForm,
   emptyInvoiceForm,
   emptyInvoiceItemForm,
   invoiceContextLabel,
-  invoiceItemToForm,
   inventoryItemToInvoiceItemForm,
   isActiveInvoice,
   invoiceStatusOptions,
-  invoiceToForm,
+  validateInvoicePaymentForm,
   validateInvoiceForm,
 } from "./invoiceUtils";
+import {
+  recordOriginCardClassName,
+  recordOriginFromLinks,
+  recordOriginTableRowClassName,
+} from "../shared/recordOriginStyles";
+import {
+  fetchInvoicePdfPreviewUrl,
+  generateAndStoreInvoicePdf,
+} from "./invoicePdfWorkflow";
 import type {
   InvoiceCreationMode,
   InvoiceFormValues,
   InvoiceLinkOptions,
+  InvoicePaymentFormValues,
   InvoiceProjectOption,
   InvoiceQuotationSummary,
   InvoiceWithRelations,
@@ -61,10 +81,12 @@ type InvoiceItemPrefill = {
 };
 
 export function InvoicesPage() {
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, organization } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([]);
+  const [invoicePdfUrls, setInvoicePdfUrls] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<InvoiceLinkOptions>({
     customers: [],
     projects: [],
@@ -90,11 +112,30 @@ export function InvoicesPage() {
     null,
   );
   const [deleting, setDeleting] = useState(false);
+  const [paymentForm, setPaymentForm] = useState<{
+    invoice: InvoiceWithRelations;
+    values: InvoicePaymentFormValues;
+  } | null>(null);
+  const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [preparingInvoiceId, setPreparingInvoiceId] = useState<string | null>(null);
 
   const canView = hasPermission(profile, permissions, "invoices", "view");
   const canCreate = hasPermission(profile, permissions, "invoices", "create");
   const canUpdate = hasPermission(profile, permissions, "invoices", "update");
   const canDelete = hasPermission(profile, permissions, "invoices", "delete");
+  const canCreatePayment = hasPermission(
+    profile,
+    permissions,
+    "payments",
+    "create",
+  );
+  const canCreateDocuments = hasPermission(
+    profile,
+    permissions,
+    "documents",
+    "create",
+  );
 
   async function loadData() {
     if (!canView) {
@@ -111,6 +152,26 @@ export function InvoicesPage() {
       ]);
       setInvoices(nextInvoices);
       setOptions(nextOptions);
+      if (canCreateDocuments && nextInvoices.length > 0) {
+        const pdfEntries = await Promise.all(
+          nextInvoices.map(async (invoice) => {
+            try {
+              return [invoice.id, await fetchInvoicePdfPreviewUrl(invoice)] as const;
+            } catch {
+              return [invoice.id, null] as const;
+            }
+          }),
+        );
+        setInvoicePdfUrls(
+          Object.fromEntries(
+            pdfEntries.filter(
+              (entry): entry is readonly [string, string] => Boolean(entry[1]),
+            ),
+          ),
+        );
+      } else {
+        setInvoicePdfUrls({});
+      }
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load invoices.",
@@ -243,28 +304,103 @@ export function InvoicesPage() {
     });
   }
 
-  async function openEditForm(invoice: InvoiceWithRelations) {
+  function openInvoiceDetail(invoiceId: string) {
+    navigate(`/invoices/${invoiceId}`);
+  }
+
+  function handleInvoiceRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    invoiceId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openInvoiceDetail(invoiceId);
+    }
+  }
+
+  async function handleDownloadInvoice(invoice: InvoiceWithRelations) {
+    const knownUrl = invoicePdfUrls[invoice.id];
+    if (knownUrl) {
+      window.open(knownUrl, "_blank", "noreferrer");
+      return;
+    }
+
+    if (!canCreateDocuments) {
+      showToast("Download needs documents:create access for generated PDFs.", "error");
+      return;
+    }
+
     try {
+      setPreparingInvoiceId(invoice.id);
+      const existingUrl = await fetchInvoicePdfPreviewUrl(invoice);
+      if (existingUrl) {
+        setInvoicePdfUrls((current) => ({
+          ...current,
+          [invoice.id]: existingUrl,
+        }));
+        window.open(existingUrl, "_blank", "noreferrer");
+        return;
+      }
+
       const invoiceItems = await fetchInvoiceItems(profile, invoice.id);
-      setFormErrors({});
-      setFormState({
-        mode: "edit",
+      const result = await generateAndStoreInvoicePdf(
+        profile,
+        organization,
         invoice,
-        values: {
-          ...invoiceToForm(invoice),
-          items:
-            invoiceItems.length > 0
-              ? invoiceItems.map(invoiceItemToForm)
-              : [emptyInvoiceItemForm()],
-        },
-      });
+        invoiceItems,
+      );
+      setInvoicePdfUrls((current) => ({
+        ...current,
+        [invoice.id]: result.previewUrl,
+      }));
+      window.open(result.previewUrl, "_blank", "noreferrer");
     } catch (nextError) {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "Unable to load invoice items.",
+          : "Invoice PDF download failed.",
         "error",
       );
+    } finally {
+      setPreparingInvoiceId(null);
+    }
+  }
+
+  function openPaymentForm(invoice: InvoiceWithRelations) {
+    setPaymentErrors({});
+    setPaymentForm({
+      invoice,
+      values: emptyInvoicePaymentForm(),
+    });
+  }
+
+  async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!paymentForm) {
+      return;
+    }
+
+    const nextErrors = validateInvoicePaymentForm(paymentForm.values);
+    setPaymentErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setSavingPayment(true);
+      await createInvoicePayment(profile, paymentForm.invoice, paymentForm.values);
+      setPaymentForm(null);
+      showToast("Payment added.", "success");
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Payment save failed.",
+        "error",
+      );
+    } finally {
+      setSavingPayment(false);
     }
   }
 
@@ -307,11 +443,7 @@ export function InvoicesPage() {
           project_id: projectId,
           customer_id: project?.customer_id ?? "",
           quotation_id: project?.quotation_id ?? "",
-          discount_amount:
-            project?.quotation?.discount_amount === null ||
-            project?.quotation?.discount_amount === undefined
-              ? current.values.discount_amount
-              : String(project.quotation.discount_amount),
+          discount_amount: "",
           items,
         },
       };
@@ -341,8 +473,44 @@ export function InvoicesPage() {
     try {
       setSaving(true);
       if (formState.mode === "create") {
-        await createInvoice(profile, formState.values);
-        showToast("Invoice created.", "success");
+        const createdInvoice = await createInvoice(profile, formState.values);
+        let pdfGenerated = false;
+        let pdfGenerationFailed = false;
+
+        if (canCreateDocuments) {
+          try {
+            const [invoiceForPdf, itemsForPdf] = await Promise.all([
+              fetchInvoice(profile, createdInvoice.id),
+              fetchInvoiceItems(profile, createdInvoice.id),
+            ]);
+
+            if (invoiceForPdf) {
+              await generateAndStoreInvoicePdf(
+                profile,
+                organization,
+                invoiceForPdf,
+                itemsForPdf,
+              );
+              pdfGenerated = true;
+            }
+          } catch (pdfError) {
+            pdfGenerationFailed = true;
+            showToast(
+              pdfError instanceof Error
+                ? `Invoice created, but PDF generation failed: ${pdfError.message}`
+                : "Invoice created, but PDF generation failed.",
+              "error",
+            );
+          }
+        }
+
+        if (pdfGenerated) {
+          showToast("Invoice created and PDF generated.", "success");
+        } else if (!canCreateDocuments) {
+          showToast("Invoice created. PDF generation needs documents:create access.", "success");
+        } else if (!pdfGenerationFailed) {
+          showToast("Invoice created.", "success");
+        }
       } else if (formState.invoice) {
         await updateInvoice(formState.invoice.id, formState.values, {
           includeItems: true,
@@ -393,11 +561,6 @@ export function InvoicesPage() {
       return [emptyInvoiceItemForm()];
     }
 
-    const quotationItems = await fetchQuotationItemsForInvoice(profile, quotation.id);
-    if (quotationItems.length > 0) {
-      return quotationItems.map(quotationItemToInvoiceItem);
-    }
-
     const gstPercent =
       Number(quotation.base_amount ?? 0) > 0
         ? (Number(quotation.gst_amount ?? 0) / Number(quotation.base_amount ?? 1)) *
@@ -411,7 +574,9 @@ export function InvoicesPage() {
         description: quotation.quotation_code ?? "",
         quantity: "1",
         unit: "project",
-        unit_price: numberToInput(quotation.base_amount ?? quotation.total_amount),
+        unit_price: numberToInput(
+          quotation.base_amount ?? quotation.total_amount ?? quotation.net_payable_amount,
+        ),
         gst_percent: numberToInput(gstPercent),
       },
     ];
@@ -484,142 +649,138 @@ export function InvoicesPage() {
 
       {!loading && !error && filteredInvoices.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm 2xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Invoice</th>
                   <th className="px-4 py-3">Customer</th>
+                  <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Context</th>
-                  <th className="px-4 py-3">Invoice Date</th>
                   <th className="px-4 py-3">Due Date</th>
                   <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3">Paid</th>
-                  <th className="px-4 py-3">Balance</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3 text-right">Next Step</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredInvoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {invoice.invoice_code ?? "Invoice"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-900">
-                        {invoice.customer?.business_name ||
-                          invoice.customer?.full_name ||
-                          "-"}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {invoice.customer?.phone ?? "-"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {invoiceContextLabel(invoice)}
-                    </td>
-                    <td className="px-4 py-3">{formatDate(invoice.invoice_date)}</td>
-                    <td className="px-4 py-3">{formatDate(invoice.due_date)}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatMoney(invoice.total_amount)}
-                    </td>
-                    <td className="px-4 py-3">{formatMoney(invoice.amount_paid)}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatMoney(invoice.balance_due)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <InvoiceStatusBadge value={invoice.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <ViewLink to={`/invoices/${invoice.id}`}>View</ViewLink>
-                        {canUpdate ? (
-                          <Button
-                            onClick={() => void openEditForm(invoice)}
-                            variant="secondary"
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canDelete ? (
-                          <Button
-                            onClick={() => setDeleteTarget(invoice)}
-                            variant="danger"
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredInvoices.map((invoice) => {
+                  const origin = recordOriginFromLinks(invoice);
+
+                  return (
+                    <tr
+                      className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordOriginTableRowClassName(origin)}`}
+                      key={invoice.id}
+                      onClick={() => openInvoiceDetail(invoice.id)}
+                      onKeyDown={(event) => handleInvoiceRowKeyDown(event, invoice.id)}
+                      role="link"
+                      tabIndex={0}
+                    >
+                      <td className="px-4 py-3 font-semibold text-slate-950">
+                        {invoice.invoice_code ?? "Invoice"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-900">
+                          {invoice.customer?.business_name ||
+                            invoice.customer?.full_name ||
+                            "-"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">{invoice.customer?.phone ?? "-"}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-950">
+                        {invoiceContextLabel(invoice)}
+                      </td>
+                      <td className="px-4 py-3">{formatDate(invoice.due_date)}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-950">
+                        {formatMoney(invoice.total_amount)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <InvoiceStatusBadge value={invoice.status} />
+                      </td>
+                      <td className="w-48 px-4 py-3">
+                        <InvoiceNextStepActions
+                          canAddPayment={
+                            canCreatePayment && canAddInvoicePayment(invoice)
+                          }
+                          canCreateDocuments={canCreateDocuments}
+                          downloadUrl={invoicePdfUrls[invoice.id]}
+                          preparing={preparingInvoiceId === invoice.id}
+                          onAddPayment={() => openPaymentForm(invoice)}
+                          onDownload={() => void handleDownloadInvoice(invoice)}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          <div className="grid gap-3 2xl:hidden">
-            {filteredInvoices.map((invoice) => (
-              <article
-                key={invoice.id}
-                className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {formatDate(invoice.invoice_date)}
-                    </p>
-                    <h2 className="mt-1 text-base font-semibold text-slate-950">
-                      {invoice.invoice_code ?? "Invoice"}
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {invoice.customer?.business_name ||
-                        invoice.customer?.full_name ||
-                        "-"} /{" "}
-                      {invoiceContextLabel(invoice)}
-                    </p>
+          <div className="grid gap-3 xl:hidden">
+            {filteredInvoices.map((invoice) => {
+              const origin = recordOriginFromLinks(invoice);
+
+              return (
+                <article
+                  key={invoice.id}
+                  className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordOriginCardClassName(origin)}`}
+                  onClick={() => openInvoiceDetail(invoice.id)}
+                  onKeyDown={(event) => handleInvoiceRowKeyDown(event, invoice.id)}
+                  role="link"
+                  tabIndex={0}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {formatDate(invoice.invoice_date)}
+                      </p>
+                      <h2 className="mt-1 text-base font-semibold text-slate-950">
+                        {invoice.invoice_code ?? "Invoice"}
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {invoice.customer?.business_name ||
+                          invoice.customer?.full_name ||
+                          "-"} /{" "}
+                        {invoiceContextLabel(invoice)}
+                      </p>
+                    </div>
+                    <InvoiceStatusBadge value={invoice.status} />
                   </div>
-                  <InvoiceStatusBadge value={invoice.status} />
-                </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <InvoiceCardItem
-                    label="Total"
-                    value={formatMoney(invoice.total_amount)}
-                  />
-                  <InvoiceCardItem
-                    label="Paid"
-                    value={formatMoney(invoice.amount_paid)}
-                  />
-                  <InvoiceCardItem
-                    label="Balance"
-                    value={formatMoney(invoice.balance_due)}
-                  />
-                  <InvoiceCardItem
-                    label="Due"
-                    value={formatDate(invoice.due_date)}
-                  />
-                </dl>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <ViewLink to={`/invoices/${invoice.id}`}>View</ViewLink>
-                  {canUpdate ? (
-                    <Button
-                      onClick={() => void openEditForm(invoice)}
-                      variant="secondary"
-                    >
-                      Edit
-                    </Button>
-                  ) : null}
-                  {canDelete ? (
-                    <Button
-                      onClick={() => setDeleteTarget(invoice)}
-                      variant="danger"
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <InvoiceCardItem
+                      label="Total"
+                      value={formatMoney(invoice.total_amount)}
+                    />
+                    <InvoiceCardItem
+                      label="Paid"
+                      value={formatMoney(invoice.amount_paid)}
+                    />
+                    <InvoiceCardItem
+                      label="Balance"
+                      value={formatMoney(invoice.balance_due)}
+                    />
+                    <InvoiceCardItem
+                      label="Due"
+                      value={formatDate(invoice.due_date)}
+                    />
+                  </dl>
+                  <div
+                    className="mt-4"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
+                    <InvoiceNextStepActions
+                      canAddPayment={canCreatePayment && canAddInvoicePayment(invoice)}
+                      canCreateDocuments={canCreateDocuments}
+                      downloadUrl={invoicePdfUrls[invoice.id]}
+                      preparing={preparingInvoiceId === invoice.id}
+                      onAddPayment={() => openPaymentForm(invoice)}
+                      onDownload={() => void handleDownloadInvoice(invoice)}
+                    />
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </>
       ) : null}
@@ -659,6 +820,19 @@ export function InvoicesPage() {
         />
       ) : null}
 
+      {paymentForm ? (
+        <InvoicePaymentFormModal
+          values={paymentForm.values}
+          setValues={(values) =>
+            setPaymentForm((current) => (current ? { ...current, values } : current))
+          }
+          errors={paymentErrors}
+          onClose={() => setPaymentForm(null)}
+          onSubmit={handlePaymentSubmit}
+          saving={savingPayment}
+        />
+      ) : null}
+
       {deleteTarget ? (
         <ConfirmDialog
           title="Delete invoice?"
@@ -670,18 +844,6 @@ export function InvoicesPage() {
       ) : null}
     </div>
   );
-}
-
-function quotationItemToInvoiceItem(item: QuotationItem) {
-  return {
-    inventory_item_id: "",
-    item_name: item.item_name ?? "",
-    description: item.description ?? "",
-    quantity: numberToInput(item.quantity) || "1",
-    unit: item.unit ?? "",
-    unit_price: numberToInput(item.unit_price),
-    gst_percent: numberToInput(item.gst_percent) || "0",
-  };
 }
 
 function prefillItemFromInventory(
@@ -712,6 +874,69 @@ function InvoiceCardItem({ label, value }: { label: string; value: string }) {
     <div>
       <dt className="text-xs text-slate-500">{label}</dt>
       <dd className="font-medium text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
+function canAddInvoicePayment(invoice: InvoiceWithRelations) {
+  return (
+    ["sent", "partially_paid", "overdue"].includes(invoice.status ?? "") &&
+    Number(invoice.balance_due ?? 0) > 0
+  );
+}
+
+function InvoiceNextStepActions({
+  canAddPayment,
+  canCreateDocuments,
+  downloadUrl,
+  preparing,
+  onAddPayment,
+  onDownload,
+}: {
+  canAddPayment: boolean;
+  canCreateDocuments: boolean;
+  downloadUrl: string | undefined;
+  preparing: boolean;
+  onAddPayment: () => void;
+  onDownload: () => void;
+}) {
+  return (
+    <div
+      className="flex flex-col items-stretch gap-2"
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {canAddPayment ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={onAddPayment}
+          type="button"
+        >
+          Add Payment
+        </button>
+      ) : null}
+      {downloadUrl ? (
+        <a
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+          download
+          href={downloadUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Download Invoice
+        </a>
+      ) : canCreateDocuments ? (
+        <button
+          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={preparing}
+          onClick={onDownload}
+          type="button"
+        >
+          {preparing ? "Preparing Invoice" : "Download Invoice"}
+        </button>
+      ) : (
+        <PlaceholderAction>Download Invoice</PlaceholderAction>
+      )}
     </div>
   );
 }

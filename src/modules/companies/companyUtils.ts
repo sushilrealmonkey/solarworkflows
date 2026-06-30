@@ -2,6 +2,7 @@ import type {
   PlatformCompany,
   UpdatePlatformCompanyFormValues,
 } from "./types";
+import { formatDisplayDate, formatDisplayDateTime } from "../../utils/dateFormat";
 
 export function isAdminSetupPending(company: PlatformCompany) {
   if (!company.admin) {
@@ -88,27 +89,9 @@ export function slugify(value: string) {
 }
 
 export function formatDate(value: string | null) {
-  if (!value) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  return formatDisplayDate(value);
 }
 
 export function formatDateTime(value: string | null) {
-  if (!value) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(value));
+  return formatDisplayDateTime(value);
 }

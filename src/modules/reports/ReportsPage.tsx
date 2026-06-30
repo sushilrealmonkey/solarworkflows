@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { formatDisplayDate } from "../../utils/dateFormat";
 import { hasPermission, labelize } from "../crm/crmUtils";
 import { formatStock } from "../inventory/inventoryUtils";
 import {
@@ -595,9 +596,5 @@ function normalizeCustomRange(startDate: string, endDate: string): DateRange {
 }
 
 function formatDateLabel(value: string) {
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(`${value}T00:00:00`));
+  return formatDisplayDate(value);
 }

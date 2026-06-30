@@ -53,7 +53,7 @@ export function organizationSettingsToForm(
     bank_account_type: settings.bank_account_type ?? "",
     timezone: settings.timezone ?? fallback.timezone,
     currency: settings.currency ?? fallback.currency,
-    date_format: settings.date_format ?? fallback.date_format,
+    date_format: fallback.date_format,
   };
 }
 

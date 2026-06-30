@@ -44,6 +44,27 @@ export function emptyPurchaseOrderForm(): PurchaseOrderFormValues {
   };
 }
 
+export function purchaseOrderToForm(
+  order: PurchaseOrderWithRelations,
+): PurchaseOrderFormValues {
+  return {
+    vendor_id: order.vendor_id,
+    order_date: order.order_date ?? new Date().toISOString().slice(0, 10),
+    expected_delivery_date: order.expected_delivery_date ?? "",
+    notes: order.notes ?? "",
+    items:
+      order.items && order.items.length > 0
+        ? order.items.map((item) => ({
+            id: item.id,
+            item_id: item.item_id,
+            quantity: String(item.quantity ?? 1),
+            unit_price: String(item.unit_price ?? 0),
+            gst_percent: String(item.gst_percent ?? 0),
+          }))
+        : [emptyPurchaseItemForm()],
+  };
+}
+
 export function calculatePurchaseItemTotal(item: PurchaseOrderItemFormValues) {
   const quantity = numberValue(item.quantity);
   const unitPrice = numberValue(item.unit_price);

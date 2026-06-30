@@ -13,6 +13,7 @@ import {
   EmptyState,
   LoadingSkeleton,
   Modal,
+  PlaceholderAction,
   SelectInput,
   TextArea,
   TextInput,
@@ -116,6 +117,8 @@ import type {
 } from "../inventory/types";
 import { fetchProjectInvoices } from "../invoices/invoiceApi";
 import { InvoiceStatusBadge } from "../invoices/InvoiceComponents";
+import { fetchInvoicePdfPreviewUrl } from "../invoices/invoicePdfWorkflow";
+import { isActiveInvoice } from "../invoices/invoiceUtils";
 import type { InvoiceWithRelations } from "../invoices/types";
 import { formatMoney } from "../quotations/quotationUtils";
 
@@ -157,6 +160,7 @@ export function ProjectDetailPage() {
     [],
   );
   const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([]);
+  const [invoicePdfUrls, setInvoicePdfUrls] = useState<Record<string, string>>({});
   const [documentForm, setDocumentForm] = useState<DocumentUploadValues | null>(
     null,
   );
@@ -261,6 +265,26 @@ export function ProjectDetailPage() {
       setInventoryItems(nextInventoryItems);
       setProjectMaterials(nextProjectMaterials);
       setInvoices(nextInvoices);
+      if (canCreateDocument && nextInvoices.length > 0) {
+        const pdfEntries = await Promise.all(
+          nextInvoices.map(async (invoice) => {
+            try {
+              return [invoice.id, await fetchInvoicePdfPreviewUrl(invoice)] as const;
+            } catch {
+              return [invoice.id, null] as const;
+            }
+          }),
+        );
+        setInvoicePdfUrls(
+          Object.fromEntries(
+            pdfEntries.filter(
+              (entry): entry is readonly [string, string] => Boolean(entry[1]),
+            ),
+          ),
+        );
+      } else {
+        setInvoicePdfUrls({});
+      }
       if (nextProject && canViewPayments) {
         const nextSummary = await fetchProjectPaymentSummary(profile, nextProject.id);
         const paymentProject = projectToPaymentOption(nextProject);
@@ -383,6 +407,15 @@ export function ProjectDetailPage() {
     } finally {
       setDeleting(false);
     }
+  }
+
+  function openEditForm() {
+    if (!project) {
+      return;
+    }
+
+    setFormErrors({});
+    setEditing(projectToForm(project));
   }
 
   function openPaymentForm() {
@@ -566,6 +599,7 @@ export function ProjectDetailPage() {
 
   const contact = project ? getProjectContact(project) : null;
   const paymentProject = project ? projectToPaymentOption(project) : null;
+  const hasActiveProjectInvoice = invoices.some(isActiveInvoice);
 
   return (
     <div className="space-y-6">
@@ -589,6 +623,19 @@ export function ProjectDetailPage() {
               <RecordTitle
                 recordType="Project"
                 name={project.project_name ?? contact.customerName ?? "Project"}
+                action={
+                  canUpdate ? (
+                    <button
+                      aria-label="Edit project"
+                      className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
+                      onClick={openEditForm}
+                      title="Edit project"
+                      type="button"
+                    >
+                      <PencilIcon />
+                    </button>
+                  ) : null
+                }
                 meta={[
                   project.project_code ?? "Project",
                   project.quotation?.quotation_code ??
@@ -608,42 +655,6 @@ export function ProjectDetailPage() {
                 ) : null}
               </div>
             </header>
-            <div className="flex flex-wrap gap-2">
-              {canCreateInvoice ? (
-                <Button onClick={openProjectInvoiceForm}>
-                  Create Project Invoice
-                </Button>
-              ) : null}
-              {canUpdate ? (
-                <Button
-                  onClick={() => {
-                    setFormErrors({});
-                    setEditing(projectToForm(project));
-                  }}
-                  variant="secondary"
-                >
-                  Edit Project
-                </Button>
-              ) : null}
-              {canDelete ? (
-                <Button
-                  onClick={() => setConfirmingDelete(true)}
-                  variant="danger"
-                >
-                  Delete Project
-                </Button>
-              ) : null}
-              {canCreateDocument ? (
-                <Button onClick={openDocumentForm} variant="secondary">
-                  Upload Document
-                </Button>
-              ) : null}
-              {canCreateInventory ? (
-                <Button onClick={openMaterialIssueForm} variant="secondary">
-                  Add Material Issue
-                </Button>
-              ) : null}
-            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
@@ -712,35 +723,47 @@ export function ProjectDetailPage() {
               </DetailSection>
             </div>
 
-            {canViewPayments && paymentSummary ? (
-              <aside className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-stretch">
-                  <h2 className="text-base font-semibold text-slate-950">
-                    Payment Details
-                  </h2>
-                  <div className="flex flex-wrap gap-2">
-                    {canCreatePayment ? (
-                      <Button onClick={openPaymentForm}>Add Payment</Button>
-                    ) : null}
-                    <Link
-                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
-                      to="/payments"
-                    >
-                      Open Payments
-                    </Link>
+            <aside className="space-y-6">
+              <NextStepSection
+                canCreateInvoice={canCreateInvoice && !hasActiveProjectInvoice}
+                canCreateDocument={canCreateDocument}
+                canCreateInventory={canCreateInventory}
+                onCreateInvoice={openProjectInvoiceForm}
+                onUploadDocument={openDocumentForm}
+                onAddMaterialIssue={openMaterialIssueForm}
+              />
+
+              {canViewPayments && paymentSummary ? (
+                <section className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-stretch">
+                    <h2 className="text-base font-semibold text-slate-950">
+                      Payment Details
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                      {canCreatePayment ? (
+                        <Button onClick={openPaymentForm}>Add Payment</Button>
+                      ) : null}
+                      <Link
+                        className="inline-flex min-h-10 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
+                        to="/payments"
+                      >
+                        Open Payments
+                      </Link>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-4">
-                  <PaymentSummaryCards className="grid gap-3" summary={paymentSummary} />
-                </div>
-              </aside>
-            ) : null}
+                  <div className="mt-4">
+                    <PaymentSummaryCards className="grid gap-3" summary={paymentSummary} />
+                  </div>
+                </section>
+              ) : null}
+            </aside>
           </div>
 
           {canViewInvoices ? (
             <ProjectInvoicesSection
               invoices={invoices}
-              canCreate={canCreateInvoice}
+              invoicePdfUrls={invoicePdfUrls}
+              canCreate={canCreateInvoice && !hasActiveProjectInvoice}
               onCreate={openProjectInvoiceForm}
             />
           ) : null}
@@ -788,6 +811,10 @@ export function ProjectDetailPage() {
               onAdd={openMaterialIssueForm}
               onCreateInvoice={openMaterialInvoiceForm}
             />
+          ) : null}
+
+          {canDelete ? (
+            <DangerZoneSection onDelete={() => setConfirmingDelete(true)} />
           ) : null}
         </>
       ) : null}
@@ -898,12 +925,106 @@ export function ProjectDetailPage() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M16.8 4.8 19.2 7.2M5 19l4.8-1 9.4-9.4a1.7 1.7 0 0 0 0-2.4l-1.4-1.4a1.7 1.7 0 0 0-2.4 0L6 14.2 5 19Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function NextStepSection({
+  canCreateInvoice,
+  canCreateDocument,
+  canCreateInventory,
+  onCreateInvoice,
+  onUploadDocument,
+  onAddMaterialIssue,
+}: {
+  canCreateInvoice: boolean;
+  canCreateDocument: boolean;
+  canCreateInventory: boolean;
+  onCreateInvoice: () => void;
+  onUploadDocument: () => void;
+  onAddMaterialIssue: () => void;
+}) {
+  if (!canCreateInvoice && !canCreateDocument && !canCreateInventory) {
+    return null;
+  }
+
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-950">Next Step</h2>
+      <div className="mt-4 grid gap-2">
+        {canCreateInvoice ? (
+          <button
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+            onClick={onCreateInvoice}
+            type="button"
+          >
+            Create Project Invoice
+          </button>
+        ) : null}
+        {canCreateDocument ? (
+          <button
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
+            onClick={onUploadDocument}
+            type="button"
+          >
+            Upload Documents
+          </button>
+        ) : null}
+        {canCreateInventory ? (
+          <button
+            className="inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
+            onClick={onAddMaterialIssue}
+            type="button"
+          >
+            Additional Material Issue
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function DangerZoneSection({ onDelete }: { onDelete: () => void }) {
+  return (
+    <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-rose-900">Danger Zone</h2>
+          <p className="mt-1 text-sm leading-6 text-rose-700">
+            Delete this project record from the installation workflow.
+          </p>
+        </div>
+        <Button onClick={onDelete} variant="danger">
+          Delete Project
+        </Button>
+      </div>
+    </section>
+  );
+}
+
 function ProjectInvoicesSection({
   invoices,
+  invoicePdfUrls,
   canCreate,
   onCreate,
 }: {
   invoices: InvoiceWithRelations[];
+  invoicePdfUrls: Record<string, string>;
   canCreate: boolean;
   onCreate: () => void;
 }) {
@@ -940,7 +1061,7 @@ function ProjectInvoicesSection({
                   <th className="px-4 py-3">Paid</th>
                   <th className="px-4 py-3">Balance</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Actions</th>
+                  <th className="px-4 py-3">Download</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -962,12 +1083,7 @@ function ProjectInvoicesSection({
                       <InvoiceStatusBadge value={invoice.status} />
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        className="inline-flex min-h-9 items-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
-                        to={`/invoices/${invoice.id}`}
-                      >
-                        View
-                      </Link>
+                      <DownloadInvoiceAction url={invoicePdfUrls[invoice.id]} />
                     </td>
                   </tr>
                 ))}
@@ -986,12 +1102,9 @@ function ProjectInvoicesSection({
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                       {formatDate(invoice.invoice_date)}
                     </p>
-                    <Link
-                      className="mt-1 block text-sm font-semibold text-[#06173f]"
-                      to={`/invoices/${invoice.id}`}
-                    >
+                    <h3 className="mt-1 text-sm font-semibold text-slate-950">
                       {invoice.invoice_code ?? "Invoice"}
-                    </Link>
+                    </h3>
                   </div>
                   <InvoiceStatusBadge value={invoice.status} />
                 </div>
@@ -1013,6 +1126,9 @@ function ProjectInvoicesSection({
                     value={formatDate(invoice.due_date)}
                   />
                 </dl>
+                <div className="mt-4">
+                  <DownloadInvoiceAction url={invoicePdfUrls[invoice.id]} />
+                </div>
               </article>
             ))}
           </div>
@@ -1034,6 +1150,24 @@ function ProjectInvoiceCardItem({
       <dt className="text-xs text-slate-500">{label}</dt>
       <dd className="font-medium text-slate-900">{value}</dd>
     </div>
+  );
+}
+
+function DownloadInvoiceAction({ url }: { url: string | undefined }) {
+  if (!url) {
+    return <PlaceholderAction>Download Invoice</PlaceholderAction>;
+  }
+
+  return (
+    <a
+      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+      download
+      href={url}
+      rel="noreferrer"
+      target="_blank"
+    >
+      Download Invoice
+    </a>
   );
 }
 

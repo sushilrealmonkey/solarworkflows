@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
+import { formatDisplayDate } from "../../utils/dateFormat";
 import {
   AccessDenied,
   Button,
@@ -56,8 +57,8 @@ import {
   calculateTurnkeyGstBreakdown,
   defaultTechnicalPaymentTerms,
   deriveQuotationMaterialSummary,
+  discountedTurnkeyAmount,
   emptyQuotationForm,
-  formatIndianCurrencyInWords,
   formatMoneyWithPaise,
   hasTurnkeyGstAmount,
   leadToQuotationForm,
@@ -309,6 +310,12 @@ export function NewQuotationPage() {
     )
       ? createPanelWattageValue
       : values.summary_module_wattage;
+  const commercialTurnkeyAmount =
+    values.summary_total_turnkey_cost || values.pricing_total_rate;
+  const commercialDiscountedAmount = discountedTurnkeyAmount(
+    commercialTurnkeyAmount,
+    values.discount_amount,
+  );
 
   if (!canView || !canSave) {
     return (
@@ -345,16 +352,50 @@ export function NewQuotationPage() {
   }
 
   function updateTurnkeyCost(totalTurnkeyCost: string) {
-    setValues((current) => ({
-      ...current,
-      summary_total_turnkey_cost: totalTurnkeyCost,
-      pricing_total_rate: totalTurnkeyCost,
-      summary_amount_in_words: amountInWordsFromTurnkeyCost(totalTurnkeyCost),
-      payment_term_rows: autoCalculatePaymentTermRows(
-        current.payment_term_rows,
+    setValues((current) => {
+      const payableTurnkeyAmount = discountedTurnkeyAmount(
         totalTurnkeyCost,
-      ),
-    }));
+        current.discount_amount,
+      );
+
+      return {
+        ...current,
+        summary_total_turnkey_cost: totalTurnkeyCost,
+        pricing_total_rate: totalTurnkeyCost,
+        summary_amount_in_words:
+          payableTurnkeyAmount === null
+            ? ""
+            : amountInWordsFromTurnkeyCost(payableTurnkeyAmount),
+        payment_term_rows: autoCalculatePaymentTermRows(
+          current.payment_term_rows,
+          payableTurnkeyAmount ?? totalTurnkeyCost,
+        ),
+      };
+    });
+  }
+
+  function updateDiscountAmount(discountAmount: string) {
+    setValues((current) => {
+      const totalTurnkeyCost =
+        current.summary_total_turnkey_cost || current.pricing_total_rate;
+      const payableTurnkeyAmount = discountedTurnkeyAmount(
+        totalTurnkeyCost,
+        discountAmount,
+      );
+
+      return {
+        ...current,
+        discount_amount: discountAmount,
+        summary_amount_in_words:
+          payableTurnkeyAmount === null
+            ? ""
+            : amountInWordsFromTurnkeyCost(payableTurnkeyAmount),
+        payment_term_rows: autoCalculatePaymentTermRows(
+          current.payment_term_rows,
+          payableTurnkeyAmount ?? totalTurnkeyCost,
+        ),
+      };
+    });
   }
 
   function updateCapacity(capacity: string) {
@@ -499,17 +540,21 @@ export function NewQuotationPage() {
     key: keyof QuotationPaymentTermFormValues,
     value: string,
   ) {
-    setValues((current) => ({
-      ...current,
-      payment_term_rows: current.payment_term_rows.map((paymentTerm, paymentIndex) =>
-        paymentIndex === index
-          ? autoCalculatePaymentTerm(
-              { ...paymentTerm, [key]: value },
-              current.summary_total_turnkey_cost || current.pricing_total_rate,
-            )
-          : paymentTerm,
-      ),
-    }));
+    setValues((current) => {
+      const paymentBaseAmount = quotationPaymentTermBaseAmount(current);
+
+      return {
+        ...current,
+        payment_term_rows: current.payment_term_rows.map((paymentTerm, paymentIndex) =>
+          paymentIndex === index
+            ? autoCalculatePaymentTerm(
+                { ...paymentTerm, [key]: value },
+                paymentBaseAmount,
+              )
+            : paymentTerm,
+        ),
+      };
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -659,7 +704,10 @@ export function NewQuotationPage() {
             required
             type="date"
           />
-          <ReadOnlyField label="Valid Until" value={values.valid_until || "-"} />
+          <ReadOnlyField
+            label="Valid Until"
+            value={formatDisplayDate(values.valid_until)}
+          />
           <ReadOnlyField
             label="Quotation Title"
             value={values.quotation_title || "-"}
@@ -975,28 +1023,35 @@ export function NewQuotationPage() {
             onChange={updateTurnkeyCost}
             type="number"
           />
-          <TurnkeyGstBreakup
-            amount={values.summary_total_turnkey_cost}
-            discountAmount={values.discount_amount}
-          />
           <TextInput
             label="Discount Amount"
             value={values.discount_amount}
-            onChange={(value) => update("discount_amount", value)}
+            onChange={updateDiscountAmount}
             type="number"
+          />
+          {commercialDiscountedAmount !== null &&
+          Number(values.discount_amount || 0) > 0 ? (
+            <ReadOnlyField
+              label="Discounted Price"
+              value={formatMoneyWithPaise(commercialDiscountedAmount)}
+            />
+          ) : null}
+          <ReadOnlyField
+            label="Total Amount In Words"
+            value={amountInWordsFromTurnkeyCost(
+              commercialDiscountedAmount ?? commercialTurnkeyAmount,
+              values.summary_amount_in_words,
+            )}
+          />
+          <TurnkeyGstBreakup
+            amount={values.summary_total_turnkey_cost}
+            discountAmount={values.discount_amount}
           />
           <TextInput
             label="Subsidy Amount"
             value={values.subsidy_amount}
             onChange={(value) => update("subsidy_amount", value)}
             type="number"
-          />
-          <ReadOnlyField
-            label="Amount In Words"
-            value={amountInWordsFromTurnkeyCost(
-              values.summary_total_turnkey_cost || values.pricing_total_rate,
-              values.summary_amount_in_words,
-            )}
           />
           <TextArea
             label="Price Basis"
@@ -1173,8 +1228,7 @@ export function NewQuotationPage() {
                     ...current.payment_term_rows,
                     autoCalculatePaymentTerm(
                       { milestone: "", percentage: "", amount: "" },
-                      current.summary_total_turnkey_cost ||
-                        current.pricing_total_rate,
+                      quotationPaymentTermBaseAmount(current),
                     ),
                   ],
                 }))
@@ -1263,7 +1317,6 @@ function TurnkeyGstBreakup({
     Number(discountAmount || 0),
   );
   const breakdown = calculateTurnkeyGstBreakdown(totals.totalAmount);
-  const taxableAmountInWords = formatIndianCurrencyInWords(totals.taxableAmount);
 
   return (
     <div className="rounded-lg border border-stone-200 bg-stone-50 p-4 md:col-span-2">
@@ -1286,12 +1339,6 @@ function TurnkeyGstBreakup({
           value={formatMoneyWithPaise(totals.gstAmount)}
         />
       </dl>
-      <div className="mt-3 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Final Taxable Amount In Words
-        </p>
-        <p className="mt-1 font-medium text-slate-950">{taxableAmountInWords}</p>
-      </div>
       <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[520px] border-collapse text-left text-xs">
           <thead className="bg-white text-slate-600">
@@ -1383,6 +1430,9 @@ function ProposalPreview({
     Number(turnkeyAmount || 0),
     Number(values.discount_amount || 0),
   );
+  const payableTurnkeyAmount =
+    discountedTurnkeyAmount(turnkeyAmount, values.discount_amount) ??
+    Number(turnkeyAmount || 0);
 
   return (
     <div className="space-y-5 rounded-lg border border-stone-200 bg-white p-4 text-sm text-slate-800 md:col-span-2">
@@ -1395,7 +1445,7 @@ function ProposalPreview({
         </h2>
         <p className="mt-1 text-slate-600">
           Ref. No.: {values.quotation_code || "Draft"} / Date:{" "}
-          {values.quotation_date || "-"}
+          {formatDisplayDate(values.quotation_date)}
         </p>
       </div>
 
@@ -1473,19 +1523,16 @@ function ProposalPreview({
             ["Total Turnkey Cost", moneyPreview(turnkeyAmount)],
             ["Base Amount", moneyPreviewFromNumber(gstBreakdown.taxableAmount)],
             ["Discount", moneyPreview(values.discount_amount)],
+            ["Total Amount", moneyPreviewFromNumber(payableTurnkeyAmount)],
             ["Taxable After Discount", moneyPreviewFromNumber(discountedTotals.taxableAmount)],
-            [
-              "Final Taxable Amount In Words",
-              formatIndianCurrencyInWords(discountedTotals.taxableAmount),
-            ],
             ["CGST", moneyPreviewFromNumber(discountedTotals.cgstAmount)],
             ["SGST", moneyPreviewFromNumber(discountedTotals.sgstAmount)],
             ["Total GST", moneyPreviewFromNumber(discountedTotals.gstAmount)],
             ["Subsidy", moneyPreview(values.subsidy_amount)],
             [
-              "Amount In Words",
+              "Total Amount In Words",
               amountInWordsFromTurnkeyCost(
-                turnkeyAmount,
+                payableTurnkeyAmount,
                 values.summary_amount_in_words || "-",
               ),
             ],
@@ -1645,6 +1692,10 @@ function newQuotationDefaults(values: QuotationFormValues): QuotationFormValues 
       : defaultTechnicalPaymentTerms.map((item) => ({ ...item }));
   const totalTurnkeyCost =
     values.summary_total_turnkey_cost || values.pricing_total_rate;
+  const payableTurnkeyAmount = discountedTurnkeyAmount(
+    totalTurnkeyCost,
+    values.discount_amount,
+  );
   const expectedGeneration =
     values.expected_annual_generation_kwh ||
     calculateExpectedAnnualGenerationInput(values.system_capacity_kw);
@@ -1667,7 +1718,7 @@ function newQuotationDefaults(values: QuotationFormValues): QuotationFormValues 
     pricing_total_rate:
       values.pricing_total_rate || values.summary_total_turnkey_cost,
     summary_amount_in_words: amountInWordsFromTurnkeyCost(
-      totalTurnkeyCost,
+      payableTurnkeyAmount ?? totalTurnkeyCost,
       values.summary_amount_in_words,
     ),
     work_description:
@@ -1675,7 +1726,7 @@ function newQuotationDefaults(values: QuotationFormValues): QuotationFormValues 
       "Supply, installation, testing and commissioning of the proposed solar PV power plant.",
     payment_term_rows: autoCalculatePaymentTermRows(
       paymentTermRows,
-      totalTurnkeyCost,
+      payableTurnkeyAmount ?? totalTurnkeyCost,
     ),
   };
 }
@@ -1693,18 +1744,12 @@ function prepareNewQuotationValues(values: QuotationFormValues): QuotationFormVa
         item.make_specification,
     }));
   const materialSummary = deriveQuotationMaterialSummary(material_items);
-  const summaryStructureType =
-    preparedValues.summary_structure_type ||
-    preparedValues.structure_type ||
-    materialSummary.summary_structure_type ||
-    "";
-
   return {
     ...preparedValues,
     material_items,
     payment_term_rows: autoCalculatePaymentTermRows(
       preparedValues.payment_term_rows,
-      preparedValues.summary_total_turnkey_cost || preparedValues.pricing_total_rate,
+      quotationPaymentTermBaseAmount(preparedValues),
     ),
     summary_module_brand:
       preparedValues.summary_module_brand ||
@@ -1718,8 +1763,6 @@ function prepareNewQuotationValues(values: QuotationFormValues): QuotationFormVa
       preparedValues.summary_inverter_brand ||
       materialSummary.summary_inverter_brand ||
       "",
-    summary_structure_type: summaryStructureType,
-    structure_type: preparedValues.structure_type || summaryStructureType,
     summary_earthing_count:
       preparedValues.summary_earthing_count ||
       materialSummary.summary_earthing_count ||
@@ -1781,9 +1824,6 @@ function applyLeadToCurrentQuotation(
     customer_city_village:
       leadValues.customer_city_village || current.customer_city_village,
     site_type: leadValues.site_type || current.site_type,
-    structure_type: leadValues.structure_type || current.structure_type,
-    summary_structure_type:
-      leadValues.summary_structure_type || current.summary_structure_type,
     installation_location:
       leadValues.installation_location || current.installation_location,
   });
@@ -2003,14 +2043,14 @@ function moneyPreviewFromNumber(value: number) {
 
 function autoCalculatePaymentTermRows(
   rows: QuotationPaymentTermFormValues[],
-  totalAmount: string,
+  totalAmount: number | string | null | undefined,
 ) {
   return rows.map((row) => autoCalculatePaymentTerm(row, totalAmount));
 }
 
 function autoCalculatePaymentTerm(
   row: QuotationPaymentTermFormValues,
-  totalAmount: string,
+  totalAmount: number | string | null | undefined,
 ): QuotationPaymentTermFormValues {
   return {
     ...row,
@@ -2018,7 +2058,10 @@ function autoCalculatePaymentTerm(
   };
 }
 
-function calculatePaymentTermAmount(percentage: string, totalAmount: string) {
+function calculatePaymentTermAmount(
+  percentage: string,
+  totalAmount: number | string | null | undefined,
+) {
   const amount = Number(totalAmount || 0);
   const percent = Number(percentage || 0);
 
@@ -2027,5 +2070,13 @@ function calculatePaymentTermAmount(percentage: string, totalAmount: string) {
   }
 
   return String(Math.round((amount * percent / 100) * 100) / 100);
+}
+
+function quotationPaymentTermBaseAmount(values: QuotationFormValues) {
+  const turnkeyAmount =
+    values.summary_total_turnkey_cost || values.pricing_total_rate;
+
+  return discountedTurnkeyAmount(turnkeyAmount, values.discount_amount) ??
+    turnkeyAmount;
 }
 

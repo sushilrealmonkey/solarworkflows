@@ -467,32 +467,6 @@ export async function recalculateB2BSaleTotals(saleId: string) {
   return data as B2BSale;
 }
 
-export async function confirmB2BSale(saleId: string) {
-  const client = requireSupabase();
-  const { data, error } = await client.rpc("confirm_b2b_sale", {
-    target_sale_id: saleId,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as B2BSale;
-}
-
-export async function cancelB2BSale(saleId: string) {
-  const client = requireSupabase();
-  const { data, error } = await client.rpc("cancel_b2b_sale", {
-    target_sale_id: saleId,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as B2BSale;
-}
-
 export async function dispatchB2BSale(saleId: string) {
   const client = requireSupabase();
   const { data, error } = await client.rpc("dispatch_b2b_sale", {

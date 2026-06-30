@@ -36,7 +36,7 @@ import {
   defaultProposalScope,
   defaultQuotationWarranties,
   defaultTechnicalPaymentTerms,
-  formatIndianCurrencyInWords,
+  discountedTurnkeyAmount,
   formatKw,
   formatMoney,
   formatMoneyWithPaise,
@@ -283,7 +283,6 @@ export function QuotationDetailPage() {
     snapshotValues.site_type ||
     quotation?.lead?.roof_type ||
     quotation?.lead?.property_type ||
-    quotation?.site_survey?.structure_type ||
     "-";
   const moduleBrand =
     quotation?.summary_module_brand ||
@@ -316,16 +315,20 @@ export function QuotationDetailPage() {
           0,
       )
     : null;
+  const detailDiscountAmount =
+    quotation?.discount_amount ??
+    numberFromFormValue(snapshotValues.discount_amount) ??
+    0;
+  const detailTotalAmount =
+    detailDiscountedTotals?.totalAmount ??
+    discountedTurnkeyAmount(totalTurnkeyCost, detailDiscountAmount);
   const amountInWords =
     amountInWordsFromTurnkeyCost(
-      totalTurnkeyCost,
+      detailTotalAmount ?? totalTurnkeyCost,
       quotation?.summary_amount_in_words ||
         snapshotValues.summary_amount_in_words ||
         "-",
     );
-  const finalTaxableAmountInWords = detailDiscountedTotals
-    ? formatIndianCurrencyInWords(detailDiscountedTotals.taxableAmount)
-    : "-";
   const workDescription =
     quotation?.work_description || snapshotValues.work_description || "-";
   const pricingRemarks =
@@ -408,8 +411,8 @@ export function QuotationDetailPage() {
       {quotation && contact ? (
         <>
           <div>
-            <header className="space-y-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-3">
                 <RecordTitle
                   recordType="Quotation"
                   name={contact.customerName}
@@ -435,55 +438,57 @@ export function QuotationDetailPage() {
                     ) : null
                   }
                 />
+                <QuotationStatusPill quotation={quotation} />
               </div>
-              <QuotationStatusPill quotation={quotation} />
+              <div className="space-y-3 lg:max-w-md lg:shrink-0 lg:text-right">
+                <div className="lg:flex lg:justify-end">
+                  <NextStepLabel />
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  {pdfPreviewUrl ? (
+                    <a
+                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                      download
+                      href={pdfPreviewUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Download Quotation
+                    </a>
+                  ) : (
+                    <PlaceholderAction>
+                      {preparingPdf ? "Preparing Quotation" : "Download Quotation"}
+                    </PlaceholderAction>
+                  )}
+                  {canUpdate ? (
+                    <QuotationStatusSelect
+                      disabled={updatingStatus}
+                      value={quotation.status ?? "draft"}
+                      onChange={setStatusTarget}
+                    />
+                  ) : null}
+                  {openProjectId && canViewProjects ? (
+                    <Link
+                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                      to={`/projects/${openProjectId}`}
+                    >
+                      Open Project
+                    </Link>
+                  ) : quotation.status === "accepted" ? (
+                    <PlaceholderAction>Open Project</PlaceholderAction>
+                  ) : !relatedSiteSurveyId && canCreateSurvey && quotation.lead_id ? (
+                    <Link
+                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                      to={`/site-surveys?new=1&leadId=${quotation.lead_id}`}
+                    >
+                      Create Site Survey
+                    </Link>
+                  ) : !relatedSiteSurveyId ? (
+                    <PlaceholderAction>Create Site Survey</PlaceholderAction>
+                  ) : null}
+                </div>
+              </div>
             </header>
-            <div className="mt-4 space-y-3">
-              <NextStepLabel />
-              <div className="flex flex-wrap gap-2">
-                {pdfPreviewUrl ? (
-                  <a
-                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-                    download
-                    href={pdfPreviewUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    Download Quotation
-                  </a>
-                ) : (
-                  <PlaceholderAction>
-                    {preparingPdf ? "Preparing Quotation" : "Download Quotation"}
-                  </PlaceholderAction>
-                )}
-                {canUpdate ? (
-                  <QuotationStatusSelect
-                    disabled={updatingStatus}
-                    value={quotation.status ?? "draft"}
-                    onChange={setStatusTarget}
-                  />
-                ) : null}
-                {openProjectId && canViewProjects ? (
-                  <Link
-                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-                    to={`/projects/${openProjectId}`}
-                  >
-                    Open Project
-                  </Link>
-                ) : quotation.status === "accepted" ? (
-                  <PlaceholderAction>Open Project</PlaceholderAction>
-                ) : !relatedSiteSurveyId && canCreateSurvey && quotation.lead_id ? (
-                  <Link
-                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-                    to={`/site-surveys?new=1&leadId=${quotation.lead_id}`}
-                  >
-                    Create Site Survey
-                  </Link>
-                ) : !relatedSiteSurveyId ? (
-                  <PlaceholderAction>Create Site Survey</PlaceholderAction>
-                ) : null}
-              </div>
-            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -681,6 +686,19 @@ export function QuotationDetailPage() {
                   }
                 />
                 <DetailItem
+                  label="Discount Amount"
+                  value={formatMoney(detailDiscountAmount)}
+                />
+                {detailTotalAmount !== null &&
+                detailTotalAmount !== undefined &&
+                detailDiscountAmount > 0 ? (
+                  <DetailItem
+                    label="Discounted Price"
+                    value={formatMoneyWithPaise(detailTotalAmount)}
+                  />
+                ) : null}
+                <DetailItem label="Total Amount In Words" value={amountInWords} />
+                <DetailItem
                   label="Taxable Amount"
                   value={
                     detailDiscountedTotals
@@ -713,18 +731,9 @@ export function QuotationDetailPage() {
                   }
                 />
                 <DetailItem
-                  label="Discount Amount"
-                  value={formatMoney(quotation.discount_amount)}
-                />
-                <DetailItem
                   label="Subsidy Amount"
                   value={formatMoney(quotation.subsidy_amount)}
                 />
-                <DetailItem
-                  label="Final Taxable Amount In Words"
-                  value={finalTaxableAmountInWords}
-                />
-                <DetailItem label="Amount In Words" value={amountInWords} />
                 <DetailItem
                   label="Price Basis"
                   value={scopeAndCommercial.commercial_price_basis}
@@ -866,7 +875,7 @@ export function QuotationDetailPage() {
                                   {formatPaymentTermAmount(
                                     paymentTerm.amount,
                                     paymentTerm.percentage,
-                                    totalTurnkeyCost,
+                                    detailTotalAmount ?? totalTurnkeyCost,
                                   )}
                                 </td>
                               </tr>
@@ -1301,19 +1310,16 @@ function formatPaymentTermAmount(
   percentage: number | string | null | undefined,
   totalAmount: number | string | null | undefined,
 ) {
-  const savedAmount = numberFromFormValue(amount);
-  if (savedAmount !== null) {
-    return formatMoney(savedAmount);
-  }
-
   const percent = numberFromFormValue(percentage);
   const total = numberFromFormValue(totalAmount);
 
-  if (percent === null || total === null || total <= 0) {
-    return "-";
+  if (percent !== null && total !== null && total > 0) {
+    return formatMoney(total * percent / 100);
   }
 
-  return formatMoney(total * percent / 100);
+  const savedAmount = numberFromFormValue(amount);
+
+  return savedAmount === null ? "-" : formatMoney(savedAmount);
 }
 
 

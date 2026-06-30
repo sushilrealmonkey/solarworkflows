@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import type { B2BSaleWithRelations } from "../b2b-sales/types";
 import type { Lead, LeadFollowupWithLead } from "../crm/types";
 import type { OrganizationDocumentWithRelations } from "../documents/types";
 import type { InventoryItem } from "../inventory/types";
@@ -24,6 +25,12 @@ export type DashboardSummaryRow = {
   total_balance_due: number;
   low_stock_items: number;
   pending_documents: number;
+  b2b_customers: number;
+  active_b2b_customers: number;
+  b2b_sales_count: number;
+  b2b_sales_value: number;
+  b2b_sales_received_amount: number;
+  b2b_sales_balance_due: number;
 };
 
 export type DashboardOperationalData = {
@@ -31,6 +38,7 @@ export type DashboardOperationalData = {
   upcomingSurveys: SiteSurveyWithRelations[];
   recentLeads: Lead[];
   recentPayments: PaymentWithRelations[];
+  recentB2BSales: B2BSaleWithRelations[];
   lowStockItems: InventoryItem[];
   pendingDocuments: OrganizationDocumentWithRelations[];
 };
@@ -57,6 +65,10 @@ export type EpcAdminDashboardSnapshot = DashboardOperationalData & {
   inventoryReservations: QuotationInventoryReservation[];
   purchaseOrders: PurchaseOrderWithRelations[];
   recentActivity: DashboardActivityLog[];
+};
+
+type EpcAdminDashboardSnapshotOptions = {
+  includeB2BSales?: boolean;
 };
 
 function requireSupabase() {
@@ -99,6 +111,7 @@ export async function fetchDashboardSummary() {
 
 export async function fetchEpcAdminDashboardSnapshot(
   profile: UserProfile | null,
+  options: EpcAdminDashboardSnapshotOptions = {},
 ): Promise<EpcAdminDashboardSnapshot> {
   const [
     summaryRows,
@@ -106,6 +119,7 @@ export async function fetchEpcAdminDashboardSnapshot(
     upcomingSurveys,
     recentLeads,
     recentPayments,
+    recentB2BSales,
     lowStockItems,
     pendingDocuments,
     quotations,
@@ -120,6 +134,9 @@ export async function fetchEpcAdminDashboardSnapshot(
     fetchDashboardUpcomingSurveys(profile),
     fetchDashboardRecentLeads(profile, 120),
     fetchDashboardRecentPayments(profile, 12),
+    options.includeB2BSales
+      ? fetchDashboardRecentB2BSales(profile, 8)
+      : Promise.resolve([]),
     fetchDashboardLowStockItems(profile, 12),
     fetchDashboardPendingDocuments(profile, 12),
     fetchDashboardQuotations(profile),
@@ -136,6 +153,7 @@ export async function fetchEpcAdminDashboardSnapshot(
     upcomingSurveys,
     recentLeads,
     recentPayments,
+    recentB2BSales,
     lowStockItems,
     pendingDocuments,
     quotations,
@@ -162,6 +180,12 @@ export function emptyDashboardSummary(): DashboardSummaryRow {
     total_balance_due: 0,
     low_stock_items: 0,
     pending_documents: 0,
+    b2b_customers: 0,
+    active_b2b_customers: 0,
+    b2b_sales_count: 0,
+    b2b_sales_value: 0,
+    b2b_sales_received_amount: 0,
+    b2b_sales_balance_due: 0,
   };
 }
 
@@ -179,6 +203,14 @@ export function aggregateDashboardSummary(rows: DashboardSummaryRow[]) {
     summary.total_balance_due += Number(row.total_balance_due ?? 0);
     summary.low_stock_items += Number(row.low_stock_items ?? 0);
     summary.pending_documents += Number(row.pending_documents ?? 0);
+    summary.b2b_customers += Number(row.b2b_customers ?? 0);
+    summary.active_b2b_customers += Number(row.active_b2b_customers ?? 0);
+    summary.b2b_sales_count += Number(row.b2b_sales_count ?? 0);
+    summary.b2b_sales_value += Number(row.b2b_sales_value ?? 0);
+    summary.b2b_sales_received_amount += Number(
+      row.b2b_sales_received_amount ?? 0,
+    );
+    summary.b2b_sales_balance_due += Number(row.b2b_sales_balance_due ?? 0);
     return summary;
   }, emptyDashboardSummary());
 }
@@ -285,6 +317,51 @@ export async function fetchDashboardRecentPayments(
   }
 
   return (data ?? []) as unknown as PaymentWithRelations[];
+}
+
+export async function fetchDashboardRecentB2BSales(
+  profile: UserProfile | null,
+  limit = 6,
+) {
+  if (!profile?.is_super_admin && !profile?.company_id) {
+    return [] as B2BSaleWithRelations[];
+  }
+
+  const client = requireSupabase();
+  let query = client
+    .from("b2b_sales")
+    .select(
+      `
+      *,
+      customer:customers(id, customer_code, full_name, business_name, gst_number, contact_person_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, customer_segment, customer_type, assigned_to),
+      proforma_invoice:proforma_invoices!b2b_sales_proforma_invoice_id_fkey(id, proforma_code, total_amount, amount_paid, balance_due, status),
+      invoice:invoices!b2b_sales_invoice_id_fkey(id, invoice_code, total_amount, amount_paid, balance_due, status),
+      created_by_profile:users_profile!b2b_sales_created_by_fkey(id, full_name, phone, email)
+    `,
+    )
+    .neq("status", "cancelled")
+    .order("sale_date", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (!profile?.is_super_admin) {
+    query = query
+      .eq("organization_id", requireOrganization(profile))
+      .eq("company_id", profile.company_id);
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+    if (profile.company_id) {
+      query = query.eq("company_id", profile.company_id);
+    }
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as unknown as B2BSaleWithRelations[];
 }
 
 export async function fetchDashboardLowStockItems(

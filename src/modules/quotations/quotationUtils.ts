@@ -163,7 +163,6 @@ export type DerivedQuotationMaterialSummary = {
   summary_module_brand?: string;
   summary_module_wattage?: string;
   summary_inverter_brand?: string;
-  summary_structure_type?: string;
   summary_dcdb_included?: boolean;
   summary_acdb_included?: boolean;
   summary_earthing_count?: string;
@@ -184,10 +183,6 @@ export function deriveQuotationMaterialSummary(
     "pv panel",
   ]);
   const inverterItem = firstMatchingMaterial(items, ["inverter"]);
-  const structureItem = firstMatchingMaterial(items, [
-    "mounting structure",
-    "structure",
-  ]);
   const earthingItem = firstMatchingMaterial(items, ["earthing"]);
 
   return {
@@ -196,7 +191,6 @@ export function deriveQuotationMaterialSummary(
       ? wattageFromMaterial(moduleItem)
       : undefined,
     summary_inverter_brand: brandFromMaterial(inverterItem),
-    summary_structure_type: structureFromMaterial(structureItem),
     summary_dcdb_included: inferIncluded(items, ["dcdb"]),
     summary_acdb_included: inferIncluded(items, ["acdb"]),
     summary_earthing_count: earthingItem?.quantity?.trim() || undefined,
@@ -311,7 +305,6 @@ export function emptyQuotationForm(): QuotationFormValues {
     summary_module_wattage: "",
     summary_plant_size_kw: "",
     summary_inverter_brand: "",
-    summary_structure_type: "",
     summary_dcdb_included: "",
     summary_acdb_included: "",
     summary_earthing_count: "",
@@ -321,7 +314,6 @@ export function emptyQuotationForm(): QuotationFormValues {
     summary_amount_in_words: "",
     panel_type: "",
     inverter_type: "",
-    structure_type: "",
     estimated_generation_units: "",
     discount_amount: "",
     subsidy_amount: "",
@@ -368,11 +360,7 @@ export function quotationToForm(quotation: QuotationWithRelations): QuotationFor
   const linkedCustomerType = normalizeQuotationCustomerType(
     quotation.customer?.customer_type,
   );
-  const linkedSiteType =
-    quotation.site_survey?.structure_type ||
-    quotation.lead?.roof_type ||
-    quotation.lead?.property_type ||
-    "";
+  const linkedSiteType = quotation.lead?.roof_type || quotation.lead?.property_type || "";
 
   return {
     quotation_code: quotation.quotation_code ?? snapshotValues.quotation_code ?? "",
@@ -444,13 +432,6 @@ export function quotationToForm(quotation: QuotationWithRelations): QuotationFor
       snapshotValues.summary_inverter_brand ??
       materialSummary.summary_inverter_brand ??
       "",
-    summary_structure_type:
-      quotation.summary_structure_type ??
-      snapshotValues.summary_structure_type ??
-      quotation.structure_type ??
-      snapshotValues.structure_type ??
-      materialSummary.summary_structure_type ??
-      "",
     summary_dcdb_included:
       booleanToInput(quotation.summary_dcdb_included) ||
       snapshotValues.summary_dcdb_included ||
@@ -484,7 +465,6 @@ export function quotationToForm(quotation: QuotationWithRelations): QuotationFor
       quotation.summary_amount_in_words ?? snapshotValues.summary_amount_in_words ?? "",
     panel_type: quotation.panel_type ?? snapshotValues.panel_type ?? "",
     inverter_type: quotation.inverter_type ?? snapshotValues.inverter_type ?? "",
-    structure_type: quotation.structure_type ?? snapshotValues.structure_type ?? "",
     estimated_generation_units:
       numberToInput(quotation.estimated_generation_units) ||
       snapshotValues.estimated_generation_units ||
@@ -646,9 +626,6 @@ export function surveyToQuotationForm(
     values.module_category,
     values.customer_type,
   );
-  values.structure_type = survey.structure_type ?? values.structure_type;
-  values.summary_structure_type =
-    values.summary_structure_type || values.structure_type;
   values.installation_location =
     values.installation_location ||
     (survey.lead
@@ -680,8 +657,6 @@ export function leadToQuotationForm(lead: SurveyLeadSummary): QuotationFormValue
     values.module_category,
     values.customer_type,
   );
-  values.structure_type = lead.roof_type ?? "";
-  values.summary_structure_type = lead.roof_type ?? "";
   values.installation_location = formatLeadAddress(lead);
   return values;
 }
@@ -709,9 +684,6 @@ export function applySurveyToQuotationForm(
         customer_city_village:
           leadValues.customer_city_village || values.customer_city_village,
         site_type: leadValues.site_type || values.site_type,
-        structure_type: leadValues.structure_type || values.structure_type,
-        summary_structure_type:
-          leadValues.summary_structure_type || values.summary_structure_type,
         installation_location:
           leadValues.installation_location || values.installation_location,
       }
@@ -750,9 +722,6 @@ export function applySurveyToQuotationForm(
       survey.lead?.city ||
       survey.customer?.city ||
       values.customer_city_village,
-    structure_type: survey.structure_type || baseValues.structure_type,
-    summary_structure_type:
-      baseValues.summary_structure_type || survey.structure_type || "",
     installation_location:
       baseValues.installation_location ||
       (survey.lead
@@ -1021,14 +990,6 @@ function brandFromMaterial(item: QuotationMaterialItem | undefined) {
   return wattageFromText(inferredBrand) ? undefined : inferredBrand || undefined;
 }
 
-function structureFromMaterial(item: QuotationMaterialItem | undefined) {
-  return (
-    item?.specification?.trim() ||
-    item?.make_specification?.trim() ||
-    undefined
-  );
-}
-
 function wattageFromMaterial(item: QuotationMaterialItem) {
   return wattageFromText(
     [item.specification, item.make_specification, item.description].join(" "),
@@ -1214,6 +1175,28 @@ export function amountInWordsFromTurnkeyCost(
   }
 
   return formatIndianCurrencyInWords(numericValue);
+}
+
+export function discountedTurnkeyAmount(
+  totalTurnkeyCost: number | string | null | undefined,
+  discountAmount: number | string | null | undefined,
+) {
+  const amount =
+    typeof totalTurnkeyCost === "string" && totalTurnkeyCost.trim() === ""
+      ? 0
+      : Number(totalTurnkeyCost ?? 0);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return null;
+  }
+
+  const numericDiscount = Number(discountAmount ?? 0);
+  const discount = Math.min(
+    Math.max(Number.isFinite(numericDiscount) ? numericDiscount : 0, 0),
+    amount,
+  );
+
+  return roundMoney(amount - discount);
 }
 
 export type TurnkeyGstBreakdown = {

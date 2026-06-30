@@ -35,8 +35,8 @@ export const navigationItems: NavigationItem[] = [
       navigationRoute("/leads"),
       navigationRoute("/site-surveys"),
       navigationRoute("/quotations"),
-      navigationRoute("/customers/project-based"),
       navigationRoute("/projects"),
+      navigationRoute("/customers/project-based"),
     ],
   },
   {
@@ -46,18 +46,17 @@ export const navigationItems: NavigationItem[] = [
       navigationRoute("/customers/b2b-direct"),
       navigationRoute("/b2b-sales"),
       navigationRoute("/proforma-invoices"),
-      navigationRoute("/payments"),
       navigationRoute("/invoices"),
+      navigationRoute("/payments"),
     ],
   },
   {
     label: "Purchasing & Stock",
     path: "/stock-purchasing",
     children: [
-      navigationRoute("/vendors"),
-      navigationRoute("/purchases"),
-      navigationRoute("/material-receive"),
       navigationRoute("/inventory"),
+      navigationRoute("/purchases"),
+      navigationRoute("/vendors"),
     ],
   },
   {

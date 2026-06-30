@@ -29,6 +29,10 @@ import {
 } from "../crm/crmUtils";
 import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
+import {
+  recordPaletteCardClassName,
+  recordPaletteTableRowClassName,
+} from "../shared/recordOriginStyles";
 import type { Vendor } from "../vendors/types";
 import {
   fetchProjects,
@@ -265,7 +269,7 @@ export function ProjectsPage() {
                   return (
                     <tr
                       key={project.id}
-                      className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                      className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("projectFlow")}`}
                       onClick={() => openProjectDetail(project.id)}
                       onKeyDown={(event) =>
                         handleProjectRowKeyDown(event, project.id)
@@ -308,7 +312,7 @@ export function ProjectsPage() {
               return (
                 <article
                   key={project.id}
-                  className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
+                  className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("projectFlow")}`}
                   onClick={() => openProjectDetail(project.id)}
                   onKeyDown={(event) => handleProjectRowKeyDown(event, project.id)}
                   role="link"

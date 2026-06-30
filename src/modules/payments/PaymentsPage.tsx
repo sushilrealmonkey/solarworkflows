@@ -1,18 +1,23 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   SearchInput,
   SelectInput,
   TextInput,
   Toolbar,
-  ViewLink,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -21,11 +26,14 @@ import {
 } from "../crm/crmUtils";
 import { formatMoney } from "../quotations/quotationUtils";
 import {
+  recordOriginCardClassName,
+  recordOriginFromLinks,
+  recordOriginTableRowClassName,
+} from "../shared/recordOriginStyles";
+import {
   createPayment,
-  deletePayment,
   fetchPaymentProjects,
   fetchPayments,
-  updatePayment,
 } from "./paymentApi";
 import { PaymentFormModal, PaymentStatusBadge } from "./PaymentComponents";
 import {
@@ -33,7 +41,6 @@ import {
   paymentModeOptions,
   paymentSourceOptions,
   paymentStatusOptions,
-  paymentToForm,
   validatePaymentForm,
 } from "./paymentUtils";
 import type {
@@ -53,6 +60,7 @@ type PaymentFilters = {
 export function PaymentsPage() {
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
+  const navigate = useNavigate();
   const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
   const [projects, setProjects] = useState<PaymentProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,21 +73,13 @@ export function PaymentsPage() {
     date: "",
   });
   const [formState, setFormState] = useState<{
-    mode: "create" | "edit";
-    payment: PaymentWithRelations | null;
     values: PaymentFormValues;
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<PaymentWithRelations | null>(
-    null,
-  );
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "payments", "view");
   const canCreate = hasPermission(profile, permissions, "payments", "create");
-  const canUpdate = hasPermission(profile, permissions, "payments", "update");
-  const canDelete = hasPermission(profile, permissions, "payments", "delete");
 
   async function loadData() {
     if (!canView) {
@@ -158,19 +158,22 @@ export function PaymentsPage() {
   function openCreateForm() {
     setFormErrors({});
     setFormState({
-      mode: "create",
-      payment: null,
       values: emptyPaymentForm(),
     });
   }
 
-  function openEditForm(payment: PaymentWithRelations) {
-    setFormErrors({});
-    setFormState({
-      mode: "edit",
-      payment,
-      values: paymentToForm(payment),
-    });
+  function openPaymentDetail(paymentId: string) {
+    navigate(`/payments/${paymentId}`);
+  }
+
+  function handlePaymentRowKeyDown(
+    event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
+    paymentId: string,
+  ) {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openPaymentDetail(paymentId);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -189,13 +192,8 @@ export function PaymentsPage() {
 
     try {
       setSaving(true);
-      if (formState.mode === "create") {
-        await createPayment(profile, formState.values);
-        showToast("Payment added.", "success");
-      } else if (formState.payment) {
-        await updatePayment(formState.payment.id, formState.values);
-        showToast("Payment updated.", "success");
-      }
+      await createPayment(profile, formState.values);
+      showToast("Payment added.", "success");
 
       setFormState(null);
       await loadData();
@@ -206,29 +204,6 @@ export function PaymentsPage() {
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deletePayment(deleteTarget.id);
-      setPayments((current) =>
-        current.filter((payment) => payment.id !== deleteTarget.id),
-      );
-      showToast("Payment deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Payment delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -305,7 +280,7 @@ export function PaymentsPage() {
 
       {!loading && !error && filteredPayments.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm 2xl:block">
+          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
@@ -317,130 +292,108 @@ export function PaymentsPage() {
                   <th className="px-4 py-3">Amount</th>
                   <th className="px-4 py-3">Reference</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Created By</th>
-                  <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredPayments.map((payment) => (
-                  <tr key={payment.id}>
-                    <td className="px-4 py-3">
-                      {formatDate(payment.payment_date)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-900">
-                        {payment.customer?.business_name ||
-                          payment.customer?.full_name ||
-                          "-"}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {payment.customer?.phone ?? "-"}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {paymentContextLabel(payment)}
-                    </td>
-                    <td className="px-4 py-3">{labelize(payment.payment_source)}</td>
-                    <td className="px-4 py-3">{labelize(payment.payment_mode)}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatMoney(payment.amount)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {payment.reference_number ?? "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <PaymentStatusBadge value={payment.status} />
-                    </td>
-                    <td className="px-4 py-3">{createdByName(payment)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <ViewLink to={`/payments/${payment.id}`}>View</ViewLink>
-                        {canUpdate && payment.project_id ? (
-                          <Button
-                            onClick={() => openEditForm(payment)}
-                            variant="secondary"
-                          >
-                            Edit
-                          </Button>
-                        ) : null}
-                        {canDelete ? (
-                          <Button
-                            onClick={() => setDeleteTarget(payment)}
-                            variant="danger"
-                          >
-                            Delete
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredPayments.map((payment) => {
+                  const origin = recordOriginFromLinks(payment);
+
+                  return (
+                    <tr
+                      key={payment.id}
+                      className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordOriginTableRowClassName(origin)}`}
+                      onClick={() => openPaymentDetail(payment.id)}
+                      onKeyDown={(event) => handlePaymentRowKeyDown(event, payment.id)}
+                      role="link"
+                      tabIndex={0}
+                    >
+                      <td className="px-4 py-3">
+                        {formatDate(payment.payment_date)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-slate-900">
+                          {payment.customer?.business_name ||
+                            payment.customer?.full_name ||
+                            "-"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {payment.customer?.phone ?? "-"}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-slate-950">
+                        {paymentContextLabel(payment)}
+                      </td>
+                      <td className="px-4 py-3">{labelize(payment.payment_source)}</td>
+                      <td className="px-4 py-3">{labelize(payment.payment_mode)}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-950">
+                        {formatMoney(payment.amount)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {payment.reference_number ?? "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <PaymentStatusBadge value={payment.status} />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          <div className="grid gap-3 2xl:hidden">
-            {filteredPayments.map((payment) => (
-              <article
-                key={payment.id}
-                className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {formatDate(payment.payment_date)}
-                    </p>
-                    <h2 className="mt-1 text-base font-semibold text-slate-950">
-                      {formatMoney(payment.amount)}
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {payment.customer?.business_name ||
-                        payment.customer?.full_name ||
-                        "-"} / {paymentContextLabel(payment)}
-                    </p>
+          <div className="grid gap-3 xl:hidden">
+            {filteredPayments.map((payment) => {
+              const origin = recordOriginFromLinks(payment);
+
+              return (
+                <article
+                  key={payment.id}
+                  className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordOriginCardClassName(origin)}`}
+                  onClick={() => openPaymentDetail(payment.id)}
+                  onKeyDown={(event) => handlePaymentRowKeyDown(event, payment.id)}
+                  role="link"
+                  tabIndex={0}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {formatDate(payment.payment_date)}
+                      </p>
+                      <h2 className="mt-1 text-base font-semibold text-slate-950">
+                        {formatMoney(payment.amount)}
+                      </h2>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {payment.customer?.business_name ||
+                          payment.customer?.full_name ||
+                          "-"} / {paymentContextLabel(payment)}
+                      </p>
+                    </div>
+                    <PaymentStatusBadge value={payment.status} />
                   </div>
-                  <PaymentStatusBadge value={payment.status} />
-                </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <PaymentCardItem
-                    label="Source"
-                    value={labelize(payment.payment_source)}
-                  />
-                  <PaymentCardItem
-                    label="Mode"
-                    value={labelize(payment.payment_mode)}
-                  />
-                  <PaymentCardItem
-                    label="Reference"
-                    value={payment.reference_number ?? "-"}
-                  />
-                  <PaymentCardItem label="Created By" value={createdByName(payment)} />
-                </dl>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <ViewLink to={`/payments/${payment.id}`}>View</ViewLink>
-                  {canUpdate && payment.project_id ? (
-                    <Button onClick={() => openEditForm(payment)} variant="secondary">
-                      Edit
-                    </Button>
-                  ) : null}
-                  {canDelete ? (
-                    <Button
-                      onClick={() => setDeleteTarget(payment)}
-                      variant="danger"
-                    >
-                      Delete
-                    </Button>
-                  ) : null}
-                </div>
-              </article>
-            ))}
+                  <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                    <PaymentCardItem
+                      label="Source"
+                      value={labelize(payment.payment_source)}
+                    />
+                    <PaymentCardItem
+                      label="Mode"
+                      value={labelize(payment.payment_mode)}
+                    />
+                    <PaymentCardItem
+                      label="Reference"
+                      value={payment.reference_number ?? "-"}
+                    />
+                  </dl>
+                </article>
+              );
+            })}
           </div>
         </>
       ) : null}
 
       {formState ? (
         <PaymentFormModal
-          title={formState.mode === "create" ? "Add Payment" : "Edit Payment"}
+          title="Add Payment"
           values={formState.values}
           setValues={(values) =>
             setFormState((current) => (current ? { ...current, values } : current))
@@ -453,25 +406,7 @@ export function PaymentsPage() {
         />
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete payment?"
-          description={`This will remove the ${formatMoney(deleteTarget.amount)} payment from ${paymentContextLabel(deleteTarget)}.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
     </div>
-  );
-}
-
-function createdByName(payment: PaymentWithRelations) {
-  return (
-    payment.created_by_profile?.full_name ??
-    payment.created_by_profile?.email ??
-    payment.created_by_profile?.phone ??
-    "-"
   );
 }
 

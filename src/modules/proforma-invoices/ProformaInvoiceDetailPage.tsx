@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { PageHeader } from "../../components/PageHeader";
+import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -11,6 +11,7 @@ import {
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  PlaceholderAction,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -28,16 +29,7 @@ import {
 import type { InvoiceItem } from "../invoices/types";
 import { PaymentStatusBadge } from "../payments/PaymentComponents";
 import type { PaymentWithRelations } from "../payments/types";
-import { buildProformaInvoicePdf } from "../documents/businessPdf";
 import {
-  buildProformaInvoicePdfPath,
-  createGeneratedPdfPreviewUrl,
-  fetchBusinessDocumentSettings,
-  fetchGeneratedDocument,
-  uploadGeneratedPdf,
-} from "../documents/generatedPdfApi";
-import {
-  createInvoiceFromProformaInvoice,
   createProformaInvoicePayment,
   deleteProformaInvoice,
   fetchProformaInvoice,
@@ -55,7 +47,6 @@ import {
   ProformaPaymentFormModal,
 } from "./ProformaInvoiceComponents";
 import {
-  canCreateFinalInvoice,
   emptyProformaPaymentForm,
   proformaInvoiceContextDescription,
   proformaInvoiceItemToForm,
@@ -70,6 +61,10 @@ import type {
   ProformaInvoiceWithRelations,
   ProformaPaymentFormValues,
 } from "./types";
+import {
+  fetchProformaInvoicePdfPreviewUrl,
+  generateAndStoreProformaInvoicePdf,
+} from "./proformaInvoicePdfWorkflow";
 
 type StatusAction = "sent" | "cancelled";
 
@@ -101,9 +96,8 @@ export function ProformaInvoiceDetailPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [creatingFinalInvoice, setCreatingFinalInvoice] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [preparingPdf, setPreparingPdf] = useState(false);
 
   const canView = hasPermission(profile, permissions, "invoices", "view");
   const canCreate = hasPermission(profile, permissions, "invoices", "create");
@@ -141,8 +135,8 @@ export function ProformaInvoiceDetailPage() {
       setItems(nextItems);
       setOptions(nextOptions);
       setPayments(nextPayments);
-      if (nextProformaInvoice && canCreateDocuments) {
-        await loadPdfPreview(nextProformaInvoice);
+      if (nextProformaInvoice) {
+        await loadPdfPreview(nextProformaInvoice, nextItems);
       } else {
         setPdfPreviewUrl(null);
       }
@@ -263,26 +257,13 @@ export function ProformaInvoiceDetailPage() {
     }
   }
 
-  async function handleCreateFinalInvoice() {
+  function openPaymentForm() {
     if (!proformaInvoice) {
       return;
     }
 
-    try {
-      setCreatingFinalInvoice(true);
-      const invoice = await createInvoiceFromProformaInvoice(proformaInvoice.id);
-      showToast("Final invoice created.", "success");
-      navigate(`/invoices/${invoice.id}`);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Final invoice creation failed.",
-        "error",
-      );
-    } finally {
-      setCreatingFinalInvoice(false);
-    }
+    setPaymentErrors({});
+    setPaymentForm(emptyProformaPaymentForm());
   }
 
   async function handleDelete() {
@@ -307,80 +288,64 @@ export function ProformaInvoiceDetailPage() {
     }
   }
 
-  async function loadPdfPreview(targetProformaInvoice: ProformaInvoiceWithRelations) {
-    try {
-      const path = buildProformaInvoicePdfPath(
-        targetProformaInvoice.organization_id,
-        targetProformaInvoice.proforma_code,
-        "PI",
-        targetProformaInvoice.id,
-      );
-      const document = await fetchGeneratedDocument(path);
-
-      if (document) {
-        setPdfPreviewUrl(await createGeneratedPdfPreviewUrl(document.file_path));
-      } else {
-        setPdfPreviewUrl(null);
-      }
-    } catch {
-      setPdfPreviewUrl(null);
-    }
-  }
-
-  async function handleGeneratePdf() {
+  function openEditForm() {
     if (!proformaInvoice) {
       return;
     }
 
-    if (!canCreateDocuments) {
-      showToast("Your role needs documents:create access to store generated PDFs.", "error");
-      return;
-    }
+    setFormErrors({});
+    setEditing({
+      ...proformaInvoiceToForm(proformaInvoice),
+      items:
+        items.length > 0
+          ? items.map(proformaInvoiceItemToForm)
+          : [emptyInvoiceItemForm()],
+    });
+  }
 
+  async function loadPdfPreview(
+    targetProformaInvoice: ProformaInvoiceWithRelations,
+    targetItems: ProformaInvoiceItem[],
+  ) {
     try {
-      setGeneratingPdf(true);
-      const settings = await fetchBusinessDocumentSettings();
-      const filePath = buildProformaInvoicePdfPath(
-        proformaInvoice.organization_id,
-        proformaInvoice.proforma_code,
-        "PI",
-        proformaInvoice.id,
-      );
+      setPreparingPdf(true);
+      const existingPreviewUrl =
+        await fetchProformaInvoicePdfPreviewUrl(targetProformaInvoice);
+      if (existingPreviewUrl) {
+        setPdfPreviewUrl(existingPreviewUrl);
+        return;
+      }
 
-      const pdfBlob = await buildProformaInvoicePdf(
-        proformaInvoice,
-        items,
-        organization,
-        settings,
-      );
-      const result = await uploadGeneratedPdf(
+      if (!canCreateDocuments) {
+        setPdfPreviewUrl(null);
+        return;
+      }
+
+      const result = await generateAndStoreProformaInvoicePdf(
         profile,
-        {
-          document_type: "proforma_invoice_pdf",
-          document_name: `${proformaInvoice.proforma_code ?? "Proforma Invoice"} PDF`,
-          file_path: filePath,
-          customer_id: proformaInvoice.customer_id,
-          project_id: proformaInvoice.project_id,
-          quotation_id: proformaInvoice.quotation_id,
-          proforma_invoice_id: proformaInvoice.id,
-          notes: "Generated proforma invoice PDF",
-        },
-        pdfBlob,
+        organization,
+        targetProformaInvoice,
+        targetItems,
       );
-
       setPdfPreviewUrl(result.previewUrl);
-      showToast("Proforma invoice PDF generated.", "success");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Proforma invoice PDF generation failed.",
-        "error",
-      );
+    } catch {
+      setPdfPreviewUrl(null);
     } finally {
-      setGeneratingPdf(false);
+      setPreparingPdf(false);
     }
   }
+
+  const canMarkSent =
+    canUpdate &&
+    proformaInvoice?.status !== "sent" &&
+    proformaInvoice?.status !== "partially_paid" &&
+    proformaInvoice?.status !== "paid" &&
+    proformaInvoice?.status !== "converted" &&
+    proformaInvoice?.status !== "cancelled";
+  const canRecordPayment =
+    canCreatePayments &&
+    ["sent", "partially_paid"].includes(proformaInvoice?.status ?? "") &&
+    Number(proformaInvoice?.balance_due ?? 0) > 0;
 
   return (
     <div className="space-y-6">
@@ -399,91 +364,31 @@ export function ProformaInvoiceDetailPage() {
 
       {proformaInvoice ? (
         <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <PageHeader
-              title={proformaInvoice.proforma_code ?? "Proforma Invoice"}
-              description={proformaInvoiceContextDescription(proformaInvoice)}
+          <div className="border-b border-stone-200 pb-5">
+            <RecordTitle
+              recordType="Proforma Invoice"
+              name={proformaInvoice.proforma_code ?? "Proforma Invoice"}
+              action={
+                canUpdate &&
+                !["converted", "cancelled"].includes(proformaInvoice.status ?? "") ? (
+                  <button
+                    aria-label="Edit proforma invoice"
+                    className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
+                    onClick={openEditForm}
+                    title="Edit proforma invoice"
+                    type="button"
+                  >
+                    <PencilIcon />
+                  </button>
+                ) : null
+              }
+              meta={[
+                proformaInvoiceContextDescription(proformaInvoice),
+                labelize(proformaInvoice.status),
+                formatDate(proformaInvoice.proforma_date),
+                formatMoney(proformaInvoice.total_amount),
+              ]}
             />
-            <div className="flex flex-wrap gap-2">
-              {canUpdate && !["converted", "cancelled"].includes(proformaInvoice.status ?? "") ? (
-                <>
-                  <Button
-                    onClick={() => {
-                      setFormErrors({});
-                      setEditing({
-                        ...proformaInvoiceToForm(proformaInvoice),
-                        items:
-                          items.length > 0
-                            ? items.map(proformaInvoiceItemToForm)
-                            : [emptyInvoiceItemForm()],
-                      });
-                    }}
-                    variant="secondary"
-                  >
-                    Edit Proforma
-                  </Button>
-                  <Button
-                    onClick={() => setStatusTarget("sent")}
-                    disabled={updatingStatus}
-                    variant="secondary"
-                  >
-                    Mark Sent
-                  </Button>
-                  <Button
-                    onClick={() => setStatusTarget("cancelled")}
-                    disabled={updatingStatus}
-                    variant="danger"
-                  >
-                    Cancel Proforma
-                  </Button>
-                </>
-              ) : null}
-              {canCreatePayments && !["converted", "cancelled"].includes(proformaInvoice.status ?? "") ? (
-                <Button
-                  onClick={() => {
-                    setPaymentErrors({});
-                    setPaymentForm(emptyProformaPaymentForm());
-                  }}
-                >
-                  Record Payment
-                </Button>
-              ) : null}
-              {canCreate ? (
-                <Button
-                  onClick={() => void handleCreateFinalInvoice()}
-                  disabled={
-                    creatingFinalInvoice || !canCreateFinalInvoice(proformaInvoice)
-                  }
-                  variant="secondary"
-                >
-                  {proformaInvoice.final_invoice_id
-                    ? "Invoice Created"
-                    : "Create Invoice"}
-                </Button>
-              ) : null}
-              <Button
-                onClick={() => void handleGeneratePdf()}
-                disabled={generatingPdf || !canCreateDocuments}
-                variant="secondary"
-              >
-                {generatingPdf ? "Generating..." : "Generate PI PDF"}
-              </Button>
-              {pdfPreviewUrl ? (
-                <a
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
-                  href={pdfPreviewUrl}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  Open PDF
-                </a>
-              ) : null}
-              {canDelete ? (
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Proforma
-                </Button>
-              ) : null}
-            </div>
           </div>
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -549,8 +454,31 @@ export function ProformaInvoiceDetailPage() {
               </DetailSection>
             </div>
 
-            <ProformaInvoiceTotalsCard proformaInvoice={proformaInvoice} />
+            <aside className="space-y-6">
+              <ProformaNextStepSection
+                canMarkSent={canMarkSent}
+                canRecordPayment={canRecordPayment}
+                downloadUrl={pdfPreviewUrl}
+                preparingPdf={preparingPdf}
+                onMarkSent={() => setStatusTarget("sent")}
+                onRecordPayment={openPaymentForm}
+              />
+              <ProformaInvoiceTotalsCard proformaInvoice={proformaInvoice} />
+            </aside>
           </div>
+
+          {(canUpdate && proformaInvoice.status !== "cancelled") || canDelete ? (
+            <ProformaDangerZone
+              canCancel={
+                canUpdate &&
+                !["converted", "cancelled"].includes(proformaInvoice.status ?? "")
+              }
+              canDelete={canDelete}
+              updatingStatus={updatingStatus}
+              onCancel={() => setStatusTarget("cancelled")}
+              onDelete={() => setConfirmingDelete(true)}
+            />
+          ) : null}
         </>
       ) : null}
 
@@ -611,6 +539,127 @@ export function ProformaInvoiceDetailPage() {
       ) : null}
 
     </div>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="size-4"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M16.8 4.8 19.2 7.2M5 19l4.8-1 9.4-9.4a1.7 1.7 0 0 0 0-2.4l-1.4-1.4a1.7 1.7 0 0 0-2.4 0L6 14.2 5 19Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function ProformaNextStepSection({
+  canMarkSent,
+  canRecordPayment,
+  downloadUrl,
+  preparingPdf,
+  onMarkSent,
+  onRecordPayment,
+}: {
+  canMarkSent: boolean;
+  canRecordPayment: boolean;
+  downloadUrl: string | null;
+  preparingPdf: boolean;
+  onMarkSent: () => void;
+  onRecordPayment: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="text-base font-semibold text-slate-950">Next Step</h2>
+      <div className="mt-4 grid gap-2">
+        {canMarkSent ? <Button onClick={onMarkSent}>Mark Sent</Button> : null}
+        <DownloadProformaAction preparing={preparingPdf} url={downloadUrl} />
+        {canRecordPayment ? (
+          <Button onClick={onRecordPayment} variant="secondary">
+            Record Payment
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function DownloadProformaAction({
+  url,
+  preparing = false,
+}: {
+  url: string | null | undefined;
+  preparing?: boolean;
+}) {
+  if (!url) {
+    return (
+      <PlaceholderAction>
+        {preparing ? "Preparing Proforma" : "Download Proforma"}
+      </PlaceholderAction>
+    );
+  }
+
+  return (
+    <a
+      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+      download
+      href={url}
+      rel="noreferrer"
+      target="_blank"
+    >
+      Download Proforma
+    </a>
+  );
+}
+
+function ProformaDangerZone({
+  canCancel,
+  canDelete,
+  updatingStatus,
+  onCancel,
+  onDelete,
+}: {
+  canCancel: boolean;
+  canDelete: boolean;
+  updatingStatus: boolean;
+  onCancel: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-rose-900">Danger Zone</h2>
+          <p className="mt-1 text-sm leading-6 text-rose-700">
+            Cancel or delete this proforma invoice from billing records.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {canCancel ? (
+            <Button
+              disabled={updatingStatus}
+              onClick={onCancel}
+              variant="danger"
+            >
+              Cancel Proforma
+            </Button>
+          ) : null}
+          {canDelete ? (
+            <Button onClick={onDelete} variant="danger">
+              Delete Proforma
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }
 

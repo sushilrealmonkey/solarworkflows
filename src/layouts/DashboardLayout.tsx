@@ -105,7 +105,7 @@ export function DashboardLayout() {
     >
       <aside
         className={`fixed inset-y-0 left-0 hidden flex-col overflow-hidden border-r border-white/10 bg-[#06173f] px-3 py-5 text-white shadow-2xl shadow-slate-950/20 transition-[width] duration-300 lg:flex ${
-          sidebarCollapsed ? "w-20" : "w-72"
+          sidebarCollapsed ? "w-20" : "w-60"
         }`}
       >
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
@@ -160,7 +160,7 @@ export function DashboardLayout() {
         </div>
       ) : null}
 
-      <div className={`transition-[padding] duration-300 ${sidebarCollapsed ? "lg:pl-20" : "lg:pl-72"}`}>
+      <div className={`transition-[padding] duration-300 ${sidebarCollapsed ? "lg:pl-20" : "lg:pl-60"}`}>
         <header className="sticky top-0 z-30 border-b border-orange-100 bg-white/90 px-4 py-3 shadow-sm shadow-orange-950/5 backdrop-blur sm:px-6 lg:px-8">
           <HeaderWaves />
           <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
@@ -355,28 +355,22 @@ function SidebarNavigation({
                     </span>
                   ) : null}
                 </button>
-                {isOpen ? (
-                  <div className={`mt-1 space-y-1 ${collapsed ? "" : "pl-6"}`}>
+                {isOpen && !collapsed ? (
+                  <div className="mt-1 space-y-1 pl-6">
                     {item.children?.map((child) => (
                       <NavLink
                         key={child.path}
                         to={child.path}
                         onClick={onNavigate}
-                        title={collapsed ? child.label : undefined}
                         className={({ isActive }) =>
-                          `flex items-center rounded-lg py-2 text-sm font-medium transition-colors ${
-                            collapsed ? "justify-center px-2" : "px-3"
-                          } ${
+                          `flex items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                             isActive
                               ? "bg-orange-400 text-white shadow-lg shadow-orange-950/20"
                               : "text-slate-300 hover:bg-white/10 hover:text-white"
                           }`
                         }
                       >
-                        <NavigationIcon item={child} />
-                        <span className={collapsed ? "sr-only" : "ml-3 truncate"}>
-                          {child.label}
-                        </span>
+                        <span className="truncate">{child.label}</span>
                       </NavLink>
                     ))}
                   </div>
@@ -443,7 +437,6 @@ function navigationIconId(item: NavigationItem) {
     "/inventory": "inventory",
     "/vendors": "vendors",
     "/purchases": "purchases",
-    "/material-receive": "material_receive",
     "/proforma-invoices": "proforma_invoices",
     "/invoices": "invoices",
     "/payments": "payments",
@@ -587,7 +580,6 @@ function IconGlyph({ id }: { id: string }) {
         </svg>
       );
     case "purchases":
-    case "material_receive":
       return (
         <svg aria-hidden="true" className="h-5 w-5" {...common}>
           <path d="M6 7h15l-2 7H8L6 4H3" />
