@@ -183,6 +183,10 @@ type InventoryReservationSummaryRow = {
   status: string | null;
 };
 
+type B2BSaleUsageRow = NonNullable<
+  InventoryTransactionWithRelations["b2b_sale"]
+>;
+
 function withReservationTotals(
   items: InventoryItem[],
   reservationRows: InventoryReservationSummaryRow[],
@@ -258,6 +262,62 @@ async function attachReservationTotals(items: InventoryItem[]) {
   return withReservationTotals(
     items,
     (data ?? []) as InventoryReservationSummaryRow[],
+  );
+}
+
+async function attachB2BSaleUsage(
+  profile: UserProfile | null,
+  transactions: InventoryTransactionWithRelations[],
+) {
+  const saleIds = Array.from(
+    new Set(
+      transactions
+        .filter(
+          (transaction) =>
+            transaction.reference_type === "b2b_sale" &&
+            Boolean(transaction.reference_id),
+        )
+        .map((transaction) => transaction.reference_id as string),
+    ),
+  );
+
+  if (saleIds.length === 0) {
+    return transactions;
+  }
+
+  const client = requireSupabase();
+  let query = client
+    .from("b2b_sales")
+    .select("id, sale_code, status")
+    .in("id", saleIds);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  if (profile?.company_id) {
+    query = query.eq("company_id", profile.company_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return transactions;
+  }
+
+  const salesById = new Map(
+    ((data ?? []) as B2BSaleUsageRow[]).map((sale) => [sale.id, sale]),
+  );
+
+  return transactions.map((transaction) =>
+    transaction.reference_type === "b2b_sale" && transaction.reference_id
+      ? {
+          ...transaction,
+          b2b_sale: salesById.get(transaction.reference_id) ?? null,
+        }
+      : transaction,
   );
 }
 
@@ -475,7 +535,10 @@ export async function fetchInventoryTransactions(
     throw new Error(error.message);
   }
 
-  return (data ?? []) as unknown as InventoryTransactionWithRelations[];
+  return attachB2BSaleUsage(
+    profile,
+    (data ?? []) as unknown as InventoryTransactionWithRelations[],
+  );
 }
 
 export async function fetchProjectInventoryTransactions(
@@ -502,7 +565,10 @@ export async function fetchProjectInventoryTransactions(
     throw new Error(error.message);
   }
 
-  return (data ?? []) as unknown as InventoryTransactionWithRelations[];
+  return attachB2BSaleUsage(
+    profile,
+    (data ?? []) as unknown as InventoryTransactionWithRelations[],
+  );
 }
 
 export async function createInventoryTransaction(

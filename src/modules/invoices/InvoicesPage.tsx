@@ -8,6 +8,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -237,6 +238,9 @@ export function InvoicesPage() {
       );
     });
   }, [invoices, filters]);
+
+  const invoicePagination = useTablePagination(filteredInvoices);
+  const paginatedInvoices = invoicePagination.pageItems;
 
   const duplicateProjectInvoice = useMemo(() => {
     if (formState?.mode !== "create" || !formState.values.project_id) {
@@ -664,7 +668,7 @@ export function InvoicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredInvoices.map((invoice) => {
+                {paginatedInvoices.map((invoice) => {
                   const origin = recordOriginFromLinks(invoice);
 
                   return (
@@ -717,7 +721,7 @@ export function InvoicesPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredInvoices.map((invoice) => {
+            {paginatedInvoices.map((invoice) => {
               const origin = recordOriginFromLinks(invoice);
 
               return (
@@ -782,6 +786,7 @@ export function InvoicesPage() {
               );
             })}
           </div>
+          <TablePagination label="tax invoices" pagination={invoicePagination} />
         </>
       ) : null}
 

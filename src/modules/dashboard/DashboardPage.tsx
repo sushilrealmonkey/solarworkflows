@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { formatDisplayDate } from "../../utils/dateFormat";
 import type { B2BSaleWithRelations } from "../b2b-sales/types";
 import {
@@ -121,8 +122,8 @@ function EpcAdminDashboard() {
   );
 
   const adminData = useMemo(
-    () => buildEpcDashboardModel(snapshot, summary),
-    [snapshot, summary],
+    () => buildEpcDashboardModel(snapshot, summary, organization.createdAt),
+    [organization.createdAt, snapshot, summary],
   );
   const reportDate = formatDisplayDate(new Date().toISOString());
 
@@ -308,8 +309,13 @@ function EpcAdminDashboard() {
         />
       </section>
 
-      <section>
+      <section className="grid gap-3 sm:gap-4 xl:grid-cols-2">
         <RevenueCollectionPanel
+          currencyFormatter={compactCurrencyFormatter}
+          loading={loading}
+          rows={adminData.monthlyRows}
+        />
+        <QuotationPipelinePanel
           currencyFormatter={compactCurrencyFormatter}
           loading={loading}
           rows={adminData.monthlyRows}
@@ -350,6 +356,7 @@ type EpcDashboardModel = ReturnType<typeof buildEpcDashboardModel>;
 function buildEpcDashboardModel(
   snapshot: EpcAdminDashboardSnapshot | null,
   summary: DashboardSummaryRow,
+  organizationCreatedAt: string | null,
 ) {
   const today = startOfLocalDay(new Date());
   const endOfNextWeek = addDays(today, 7);
@@ -490,6 +497,7 @@ function buildEpcDashboardModel(
     projects,
     snapshot?.recentPayments ?? [],
     paymentSummaries,
+    organizationCreatedAt,
   );
   const b2bMonthlyRows = buildB2BMonthlyRows(b2bSales);
   const activeProjectValue =
@@ -742,9 +750,6 @@ function SalesPipelinePanel({
               </p>
             </div>
           ))}
-          <p className="rounded-lg bg-orange-50 px-3 py-2 text-xs font-medium text-orange-900 sm:text-sm">
-            Bottleneck: {rows.find((row) => row.label === "Quotation Sent")?.count ?? 0} quotations need active follow-up.
-          </p>
         </div>
       ) : null}
     </AdminPanel>
@@ -894,7 +899,6 @@ function RevenueCollectionPanel({
 }) {
   const maxValue = Math.max(
     ...rows.flatMap((row) => [
-      row.quotationValue,
       row.projectValue,
       row.receivedAmount,
       row.balanceDue,
@@ -908,12 +912,45 @@ function RevenueCollectionPanel({
       {!loading ? (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600 sm:gap-3 sm:text-xs">
-            <Legend color="bg-blue-500" label="Quotation" />
             <Legend color="bg-violet-500" label="Project" />
             <Legend color="bg-emerald-500" label="Received" />
             <Legend color="bg-orange-500" label="Balance" />
           </div>
           <ComboRevenueChart
+            currencyFormatter={currencyFormatter}
+            maxValue={maxValue}
+            rows={rows}
+          />
+        </div>
+      ) : null}
+    </AdminPanel>
+  );
+}
+
+function QuotationPipelinePanel({
+  rows,
+  loading,
+  currencyFormatter,
+}: {
+  rows: EpcDashboardModel["monthlyRows"];
+  loading: boolean;
+  currencyFormatter: Intl.NumberFormat;
+}) {
+  const maxValue = Math.max(
+    ...rows.flatMap((row) => [row.quotationValue, row.acceptedQuotationValue]),
+    1,
+  );
+
+  return (
+    <AdminPanel title="Quotation Pipeline Overview">
+      {loading ? <LoadingRows count={4} /> : null}
+      {!loading ? (
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600 sm:gap-3 sm:text-xs">
+            <Legend color="bg-blue-500" label="Quoted" />
+            <Legend color="bg-emerald-500" label="Accepted" />
+          </div>
+          <QuotationPipelineChart
             currencyFormatter={currencyFormatter}
             maxValue={maxValue}
             rows={rows}
@@ -1395,50 +1432,150 @@ function ComboRevenueChart({
   maxValue: number;
   currencyFormatter: Intl.NumberFormat;
 }) {
+  const columnWidth = 64;
+  const chartWidth = Math.max(rows.length * columnWidth, 360);
+  const effectiveColumnWidth = chartWidth / Math.max(rows.length, 1);
+  const pointStart = effectiveColumnWidth / 2;
+  const pointEnd = chartWidth - pointStart;
   const linePoints = rows.map((row, index) => {
-    const x = rows.length === 1 ? 24 : 24 + (index / (rows.length - 1)) * 312;
+    const x =
+      rows.length === 1
+        ? pointStart
+        : pointStart + (index / (rows.length - 1)) * (pointEnd - pointStart);
     const y = 146 - (Number(row.balanceDue) / maxValue) * 120;
     return `${x},${Number.isFinite(y) ? y : 146}`;
   });
 
   return (
-    <div className="relative min-h-52 overflow-hidden rounded-lg bg-stone-50 p-3">
-      <svg aria-hidden="true" className="pointer-events-none absolute inset-x-3 top-3 h-32 w-[calc(100%-1.5rem)] sm:h-40" viewBox="0 0 360 160" preserveAspectRatio="none">
-        {[32, 64, 96, 128].map((y) => (
-          <line key={y} stroke="#e7e5e4" strokeWidth="1" x1="0" x2="360" y1={y} y2={y} />
-        ))}
-        <polyline
-          fill="none"
-          points={linePoints.join(" ")}
-          stroke="#f97316"
-          strokeDasharray="5 5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-        />
-      </svg>
-      <div className="relative grid min-h-36 grid-cols-6 items-end gap-1 pt-2 sm:min-h-44 sm:gap-2">
-        {rows.map((row) => (
-          <div className="flex min-w-0 flex-col items-center gap-2" key={row.label}>
-            <div className="grid h-28 w-full grid-cols-3 items-end gap-0.5 sm:h-36 sm:gap-1">
-              {[
-                ["bg-blue-500", row.quotationValue],
-                ["bg-violet-500", row.projectValue],
-                ["bg-emerald-500", row.receivedAmount],
-              ].map(([color, value], index) => (
-                <div
-                  className={`${color} min-h-1 rounded-t`}
-                  key={`${row.label}-${index}`}
-                  title={currencyFormatter.format(Number(value))}
-                  style={{
-                    height: `${Math.max((Number(value) / maxValue) * 100, Number(value) > 0 ? 8 : 1)}%`,
-                  }}
-                />
-              ))}
+    <div className="overflow-x-auto rounded-lg bg-stone-50">
+      <div
+        className="relative min-h-52 p-3"
+        style={{ minWidth: `${chartWidth + 24}px` }}
+      >
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-3 h-32 sm:h-40"
+          preserveAspectRatio="none"
+          style={{ width: `${chartWidth}px` }}
+          viewBox={`0 0 ${chartWidth} 160`}
+        >
+          {[32, 64, 96, 128].map((y) => (
+            <line
+              key={y}
+              stroke="#e7e5e4"
+              strokeWidth="1"
+              x1="0"
+              x2={chartWidth}
+              y1={y}
+              y2={y}
+            />
+          ))}
+          <polyline
+            fill="none"
+            points={linePoints.join(" ")}
+            stroke="#f97316"
+            strokeDasharray="5 5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="3"
+          />
+        </svg>
+        <div
+          className="relative grid min-h-36 items-end gap-1 pt-2 sm:min-h-44 sm:gap-2"
+          style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}
+        >
+          {rows.map((row) => (
+            <div className="flex min-w-0 flex-col items-center gap-2" key={row.label}>
+              <div className="grid h-28 w-full grid-cols-2 items-end gap-0.5 sm:h-36 sm:gap-1">
+                {[
+                  ["bg-violet-500", row.projectValue],
+                  ["bg-emerald-500", row.receivedAmount],
+                ].map(([color, value], index) => (
+                  <div
+                    className={`${color} min-h-1 rounded-t`}
+                    key={`${row.label}-${index}`}
+                    title={currencyFormatter.format(Number(value))}
+                    style={{
+                      height: `${Math.max((Number(value) / maxValue) * 100, Number(value) > 0 ? 8 : 1)}%`,
+                    }}
+                  />
+                ))}
+              </div>
+              <p className="truncate text-xs font-medium text-slate-500">
+                {row.label}
+              </p>
             </div>
-            <p className="truncate text-xs font-medium text-slate-500">{row.label}</p>
-          </div>
-        ))}
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuotationPipelineChart({
+  rows,
+  maxValue,
+  currencyFormatter,
+}: {
+  rows: EpcDashboardModel["monthlyRows"];
+  maxValue: number;
+  currencyFormatter: Intl.NumberFormat;
+}) {
+  const columnWidth = 64;
+  const chartWidth = Math.max(rows.length * columnWidth, 360);
+
+  return (
+    <div className="overflow-x-auto rounded-lg bg-stone-50">
+      <div
+        className="relative min-h-52 p-3"
+        style={{ minWidth: `${chartWidth + 24}px` }}
+      >
+        <svg
+          aria-hidden="true"
+          className="pointer-events-none absolute left-3 top-3 h-32 sm:h-40"
+          preserveAspectRatio="none"
+          style={{ width: `${chartWidth}px` }}
+          viewBox={`0 0 ${chartWidth} 160`}
+        >
+          {[32, 64, 96, 128].map((y) => (
+            <line
+              key={y}
+              stroke="#e7e5e4"
+              strokeWidth="1"
+              x1="0"
+              x2={chartWidth}
+              y1={y}
+              y2={y}
+            />
+          ))}
+        </svg>
+        <div
+          className="relative grid min-h-36 items-end gap-1 pt-2 sm:min-h-44 sm:gap-2"
+          style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}
+        >
+          {rows.map((row) => (
+            <div className="flex min-w-0 flex-col items-center gap-2" key={row.label}>
+              <div className="grid h-28 w-full grid-cols-2 items-end gap-0.5 sm:h-36 sm:gap-1">
+                {[
+                  ["bg-blue-500", row.quotationValue],
+                  ["bg-emerald-500", row.acceptedQuotationValue],
+                ].map(([color, value], index) => (
+                  <div
+                    className={`${color} min-h-1 rounded-t`}
+                    key={`${row.label}-quotation-${index}`}
+                    title={currencyFormatter.format(Number(value))}
+                    style={{
+                      height: `${Math.max((Number(value) / maxValue) * 100, Number(value) > 0 ? 8 : 1)}%`,
+                    }}
+                  />
+                ))}
+              </div>
+              <p className="truncate text-xs font-medium text-slate-500">
+                {row.label}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1696,19 +1833,27 @@ function buildMonthlyRows(
   projects: EpcAdminDashboardSnapshot["projects"],
   payments: PaymentWithRelations[],
   paymentSummaries: EpcAdminDashboardSnapshot["paymentSummaries"],
+  organizationCreatedAt: string | null,
 ) {
-  const now = new Date();
+  const currentMonth = startOfLocalMonth(new Date());
+  const startMonth = startOfLocalMonth(
+    parseDateOrFallback(organizationCreatedAt, currentMonth),
+  );
+  const endMonth = addMonths(currentMonth, 5);
+  const monthCount = Math.max(monthDifference(startMonth, endMonth) + 1, 1);
 
-  return Array.from({ length: 6 }, (_, index) => {
-    const monthDate = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-    const label = formatDisplayDate(monthDate.toISOString());
+  return Array.from({ length: monthCount }, (_, index) => {
+    const monthDate = addMonths(startMonth, index);
+    const label = formatMonthLabel(monthDate);
+    const monthlyQuotations = quotations.filter((quotation) =>
+      isSameMonth(quotation.quotation_date ?? quotation.created_at, monthDate),
+    );
 
     return {
       label,
-      quotationValue: sumQuotationValue(
-        quotations.filter((quotation) =>
-          isSameMonth(quotation.quotation_date ?? quotation.created_at, monthDate),
-        ),
+      quotationValue: sumQuotationValue(monthlyQuotations),
+      acceptedQuotationValue: sumQuotationValue(
+        monthlyQuotations.filter((quotation) => quotation.status === "accepted"),
       ),
       projectValue: sumQuotationValue(
         projects
@@ -1786,6 +1931,38 @@ function addDays(date: Date, days: number) {
   const nextDate = new Date(date);
   nextDate.setDate(nextDate.getDate() + days);
   return nextDate;
+}
+
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1);
+}
+
+function startOfLocalMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function monthDifference(start: Date, end: Date) {
+  return (
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    end.getMonth() -
+    start.getMonth()
+  );
+}
+
+function parseDateOrFallback(value: string | null | undefined, fallback: Date) {
+  if (!value) {
+    return fallback;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? fallback : date;
+}
+
+function formatMonthLabel(date: Date) {
+  return date.toLocaleString("en-IN", {
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function isSameMonth(value: string | null | undefined, monthDate: Date) {
@@ -2630,25 +2807,31 @@ function ListTable({
     value: ReactNode;
   }>;
 }) {
+  const tablePagination = useTablePagination(rows);
+  const paginatedRows = tablePagination.pageItems;
+
   return (
-    <div className="mt-4 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-100">
-      {rows.map((row) => (
-        <Link
-          key={row.key}
-          to={row.to}
-          className="grid gap-2 bg-stone-50 p-3 hover:bg-orange-50 sm:grid-cols-[1fr_auto] sm:items-center"
-        >
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-slate-950">
-              {row.title}
+    <div className="mt-4 space-y-3">
+      <div className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-100">
+        {paginatedRows.map((row) => (
+          <Link
+            key={row.key}
+            to={row.to}
+            className="grid gap-2 bg-stone-50 p-3 hover:bg-orange-50 sm:grid-cols-[1fr_auto] sm:items-center"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-slate-950">
+                {row.title}
+              </span>
+              <span className="mt-1 block truncate text-xs text-slate-500">
+                {row.meta}
+              </span>
             </span>
-            <span className="mt-1 block truncate text-xs text-slate-500">
-              {row.meta}
-            </span>
-          </span>
-          <span className="text-sm font-semibold text-slate-700">{row.value}</span>
-        </Link>
-      ))}
+            <span className="text-sm font-semibold text-slate-700">{row.value}</span>
+          </Link>
+        ))}
+      </div>
+      <TablePagination label="rows" pagination={tablePagination} />
     </div>
   );
 }

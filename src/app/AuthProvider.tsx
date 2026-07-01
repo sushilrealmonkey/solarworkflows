@@ -37,6 +37,7 @@ export type OrganizationBranding = {
   accentColor: string;
   timezone: string;
   currency: string;
+  createdAt: string | null;
 };
 
 type AuthStatus =
@@ -67,6 +68,7 @@ type OrganizationRow = {
   id: string;
   name: string | null;
   status: string | null;
+  created_at: string | null;
 };
 
 const defaultOrganization: OrganizationBranding = {
@@ -78,6 +80,7 @@ const defaultOrganization: OrganizationBranding = {
   accentColor: "#d6a31a",
   timezone: "Asia/Kolkata",
   currency: "INR",
+  createdAt: null,
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -172,7 +175,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: organizationData } = loadedProfile.organization_id
         ? await supabase
             .from("organizations")
-            .select("id, name, status")
+            .select("id, name, status, created_at")
             .eq("id", loadedProfile.organization_id)
             .maybeSingle()
         : { data: null };
@@ -216,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           typeof settingsData?.currency === "string"
             ? settingsData.currency
             : defaultOrganization.currency,
+        createdAt: loadedOrganization?.created_at ?? null,
       });
 
       if (loadedProfile.is_super_admin) {

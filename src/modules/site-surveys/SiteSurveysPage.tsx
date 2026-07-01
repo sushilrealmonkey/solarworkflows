@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -244,6 +245,9 @@ export function SiteSurveysPage() {
     });
   }, [surveys, filters]);
 
+  const surveyPagination = useTablePagination(filteredSurveys);
+  const paginatedSurveys = surveyPagination.pageItems;
+
   if (!canView) {
     return (
       <AccessDenied
@@ -441,7 +445,7 @@ export function SiteSurveysPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredSurveys.map((survey) => {
+                {paginatedSurveys.map((survey) => {
                   const contact = getSurveyContact(survey);
                   return (
                     <tr
@@ -488,7 +492,7 @@ export function SiteSurveysPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredSurveys.map((survey) => {
+            {paginatedSurveys.map((survey) => {
               const contact = getSurveyContact(survey);
               return (
                 <article
@@ -586,6 +590,7 @@ export function SiteSurveysPage() {
               );
             })}
           </div>
+          <TablePagination label="site surveys" pagination={surveyPagination} />
         </>
       ) : null}
 

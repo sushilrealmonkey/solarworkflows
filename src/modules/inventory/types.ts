@@ -1,4 +1,5 @@
 import type { Project } from "../projects/types";
+import type { B2BSale } from "../b2b-sales/types";
 import type { Product, ProductCategory } from "../product-master/types";
 
 export type InventoryItemCategory =
@@ -134,6 +135,7 @@ export type InventoryTransactionWithRelations = InventoryTransaction & {
     "id" | "item_code" | "item_name" | "unit" | "current_stock" | "minimum_stock"
   > | null;
   project?: Pick<Project, "id" | "project_code" | "project_name"> | null;
+  b2b_sale?: Pick<B2BSale, "id" | "sale_code" | "status"> | null;
   creator?: {
     id: string;
     full_name: string | null;

@@ -8,6 +8,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -219,6 +220,9 @@ export function InventoryPage() {
       );
     });
   }, [items, filters]);
+
+  const itemPagination = useTablePagination(filteredItems);
+  const paginatedItems = itemPagination.pageItems;
 
   if (!canView) {
     return (
@@ -561,7 +565,7 @@ export function InventoryPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredItems.map((item) => (
+                {paginatedItems.map((item) => (
                   <tr
                     key={item.id}
                     className={`cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${
@@ -620,7 +624,7 @@ export function InventoryPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredItems.map((item) => (
+            {paginatedItems.map((item) => (
               <article
                 key={item.id}
                 className={`cursor-pointer rounded-xl border p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${
@@ -753,6 +757,7 @@ export function InventoryPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="inventory items" pagination={itemPagination} />
         </>
       ) : null}
 
@@ -1179,6 +1184,9 @@ export function InventoryTransactionsSection({
   transactions: InventoryTransactionWithRelations[];
   emptyTitle?: string;
 }) {
+  const transactionPagination = useTablePagination(transactions);
+  const paginatedTransactions = transactionPagination.pageItems;
+
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1202,13 +1210,13 @@ export function InventoryTransactionsSection({
                   <th className="px-4 py-3">Item</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Quantity</th>
-                  <th className="px-4 py-3">Project</th>
+                  <th className="px-4 py-3">Usage</th>
                   <th className="px-4 py-3">Notes</th>
                   <th className="px-4 py-3">Created By</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {transactions.map((transaction) => (
+                {paginatedTransactions.map((transaction) => (
                   <tr key={transaction.id}>
                     <td className="px-4 py-3">
                       {formatDate(transaction.transaction_date)}
@@ -1228,18 +1236,7 @@ export function InventoryTransactionsSection({
                       {formatStock(transaction.quantity, transaction.item?.unit)}
                     </td>
                     <td className="px-4 py-3">
-                      {transaction.project_id ? (
-                        <Link
-                          className="font-semibold text-[#06173f]"
-                          to={`/projects/${transaction.project_id}`}
-                        >
-                          {transaction.project?.project_code ??
-                            transaction.project?.project_name ??
-                            "Open project"}
-                        </Link>
-                      ) : (
-                        "-"
-                      )}
+                      <TransactionUsage transaction={transaction} />
                     </td>
                     <td className="px-4 py-3">{transaction.notes ?? "-"}</td>
                     <td className="px-4 py-3">
@@ -1254,7 +1251,7 @@ export function InventoryTransactionsSection({
             </table>
           </div>
           <div className="grid gap-3 p-3 lg:hidden">
-            {transactions.map((transaction) => (
+            {paginatedTransactions.map((transaction) => (
               <article
                 key={transaction.id}
                 className="rounded-lg border border-stone-200 bg-white p-3"
@@ -1281,9 +1278,9 @@ export function InventoryTransactionsSection({
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-slate-500">Project</dt>
-                    <dd className="font-medium text-slate-900">
-                      {transaction.project?.project_code ?? "-"}
+                    <dt className="text-xs text-slate-500">Usage</dt>
+                    <dd className="text-slate-900">
+                      <TransactionUsage transaction={transaction} />
                     </dd>
                   </div>
                 </dl>
@@ -1295,10 +1292,73 @@ export function InventoryTransactionsSection({
               </article>
             ))}
           </div>
+          <TablePagination
+            label="transactions"
+            pagination={transactionPagination}
+          />
         </div>
       )}
     </section>
   );
+}
+
+function TransactionUsage({
+  transaction,
+}: {
+  transaction: InventoryTransactionWithRelations;
+}) {
+  if (transaction.project_id) {
+    return (
+      <div className="space-y-0.5">
+        <Link
+          className="font-semibold text-[#06173f]"
+          to={`/projects/${transaction.project_id}`}
+        >
+          {transaction.project?.project_code ??
+            transaction.project?.project_name ??
+            "Open project"}
+        </Link>
+        <p className="text-xs text-slate-500">
+          Project
+          {transaction.project?.project_name
+            ? ` - ${transaction.project.project_name}`
+            : ""}
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    transaction.reference_type === "b2b_sale" &&
+    transaction.reference_id
+  ) {
+    return (
+      <div className="space-y-0.5">
+        <Link
+          className="font-semibold text-[#06173f]"
+          to={`/b2b-sales/${transaction.reference_id}`}
+        >
+          {transaction.b2b_sale?.sale_code ?? "Open B2B sale"}
+        </Link>
+        <p className="text-xs text-slate-500">
+          B2B Sales
+          {transaction.b2b_sale?.status
+            ? ` - ${labelize(transaction.b2b_sale.status)}`
+            : ""}
+        </p>
+      </div>
+    );
+  }
+
+  if (transaction.reference_type) {
+    return (
+      <span className="font-medium text-slate-900">
+        {labelize(transaction.reference_type)}
+      </span>
+    );
+  }
+
+  return <span className="text-slate-500">-</span>;
 }
 
 export function InventoryStockBadge({ item }: { item: InventoryItem }) {

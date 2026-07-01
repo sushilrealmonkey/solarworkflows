@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -79,6 +80,9 @@ export function CategoryMasterPage() {
       return counts;
     }, {});
   }, [products]);
+
+  const categoryPagination = useTablePagination(categories);
+  const paginatedCategories = categoryPagination.pageItems;
 
   async function loadData() {
     if (!canView) {
@@ -259,7 +263,7 @@ export function CategoryMasterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 bg-white">
-                {categories.map((category) => (
+                {paginatedCategories.map((category) => (
                   <tr key={category.id}>
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {category.display_order}
@@ -300,7 +304,7 @@ export function CategoryMasterPage() {
           </div>
 
           <div className="grid gap-3 md:hidden">
-            {categories.map((category) => (
+            {paginatedCategories.map((category) => (
               <article
                 key={category.id}
                 className="rounded-lg border border-stone-200 bg-stone-50 p-3"
@@ -336,6 +340,7 @@ export function CategoryMasterPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="categories" pagination={categoryPagination} />
         </section>
       ) : null}
 

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -664,6 +665,9 @@ function ProformaDangerZone({
 }
 
 function ProformaItemsTable({ items }: { items: ProformaInvoiceItem[] }) {
+  const itemPagination = useTablePagination(items);
+  const paginatedItems = itemPagination.pageItems;
+
   return (
     <>
       <div className="mt-4 hidden overflow-hidden rounded-xl border border-stone-200 md:block">
@@ -678,7 +682,7 @@ function ProformaItemsTable({ items }: { items: ProformaInvoiceItem[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
-            {items.map((item) => (
+            {paginatedItems.map((item) => (
               <tr key={item.id}>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-slate-950">
@@ -705,7 +709,7 @@ function ProformaItemsTable({ items }: { items: ProformaInvoiceItem[] }) {
         </table>
       </div>
       <div className="mt-4 grid gap-3 md:hidden">
-        {items.map((item) => (
+        {paginatedItems.map((item) => (
           <article key={item.id} className="rounded-xl border border-stone-200 p-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -726,11 +730,14 @@ function ProformaItemsTable({ items }: { items: ProformaInvoiceItem[] }) {
           </article>
         ))}
       </div>
+      <TablePagination label="proforma items" pagination={itemPagination} />
     </>
   );
 }
 
 function RelatedPaymentsSection({ payments }: { payments: PaymentWithRelations[] }) {
+  const paymentPagination = useTablePagination(payments);
+  const paginatedPayments = paymentPagination.pageItems;
   const receivedAmount = payments
     .filter((payment) => payment.status === "received")
     .reduce((total, payment) => total + Number(payment.amount ?? 0), 0);
@@ -754,7 +761,7 @@ function RelatedPaymentsSection({ payments }: { payments: PaymentWithRelations[]
         </div>
       ) : (
         <div className="mt-4 grid gap-3">
-          {payments.map((payment) => (
+          {paginatedPayments.map((payment) => (
             <article
               key={payment.id}
               className="rounded-lg border border-stone-200 bg-stone-50 p-3"
@@ -779,6 +786,7 @@ function RelatedPaymentsSection({ payments }: { payments: PaymentWithRelations[]
               </div>
             </article>
           ))}
+          <TablePagination label="payments" pagination={paymentPagination} />
         </div>
       )}
     </section>

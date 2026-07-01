@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import {
   Button,
   Modal,
@@ -136,6 +137,9 @@ export function DocumentsCollection({
   compact?: boolean;
   onDelete: (document: OrganizationDocumentWithRelations) => void;
 }) {
+  const documentPagination = useTablePagination(documents);
+  const paginatedDocuments = documentPagination.pageItems;
+
   if (documents.length === 0) {
     return null;
   }
@@ -155,7 +159,7 @@ export function DocumentsCollection({
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
-            {documents.map((document) => (
+            {paginatedDocuments.map((document) => (
               <tr key={document.id}>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-slate-950">
@@ -185,7 +189,7 @@ export function DocumentsCollection({
       </div>
 
       <div className="grid gap-3 2xl:hidden">
-        {documents.map((document) => (
+        {paginatedDocuments.map((document) => (
           <article
             key={document.id}
             className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
@@ -223,6 +227,7 @@ export function DocumentsCollection({
           </article>
         ))}
       </div>
+      <TablePagination label="documents" pagination={documentPagination} />
     </>
   );
 }

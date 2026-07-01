@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -1028,6 +1029,9 @@ function ProjectInvoicesSection({
   canCreate: boolean;
   onCreate: () => void;
 }) {
+  const invoicePagination = useTablePagination(invoices);
+  const paginatedInvoices = invoicePagination.pageItems;
+
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1065,7 +1069,7 @@ function ProjectInvoicesSection({
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {invoices.map((invoice) => (
+                {paginatedInvoices.map((invoice) => (
                   <tr key={invoice.id}>
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {invoice.invoice_code ?? "Invoice"}
@@ -1092,7 +1096,7 @@ function ProjectInvoicesSection({
           </div>
 
           <div className="mt-4 grid gap-3 lg:hidden">
-            {invoices.map((invoice) => (
+            {paginatedInvoices.map((invoice) => (
               <article
                 key={invoice.id}
                 className="rounded-lg border border-stone-200 bg-white p-3"
@@ -1132,6 +1136,7 @@ function ProjectInvoicesSection({
               </article>
             ))}
           </div>
+          <TablePagination label="project invoices" pagination={invoicePagination} />
         </>
       )}
     </section>
@@ -1193,6 +1198,8 @@ function ProjectMaterialsSection({
       material.transaction_type === "project_issue" ||
       material.transaction_type === "stock_out",
   );
+  const materialPagination = useTablePagination(issuedMaterials);
+  const paginatedIssuedMaterials = materialPagination.pageItems;
   const canShowInvoiceActions = canCreateInvoice &&
     issuedMaterials.some((material) => canInvoiceMaterial(material));
 
@@ -1228,7 +1235,7 @@ function ProjectMaterialsSection({
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {issuedMaterials.map((material) => (
+                {paginatedIssuedMaterials.map((material) => (
                   <tr key={material.id}>
                     <td className="px-4 py-3">
                       {formatDate(material.transaction_date)}
@@ -1277,7 +1284,7 @@ function ProjectMaterialsSection({
             </table>
           </div>
           <div className="mt-4 grid gap-3 lg:hidden">
-            {issuedMaterials.map((material) => (
+            {paginatedIssuedMaterials.map((material) => (
               <article
                 key={material.id}
                 className="rounded-lg border border-stone-200 bg-white p-3"
@@ -1315,6 +1322,10 @@ function ProjectMaterialsSection({
               </article>
             ))}
           </div>
+          <TablePagination
+            label="issued materials"
+            pagination={materialPagination}
+          />
         </>
       )}
     </section>

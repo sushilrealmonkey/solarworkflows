@@ -8,6 +8,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   convertLeadToCustomer,
@@ -171,6 +172,9 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
       return matchesSearch && matchesStatus && matchesType;
     });
   }, [customers, filters]);
+
+  const customerPagination = useTablePagination(filteredCustomers);
+  const paginatedCustomers = customerPagination.pageItems;
 
   if (!canView) {
     return (
@@ -407,7 +411,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredCustomers.map((customer) => (
+                {paginatedCustomers.map((customer) => (
                   <tr
                     key={customer.id}
                     className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName(segment === "b2b_direct" ? "b2bFlow" : "projectFlow")}`}
@@ -452,7 +456,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
           </div>
 
           <div className="grid gap-3 lg:hidden">
-            {filteredCustomers.map((customer) => (
+            {paginatedCustomers.map((customer) => (
               <article
                 key={customer.id}
                 className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName(segment === "b2b_direct" ? "b2bFlow" : "projectFlow")}`}
@@ -531,6 +535,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
               </article>
             ))}
           </div>
+          <TablePagination label="customers" pagination={customerPagination} />
         </>
       ) : null}
 

@@ -1,4 +1,5 @@
 import { useId, type FormEvent } from "react";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import {
   Badge,
   DetailItem,
@@ -431,6 +432,9 @@ export function ProductPriceHistoryList({
 }: {
   history: ProductPriceHistory[];
 }) {
+  const historyPagination = useTablePagination(history);
+  const paginatedHistory = historyPagination.pageItems;
+
   if (history.length === 0) {
     return (
       <p className="text-sm text-slate-500">
@@ -453,7 +457,7 @@ export function ProductPriceHistoryList({
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
-            {history.map((entry) => (
+            {paginatedHistory.map((entry) => (
               <tr key={entry.id}>
                 <td className="px-4 py-3">{entry.effective_date ?? "-"}</td>
                 <td className="px-4 py-3">
@@ -475,7 +479,7 @@ export function ProductPriceHistoryList({
         </table>
       </div>
       <div className="grid gap-3 p-3 lg:hidden">
-        {history.map((entry) => (
+        {paginatedHistory.map((entry) => (
           <article key={entry.id} className="rounded-lg border border-stone-200 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               {entry.effective_date ?? "-"} / {labelize(entry.source)}
@@ -491,6 +495,7 @@ export function ProductPriceHistoryList({
           </article>
         ))}
       </div>
+      <TablePagination label="pricing history" pagination={historyPagination} />
     </div>
   );
 }

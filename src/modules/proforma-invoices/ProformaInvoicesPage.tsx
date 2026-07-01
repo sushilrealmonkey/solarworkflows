@@ -8,6 +8,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -216,6 +217,9 @@ export function ProformaInvoicesPage() {
       return matchesSearch && matchesStatus && matchesDate && matchesDueDate;
     });
   }, [proformaInvoices, filters]);
+
+  const proformaPagination = useTablePagination(filteredProformaInvoices);
+  const paginatedProformaInvoices = proformaPagination.pageItems;
 
   if (!canView) {
     return (
@@ -631,7 +635,7 @@ export function ProformaInvoicesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredProformaInvoices.map((proformaInvoice) => (
+                {paginatedProformaInvoices.map((proformaInvoice) => (
                   <tr
                     className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("b2bFlow")}`}
                     key={proformaInvoice.id}
@@ -687,7 +691,7 @@ export function ProformaInvoicesPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredProformaInvoices.map((proformaInvoice) => (
+            {paginatedProformaInvoices.map((proformaInvoice) => (
               <article
                 key={proformaInvoice.id}
                 className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("b2bFlow")}`}
@@ -742,6 +746,10 @@ export function ProformaInvoicesPage() {
               </article>
             ))}
           </div>
+          <TablePagination
+            label="proforma invoices"
+            pagination={proformaPagination}
+          />
         </>
       ) : null}
 

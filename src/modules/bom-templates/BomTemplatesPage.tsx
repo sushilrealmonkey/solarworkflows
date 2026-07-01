@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -154,6 +155,9 @@ export function BomTemplatesPage() {
       })
       .sort((first, second) => compareTemplates(first, second, filters.sort));
   }, [filters, templates]);
+
+  const templatePagination = useTablePagination(filteredTemplates);
+  const paginatedTemplates = templatePagination.pageItems;
 
   if (!canView) {
     return (
@@ -394,7 +398,7 @@ export function BomTemplatesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredTemplates.map((template) => (
+                {paginatedTemplates.map((template) => (
                   <tr key={template.id}>
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {template.display_order ?? 0}
@@ -436,7 +440,7 @@ export function BomTemplatesPage() {
           </div>
 
           <div className="grid gap-3 lg:hidden">
-            {filteredTemplates.map((template) => (
+            {paginatedTemplates.map((template) => (
               <article
                 key={template.id}
                 className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
@@ -485,6 +489,7 @@ export function BomTemplatesPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="BOM templates" pagination={templatePagination} />
         </>
       ) : null}
 

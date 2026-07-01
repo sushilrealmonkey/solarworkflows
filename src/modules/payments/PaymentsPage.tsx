@@ -8,6 +8,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -145,6 +146,9 @@ export function PaymentsPage() {
       );
     });
   }, [payments, filters]);
+
+  const paymentPagination = useTablePagination(filteredPayments);
+  const paginatedPayments = paymentPagination.pageItems;
 
   if (!canView) {
     return (
@@ -295,7 +299,7 @@ export function PaymentsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredPayments.map((payment) => {
+                {paginatedPayments.map((payment) => {
                   const origin = recordOriginFromLinks(payment);
 
                   return (
@@ -342,7 +346,7 @@ export function PaymentsPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredPayments.map((payment) => {
+            {paginatedPayments.map((payment) => {
               const origin = recordOriginFromLinks(payment);
 
               return (
@@ -388,6 +392,7 @@ export function PaymentsPage() {
               );
             })}
           </div>
+          <TablePagination label="payments" pagination={paymentPagination} />
         </>
       ) : null}
 

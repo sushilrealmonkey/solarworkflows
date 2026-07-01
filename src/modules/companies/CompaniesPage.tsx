@@ -8,6 +8,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import { formatDisplayDate, formatDisplayDateTime } from "../../utils/dateFormat";
 import {
@@ -153,6 +154,10 @@ export function CompaniesPage() {
     () => companies.filter(isAdminSetupPending),
     [companies],
   );
+  const companyPagination = useTablePagination(filteredCompanies);
+  const paginatedCompanies = companyPagination.pageItems;
+  const pendingCompanyPagination = useTablePagination(pendingCompanies);
+  const paginatedPendingCompanies = pendingCompanyPagination.pageItems;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -296,7 +301,7 @@ export function CompaniesPage() {
             />
           ) : (
             <div className="divide-y divide-stone-200">
-              {pendingCompanies.map((company) => (
+              {paginatedPendingCompanies.map((company) => (
                 <InviteRow
                   busyAction={busyAction}
                   company={company}
@@ -316,6 +321,10 @@ export function CompaniesPage() {
                   }}
                 />
               ))}
+              <TablePagination
+                label="pending admins"
+                pagination={pendingCompanyPagination}
+              />
             </div>
           )}
         </section>
@@ -363,7 +372,7 @@ export function CompaniesPage() {
               />
             ) : (
               <div className="divide-y divide-stone-200">
-                {filteredCompanies.map((company) => (
+                {paginatedCompanies.map((company) => (
                   <CompanyRow
                     company={company}
                     isSelected={selectedCompany?.id === company.id}
@@ -371,6 +380,10 @@ export function CompaniesPage() {
                     onSelect={() => navigate(`/companies/${company.id}`)}
                   />
                 ))}
+                <TablePagination
+                  label="companies"
+                  pagination={companyPagination}
+                />
               </div>
             )}
           </div>

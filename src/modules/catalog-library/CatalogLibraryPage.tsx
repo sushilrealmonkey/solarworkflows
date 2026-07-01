@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -359,6 +360,9 @@ function CategoryLibraryList({
   categories: CatalogLibraryCategory[];
   onEdit: (category: CatalogLibraryCategory) => void;
 }) {
+  const categoryPagination = useTablePagination(categories);
+  const paginatedCategories = categoryPagination.pageItems;
+
   if (categories.length === 0) {
     return (
       <EmptyState
@@ -382,7 +386,7 @@ function CategoryLibraryList({
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100 bg-white">
-            {categories.map((category) => (
+            {paginatedCategories.map((category) => (
               <tr key={category.id}>
                 <td className="px-4 py-3 font-semibold text-slate-950">
                   {category.display_order}
@@ -413,7 +417,7 @@ function CategoryLibraryList({
       </div>
 
       <div className="grid gap-3 md:hidden">
-        {categories.map((category) => (
+        {paginatedCategories.map((category) => (
           <article
             key={category.id}
             className="rounded-lg border border-stone-200 bg-stone-50 p-3"
@@ -441,6 +445,10 @@ function CategoryLibraryList({
           </article>
         ))}
       </div>
+      <TablePagination
+        label="catalog categories"
+        pagination={categoryPagination}
+      />
     </section>
   );
 }
@@ -452,6 +460,9 @@ function BrandLibraryList({
   brands: CatalogLibraryBrand[];
   onEdit: (brand: CatalogLibraryBrand) => void;
 }) {
+  const brandPagination = useTablePagination(brands);
+  const paginatedBrands = brandPagination.pageItems;
+
   if (brands.length === 0) {
     return (
       <EmptyState
@@ -474,7 +485,7 @@ function BrandLibraryList({
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100 bg-white">
-            {brands.map((brand) => (
+            {paginatedBrands.map((brand) => (
               <tr key={brand.id}>
                 <td className="px-4 py-3 font-semibold text-slate-950">
                   {brand.display_order}
@@ -497,7 +508,7 @@ function BrandLibraryList({
       </div>
 
       <div className="grid gap-3 md:hidden">
-        {brands.map((brand) => (
+        {paginatedBrands.map((brand) => (
           <article
             key={brand.id}
             className="rounded-lg border border-stone-200 bg-stone-50 p-3"
@@ -517,6 +528,7 @@ function BrandLibraryList({
           </article>
         ))}
       </div>
+      <TablePagination label="catalog brands" pagination={brandPagination} />
     </section>
   );
 }

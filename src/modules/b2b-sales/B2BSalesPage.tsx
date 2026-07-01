@@ -9,6 +9,7 @@ import {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -277,6 +278,9 @@ export function B2BSalesPage() {
       );
     });
   }, [sales, filters]);
+
+  const salePagination = useTablePagination(filteredSales);
+  const paginatedSales = salePagination.pageItems;
 
   if (!canView) {
     return (
@@ -758,7 +762,7 @@ export function B2BSalesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredSales.map((sale) => (
+                {paginatedSales.map((sale) => (
                   <tr
                     key={sale.id}
                     className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("b2bFlow")}`}
@@ -830,7 +834,7 @@ export function B2BSalesPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredSales.map((sale) => (
+            {paginatedSales.map((sale) => (
               <article
                 key={sale.id}
                 className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("b2bFlow")}`}
@@ -902,6 +906,7 @@ export function B2BSalesPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="sales orders" pagination={salePagination} />
         </>
       ) : null}
 

@@ -8,6 +8,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import {
   AccessDenied,
   Badge,
@@ -150,6 +151,9 @@ export function ProjectsPage() {
     });
   }, [projects, filters]);
 
+  const projectPagination = useTablePagination(filteredProjects);
+  const paginatedProjects = projectPagination.pageItems;
+
   if (!canView) {
     return (
       <AccessDenied
@@ -264,7 +268,7 @@ export function ProjectsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredProjects.map((project) => {
+                {paginatedProjects.map((project) => {
                   const contact = getProjectContact(project);
                   return (
                     <tr
@@ -307,7 +311,7 @@ export function ProjectsPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredProjects.map((project) => {
+            {paginatedProjects.map((project) => {
               const contact = getProjectContact(project);
               return (
                 <article
@@ -362,6 +366,7 @@ export function ProjectsPage() {
               );
             })}
           </div>
+          <TablePagination label="projects" pagination={projectPagination} />
         </>
       ) : null}
     </div>

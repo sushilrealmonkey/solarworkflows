@@ -9,6 +9,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -613,6 +614,8 @@ export function PurchaseOrdersSection({
   emptyTitle?: string;
 }) {
   const navigate = useNavigate();
+  const orderPagination = useTablePagination(orders);
+  const paginatedOrders = orderPagination.pageItems;
 
   function openPurchaseDetail(orderId: string) {
     navigate(`/purchases/${orderId}`);
@@ -683,7 +686,7 @@ export function PurchaseOrdersSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
-            {orders.map((order) => {
+            {paginatedOrders.map((order) => {
               const progress = purchaseReceiveProgress(order);
 
               return (
@@ -756,7 +759,7 @@ export function PurchaseOrdersSection({
         </table>
       </div>
       <div className="mt-4 grid gap-3 xl:hidden">
-        {orders.map((order) => {
+        {paginatedOrders.map((order) => {
           const progress = purchaseReceiveProgress(order);
 
           return (
@@ -828,6 +831,7 @@ export function PurchaseOrdersSection({
           );
         })}
       </div>
+      <TablePagination label="purchase orders" pagination={orderPagination} />
     </section>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import { env } from "../../config/env";
 import {
@@ -407,6 +408,9 @@ export function StaffManagementPage() {
     );
   }, [search, staff]);
 
+  const staffPagination = useTablePagination(filteredStaff);
+  const paginatedStaff = staffPagination.pageItems;
+
   function openCreateForm() {
     setFormErrors({});
     setFormState({
@@ -520,7 +524,7 @@ export function StaffManagementPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredStaff.map((member) => (
+                {paginatedStaff.map((member) => (
                   <tr key={member.id}>
                     <td className="px-3 py-2.5 font-semibold text-slate-950">
                       {member.full_name ?? "-"}
@@ -557,7 +561,7 @@ export function StaffManagementPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredStaff.map((member) => (
+            {paginatedStaff.map((member) => (
               <article
                 key={member.id}
                 className="rounded-xl border border-stone-200 bg-white p-3 shadow-sm"
@@ -600,6 +604,7 @@ export function StaffManagementPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="staff" pagination={staffPagination} />
         </>
       ) : null}
 

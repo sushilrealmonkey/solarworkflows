@@ -8,6 +8,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -119,6 +120,9 @@ export function VendorsPage() {
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [vendors, filters]);
+
+  const vendorPagination = useTablePagination(filteredVendors);
+  const paginatedVendors = vendorPagination.pageItems;
 
   if (!canView) {
     return (
@@ -310,7 +314,7 @@ export function VendorsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredVendors.map((vendor) => (
+                {paginatedVendors.map((vendor) => (
                   <tr
                     key={vendor.id}
                     className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
@@ -337,7 +341,7 @@ export function VendorsPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredVendors.map((vendor) => (
+            {paginatedVendors.map((vendor) => (
               <article
                 key={vendor.id}
                 className="cursor-pointer rounded-xl border border-stone-200 bg-white p-4 shadow-sm hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
@@ -414,6 +418,7 @@ export function VendorsPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="suppliers" pagination={vendorPagination} />
         </>
       ) : null}
 

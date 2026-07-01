@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -98,6 +99,8 @@ export function BomTemplateDetailPage() {
       ),
     [rules],
   );
+  const rulePagination = useTablePagination(sortedRules);
+  const paginatedRules = rulePagination.pageItems;
 
   async function loadData() {
     if (!canView || !id) {
@@ -369,7 +372,7 @@ export function BomTemplateDetailPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {sortedRules.map((rule, index) => (
+                      {paginatedRules.map((rule) => (
                         <tr key={rule.id}>
                           <td className="px-4 py-3 font-semibold text-slate-950">
                             {rule.display_order}
@@ -395,9 +398,14 @@ export function BomTemplateDetailPage() {
                               canDelete={canDelete}
                               canUpdate={canUpdate}
                               disableMoveDown={
-                                reordering || index === sortedRules.length - 1
+                                reordering ||
+                                sortedRules.findIndex((item) => item.id === rule.id) ===
+                                  sortedRules.length - 1
                               }
-                              disableMoveUp={reordering || index === 0}
+                              disableMoveUp={
+                                reordering ||
+                                sortedRules.findIndex((item) => item.id === rule.id) === 0
+                              }
                               onDelete={() => setDeleteTarget(rule)}
                               onEdit={() => openEditRuleForm(rule)}
                               onMoveDown={() => moveRule(rule, "down")}
@@ -411,7 +419,7 @@ export function BomTemplateDetailPage() {
                 </div>
 
                 <div className="grid gap-3 xl:hidden">
-                  {sortedRules.map((rule, index) => (
+                  {paginatedRules.map((rule) => (
                     <article
                       key={rule.id}
                       className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
@@ -444,9 +452,14 @@ export function BomTemplateDetailPage() {
                           canDelete={canDelete}
                           canUpdate={canUpdate}
                           disableMoveDown={
-                            reordering || index === sortedRules.length - 1
+                            reordering ||
+                            sortedRules.findIndex((item) => item.id === rule.id) ===
+                              sortedRules.length - 1
                           }
-                          disableMoveUp={reordering || index === 0}
+                          disableMoveUp={
+                            reordering ||
+                            sortedRules.findIndex((item) => item.id === rule.id) === 0
+                          }
                           onDelete={() => setDeleteTarget(rule)}
                           onEdit={() => openEditRuleForm(rule)}
                           onMoveDown={() => moveRule(rule, "down")}
@@ -456,6 +469,7 @@ export function BomTemplateDetailPage() {
                     </article>
                   ))}
                 </div>
+                <TablePagination label="BOM rules" pagination={rulePagination} />
               </>
             )}
           </section>

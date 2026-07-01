@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { formatDisplayDate } from "../../utils/dateFormat";
 import { hasPermission, labelize } from "../crm/crmUtils";
 import { formatStock } from "../inventory/inventoryUtils";
@@ -463,6 +464,9 @@ function ResponsiveTable({
   loading: boolean;
   emptyText: string;
 }) {
+  const tablePagination = useTablePagination(rows);
+  const paginatedRows = tablePagination.pageItems;
+
   if (loading) {
     return <LoadingRows />;
   }
@@ -472,32 +476,35 @@ function ResponsiveTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-stone-100">
-      <table className="min-w-full divide-y divide-stone-100 text-left text-sm">
-        <thead className="bg-stone-50 text-xs uppercase tracking-wide text-slate-500">
-          <tr>
-            {headers.map((header) => (
-              <th key={header} className="whitespace-nowrap px-3 py-3 font-semibold">
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-stone-100 bg-white">
-          {rows.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, cellIndex) => (
-                <td
-                  key={cellIndex}
-                  className="whitespace-nowrap px-3 py-3 text-slate-700"
-                >
-                  {cell}
-                </td>
+    <div className="space-y-3">
+      <div className="overflow-x-auto rounded-lg border border-stone-100">
+        <table className="min-w-full divide-y divide-stone-100 text-left text-sm">
+          <thead className="bg-stone-50 text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              {headers.map((header) => (
+                <th key={header} className="whitespace-nowrap px-3 py-3 font-semibold">
+                  {header}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-stone-100 bg-white">
+            {paginatedRows.map((row, rowIndex) => (
+              <tr key={(tablePagination.page - 1) * tablePagination.pageSize + rowIndex}>
+                {row.map((cell, cellIndex) => (
+                  <td
+                    key={cellIndex}
+                    className="whitespace-nowrap px-3 py-3 text-slate-700"
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <TablePagination label="rows" pagination={tablePagination} />
     </div>
   );
 }

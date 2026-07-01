@@ -8,6 +8,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -146,6 +147,9 @@ export function ProductMasterPage() {
       return matchesSearch && matchesCategory && matchesStatus;
     });
   }, [filters, products]);
+
+  const productPagination = useTablePagination(filteredProducts);
+  const paginatedProducts = productPagination.pageItems;
 
   if (!canView) {
     return (
@@ -328,7 +332,7 @@ export function ProductMasterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredProducts.map((product) => (
+                {paginatedProducts.map((product) => (
                     <tr
                       key={product.id}
                       className="cursor-pointer hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600"
@@ -363,7 +367,7 @@ export function ProductMasterPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredProducts.map((product) => (
+            {paginatedProducts.map((product) => (
               <article
                 key={product.id}
                 className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
@@ -409,6 +413,7 @@ export function ProductMasterPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="products" pagination={productPagination} />
         </>
       ) : null}
 

@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { PageHeader } from "../../components/PageHeader";
+import { RecordTitle } from "../../components/RecordTitle";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -12,6 +13,8 @@ import {
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  NextStepLabel,
+  PencilIcon,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -174,6 +177,15 @@ export function InventoryDetailPage() {
     setTransactionForm(emptyInventoryTransactionForm(item.id));
   }
 
+  function openEditForm() {
+    if (!item) {
+      return;
+    }
+
+    setFormErrors({});
+    setEditing(inventoryItemToForm(item));
+  }
+
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -297,32 +309,34 @@ export function InventoryDetailPage() {
       {item ? (
         <>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <PageHeader
-              title={inventoryProductName(item)}
-              description={[
+            <RecordTitle
+              recordType="Inventory Item"
+              name={inventoryProductName(item)}
+              meta={[
                 item.item_code ?? "Inventory item",
                 inventoryBrandName(item),
                 inventoryModelName(item),
-              ]
-                .filter(Boolean)
-                .join(" / ")}
+              ]}
+              action={
+                canUpdate ? (
+                  <button
+                    aria-label="Edit inventory item"
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
+                    onClick={openEditForm}
+                    title="Edit inventory item"
+                    type="button"
+                  >
+                    <PencilIcon />
+                  </button>
+                ) : null
+              }
             />
-            <div className="flex flex-wrap gap-2">
-              {canCreate ? (
+            {canCreate ? (
+              <div className="space-y-3">
+                <NextStepLabel />
                 <Button onClick={openTransactionForm}>Add Transaction</Button>
-              ) : null}
-              {canUpdate ? (
-                <Button
-                  onClick={() => {
-                    setFormErrors({});
-                    setEditing(inventoryItemToForm(item));
-                  }}
-                  variant="secondary"
-                >
-                  Edit Item
-                </Button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
           </div>
 
           {isLowStock(item) ? (
@@ -487,6 +501,9 @@ function InventoryBatchesSection({
   batches: InventoryBatch[];
   unit: string | null;
 }) {
+  const batchPagination = useTablePagination(batches);
+  const paginatedBatches = batchPagination.pageItems;
+
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -514,7 +531,7 @@ function InventoryBatchesSection({
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {batches.map((batch) => (
+                {paginatedBatches.map((batch) => (
                   <tr key={batch.id}>
                     <td className="px-4 py-3">
                       {formatDate(batch.received_date)}
@@ -533,7 +550,7 @@ function InventoryBatchesSection({
             </table>
           </div>
           <div className="grid gap-3 p-3 lg:hidden">
-            {batches.map((batch) => (
+            {paginatedBatches.map((batch) => (
               <article
                 key={batch.id}
                 className="rounded-lg border border-stone-200 bg-white p-3"
@@ -564,6 +581,7 @@ function InventoryBatchesSection({
               </article>
             ))}
           </div>
+          <TablePagination label="batches" pagination={batchPagination} />
         </div>
       )}
     </section>

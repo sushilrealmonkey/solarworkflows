@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
@@ -164,6 +165,9 @@ export function QuotationsPage() {
     });
   }, [quotations, filters]);
 
+  const quotationPagination = useTablePagination(filteredQuotations);
+  const paginatedQuotations = quotationPagination.pageItems;
+
   if (!canView) {
     return (
       <AccessDenied
@@ -293,7 +297,7 @@ export function QuotationsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredQuotations.map((quotation) => {
+                {paginatedQuotations.map((quotation) => {
                   const contact = getQuotationContact(quotation);
                   return (
                     <tr
@@ -347,7 +351,7 @@ export function QuotationsPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredQuotations.map((quotation) => {
+            {paginatedQuotations.map((quotation) => {
               const contact = getQuotationContact(quotation);
               return (
                 <article
@@ -442,6 +446,7 @@ export function QuotationsPage() {
               );
             })}
           </div>
+          <TablePagination label="quotations" pagination={quotationPagination} />
         </>
       ) : null}
 

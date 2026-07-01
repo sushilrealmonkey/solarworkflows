@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   createLead,
@@ -166,6 +167,9 @@ export function LeadsPage() {
       );
     });
   }, [leads, followups, filters]);
+
+  const leadPagination = useTablePagination(filteredLeads);
+  const paginatedLeads = leadPagination.pageItems;
 
   if (!canView) {
     return (
@@ -361,7 +365,7 @@ export function LeadsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredLeads.map((lead) => (
+                {paginatedLeads.map((lead) => (
                   <tr
                     key={lead.id}
                     className={`cursor-pointer transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteTableRowClassName("projectFlow")}`}
@@ -400,7 +404,7 @@ export function LeadsPage() {
           </div>
 
           <div className="grid gap-3 xl:hidden">
-            {filteredLeads.map((lead) => (
+            {paginatedLeads.map((lead) => (
               <article
                 key={lead.id}
                 className={`cursor-pointer rounded-xl border p-4 shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 ${recordPaletteCardClassName("projectFlow")}`}
@@ -460,6 +464,7 @@ export function LeadsPage() {
               </article>
             ))}
           </div>
+          <TablePagination label="enquiries" pagination={leadPagination} />
         </>
       ) : null}
 
