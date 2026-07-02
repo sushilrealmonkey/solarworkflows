@@ -12,6 +12,7 @@ import type {
   InventoryTransactionFormValues,
   InventoryTransactionWithRelations,
 } from "./types";
+import type { QuotationInventoryReservation } from "../quotations/types";
 
 function requireSupabase() {
   if (!supabase) {
@@ -118,6 +119,9 @@ const inventoryTransactionSelect = `
   project:projects(id, project_code, project_name),
   creator:users_profile!inventory_transactions_created_by_fkey(id, full_name, email, phone)
 `;
+
+const inventoryReservationSelect =
+  "*, inventory_item:inventory_items(id, item_code, item_name, brand, model, unit, current_stock), catalog_product:products(id, product_code, product_name, brand, model_number, unit)";
 
 const inventoryProductSelect = `
   id,
@@ -569,6 +573,32 @@ export async function fetchProjectInventoryTransactions(
     profile,
     (data ?? []) as unknown as InventoryTransactionWithRelations[],
   );
+}
+
+export async function fetchProjectInventoryReservations(
+  profile: UserProfile | null,
+  projectId: string,
+) {
+  const client = requireSupabase();
+  let query = client
+    .from("inventory_reservations")
+    .select(inventoryReservationSelect)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return [] as QuotationInventoryReservation[];
+  }
+
+  return (data ?? []) as unknown as QuotationInventoryReservation[];
 }
 
 export async function createInventoryTransaction(

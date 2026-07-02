@@ -61,7 +61,10 @@ import type {
   SiteSurveyWithRelations,
   SurveyCustomerSummary,
 } from "../site-surveys/types";
-import type { QuotationWithRelations } from "../quotations/types";
+import type {
+  QuotationInventoryReservation,
+  QuotationWithRelations,
+} from "../quotations/types";
 import {
   createPayment,
   fetchProjectPaymentSummary,
@@ -101,6 +104,7 @@ import type {
 } from "../documents/types";
 import {
   fetchInventoryItems,
+  fetchProjectInventoryReservations,
   fetchProjectInventoryTransactions,
   issueInventoryToProject,
 } from "../inventory/inventoryApi";
@@ -175,6 +179,9 @@ export function ProjectDetailPage() {
   const [projectMaterials, setProjectMaterials] = useState<
     InventoryTransactionWithRelations[]
   >([]);
+  const [projectReservations, setProjectReservations] = useState<
+    QuotationInventoryReservation[]
+  >([]);
   const [materialIssueForm, setMaterialIssueForm] =
     useState<MaterialIssueFormValues | null>(null);
   const [materialIssueErrors, setMaterialIssueErrors] = useState<
@@ -243,6 +250,7 @@ export function ProjectDetailPage() {
         nextInstallationVendors,
         nextInventoryItems,
         nextProjectMaterials,
+        nextProjectReservations,
         nextInvoices,
       ] = await Promise.all([
         fetchProject(profile, id),
@@ -255,6 +263,9 @@ export function ProjectDetailPage() {
         canViewInventory
           ? fetchProjectInventoryTransactions(profile, id)
           : Promise.resolve([]),
+        canViewInventory
+          ? fetchProjectInventoryReservations(profile, id)
+          : Promise.resolve([]),
         canViewInvoices ? fetchProjectInvoices(profile, id) : Promise.resolve([]),
       ]);
       setProject(nextProject);
@@ -265,6 +276,7 @@ export function ProjectDetailPage() {
       setInstallationVendors(nextInstallationVendors);
       setInventoryItems(nextInventoryItems);
       setProjectMaterials(nextProjectMaterials);
+      setProjectReservations(nextProjectReservations);
       setInvoices(nextInvoices);
       if (canCreateDocument && nextInvoices.length > 0) {
         const pdfEntries = await Promise.all(
@@ -807,6 +819,7 @@ export function ProjectDetailPage() {
           {canViewInventory ? (
             <ProjectMaterialsSection
               materials={projectMaterials}
+              reservations={projectReservations}
               canCreate={canCreateInventory}
               canCreateInvoice={canCreateInvoice}
               onAdd={openMaterialIssueForm}
@@ -1180,14 +1193,150 @@ function canInvoiceMaterial(material: InventoryTransactionWithRelations) {
   return material.transaction_type === "project_issue";
 }
 
+function ProjectReservationSummary({
+  reservations,
+}: {
+  reservations: QuotationInventoryReservation[];
+}) {
+  const summary = reservations.reduce(
+    (totals, reservation) => {
+      if (reservation.status === "active" || reservation.status === "partial") {
+        totals.reserved += Number(reservation.reserved_qty ?? 0);
+      }
+
+      if (reservation.status === "partial" || reservation.status === "shortage") {
+        totals.shortage += Number(reservation.shortage_qty ?? 0);
+      }
+
+      totals.required += Number(reservation.required_qty ?? 0);
+      return totals;
+    },
+    { required: 0, reserved: 0, shortage: 0 },
+  );
+
+  return (
+    <div className="mt-4 rounded-lg border border-stone-200 bg-stone-50 p-3">
+      <div className="grid gap-2 sm:grid-cols-3">
+        <ReservationMetric label="Required" value={formatStock(summary.required)} />
+        <ReservationMetric label="Reserved" value={formatStock(summary.reserved)} />
+        <ReservationMetric label="Shortage" value={formatStock(summary.shortage)} />
+      </div>
+      <div className="mt-3 grid gap-2">
+        {reservations.map((reservation) => (
+          <div
+            key={reservation.id}
+            className="grid gap-2 rounded-lg border border-stone-200 bg-white p-3 text-sm md:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,0.7fr))] md:items-center"
+          >
+            <div>
+              <p className="font-semibold text-slate-950">
+                {projectReservationItemLabel(reservation)}
+              </p>
+              {reservation.notes ? (
+                <p className="mt-1 text-xs text-slate-500">{reservation.notes}</p>
+              ) : null}
+            </div>
+            <ReservationLineQty label="Required" reservation={reservation} field="required_qty" />
+            <ReservationLineQty label="Reserved" reservation={reservation} field="reserved_qty" />
+            <ReservationLineQty label="Shortage" reservation={reservation} field="shortage_qty" />
+            <ProjectReservationStatusChip value={reservation.status} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReservationMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-stone-200 bg-white px-3 py-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 text-sm font-semibold text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function ReservationLineQty({
+  label,
+  reservation,
+  field,
+}: {
+  label: string;
+  reservation: QuotationInventoryReservation;
+  field: "required_qty" | "reserved_qty" | "shortage_qty";
+}) {
+  const unit = reservation.inventory_item?.unit || reservation.catalog_product?.unit;
+
+  return (
+    <div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-1 font-semibold text-slate-950">
+        {formatStock(reservation[field], unit)}
+      </p>
+    </div>
+  );
+}
+
+function ProjectReservationStatusChip({
+  value,
+}: {
+  value: QuotationInventoryReservation["status"];
+}) {
+  const classes =
+    value === "active"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : value === "partial"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : value === "shortage"
+          ? "border-rose-200 bg-rose-50 text-rose-700"
+          : "border-slate-200 bg-slate-50 text-slate-600";
+
+  return (
+    <span
+      className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${classes}`}
+    >
+      {labelize(value)}
+    </span>
+  );
+}
+
+function projectReservationItemLabel(reservation: QuotationInventoryReservation) {
+  const inventoryLabel = [
+    reservation.inventory_item?.item_code,
+    reservation.inventory_item?.item_name,
+    reservation.inventory_item?.brand,
+    reservation.inventory_item?.model,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+
+  if (inventoryLabel) {
+    return inventoryLabel;
+  }
+
+  return [
+    reservation.catalog_product?.product_code,
+    reservation.catalog_product?.product_name,
+    reservation.catalog_product?.brand,
+    reservation.catalog_product?.model_number,
+  ]
+    .filter(Boolean)
+    .join(" / ") || "Reservation item";
+}
+
 function ProjectMaterialsSection({
   materials,
+  reservations,
   canCreate,
   canCreateInvoice,
   onAdd,
   onCreateInvoice,
 }: {
   materials: InventoryTransactionWithRelations[];
+  reservations: QuotationInventoryReservation[];
   canCreate: boolean;
   canCreateInvoice: boolean;
   onAdd: () => void;
@@ -1211,6 +1360,9 @@ function ProjectMaterialsSection({
         </h2>
         {canCreate ? <Button onClick={onAdd}>Add Material Issue</Button> : null}
       </div>
+      {reservations.length > 0 ? (
+        <ProjectReservationSummary reservations={reservations} />
+      ) : null}
       {issuedMaterials.length === 0 ? (
         <EmptyState
           title="No materials issued"
