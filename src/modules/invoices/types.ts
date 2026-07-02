@@ -53,6 +53,12 @@ export type InvoiceItem = {
   sort_order: number | null;
   created_at: string | null;
   updated_at: string | null;
+  inventory_item?: Pick<InventoryItem, "id" | "item_code"> & {
+    catalog_product?: Pick<
+      NonNullable<InventoryItem["catalog_product"]>,
+      "id" | "hsn_code"
+    > | null;
+  } | null;
 };
 
 export type InvoiceInventoryItemOption = Pick<
@@ -76,6 +82,7 @@ export type InvoiceInventoryItemOption = Pick<
     | "model_number"
     | "specifications"
     | "unit"
+    | "hsn_code"
     | "gst_percent"
     | "status"
   > | null;

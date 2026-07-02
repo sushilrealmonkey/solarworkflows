@@ -74,7 +74,14 @@ export type Lead = {
 export type LeadActionState = {
   hasSiteSurvey: boolean;
   hasQuotation: boolean;
+  quotations?: LeadQuotationSummary[];
   projectId?: string | null;
+};
+
+export type LeadQuotationSummary = {
+  id: string;
+  quotation_code: string | null;
+  status: string | null;
 };
 
 export type LeadFollowup = {

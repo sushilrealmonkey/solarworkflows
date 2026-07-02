@@ -5,6 +5,7 @@ import type {
   SiteSurvey,
   SiteSurveyFile,
   SiteSurveyFormValues,
+  SiteSurveyQuotationSummary,
   SiteSurveyStatus,
   SiteSurveyWithRelations,
   SurveyCustomerSummary,
@@ -130,10 +131,11 @@ export async function fetchSiteSurveys(profile: UserProfile | null) {
     throw new Error(error.message);
   }
 
-  const surveys = await attachSurveyProjectIds(
+  const surveysWithQuotations = await attachSurveyQuotationSummaries(
     profile,
     (data ?? []) as SiteSurveyWithRelations[],
   );
+  const surveys = await attachSurveyProjectIds(profile, surveysWithQuotations);
   return addSurveyFileUrls(surveys);
 }
 
@@ -151,10 +153,11 @@ export async function fetchSiteSurvey(profile: UserProfile | null, id: string) {
     throw new Error(error.message);
   }
 
-  const surveys = await attachSurveyProjectIds(
+  const surveysWithQuotations = await attachSurveyQuotationSummaries(
     profile,
     data ? ([data] as SiteSurveyWithRelations[]) : [],
   );
+  const surveys = await attachSurveyProjectIds(profile, surveysWithQuotations);
   const [survey] = await addSurveyFileUrls(surveys);
   return survey ?? null;
 }
@@ -438,6 +441,102 @@ async function attachSurveyProjectIds(
   return surveys.map((survey) => ({
     ...survey,
     project_id: projectIdsBySurvey.get(survey.id) ?? null,
+  }));
+}
+
+type SurveyQuotationLookupRow = SiteSurveyQuotationSummary & {
+  site_survey_id: string | null;
+  lead_id: string | null;
+};
+
+async function attachSurveyQuotationSummaries(
+  profile: UserProfile | null,
+  surveys: SiteSurveyWithRelations[],
+) {
+  if (surveys.length === 0) {
+    return surveys;
+  }
+
+  const client = requireSupabase();
+  const surveyIds = surveys.map((survey) => survey.id);
+  const leadIds = [
+    ...new Set(
+      surveys
+        .map((survey) => survey.lead_id)
+        .filter((leadId): leadId is string => Boolean(leadId)),
+    ),
+  ];
+  const filters = [`site_survey_id.in.(${surveyIds.join(",")})`];
+
+  if (leadIds.length > 0) {
+    filters.push(`lead_id.in.(${leadIds.join(",")})`);
+  }
+
+  let query = client
+    .from("quotations")
+    .select("id, quotation_code, status, site_survey_id, lead_id")
+    .or(filters.join(","));
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const quotations = (data ?? []) as SurveyQuotationLookupRow[];
+  const quotationsBySurvey = new Map<string, Map<string, SiteSurveyQuotationSummary>>();
+  const surveyIdsByLead = new Map<string, string[]>();
+
+  surveys.forEach((survey) => {
+    const quoteMap = new Map<string, SiteSurveyQuotationSummary>();
+    (survey.quotations ?? []).forEach((quotation) => {
+      quoteMap.set(quotation.id, quotation);
+    });
+    quotationsBySurvey.set(survey.id, quoteMap);
+
+    if (survey.lead_id) {
+      const relatedSurveyIds = surveyIdsByLead.get(survey.lead_id) ?? [];
+      relatedSurveyIds.push(survey.id);
+      surveyIdsByLead.set(survey.lead_id, relatedSurveyIds);
+    }
+  });
+
+  quotations.forEach((quotation) => {
+    const relatedSurveyIds = new Set<string>();
+
+    if (quotation.site_survey_id) {
+      relatedSurveyIds.add(quotation.site_survey_id);
+    }
+
+    if (quotation.lead_id) {
+      (surveyIdsByLead.get(quotation.lead_id) ?? []).forEach((surveyId) =>
+        relatedSurveyIds.add(surveyId),
+      );
+    }
+
+    relatedSurveyIds.forEach((surveyId) => {
+      const quoteMap = quotationsBySurvey.get(surveyId);
+      if (!quoteMap) {
+        return;
+      }
+
+      quoteMap.set(quotation.id, {
+        id: quotation.id,
+        quotation_code: quotation.quotation_code,
+        status: quotation.status,
+      });
+    });
+  });
+
+  return surveys.map((survey) => ({
+    ...survey,
+    quotations: Array.from(quotationsBySurvey.get(survey.id)?.values() ?? []),
   }));
 }
 

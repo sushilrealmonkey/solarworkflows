@@ -10,6 +10,7 @@ import type {
   LeadFollowupFormValues,
   LeadFollowupWithLead,
   LeadFormValues,
+  LeadQuotationSummary,
   StaffOption,
 } from "./types";
 
@@ -352,7 +353,7 @@ export async function fetchLeads(profile: UserProfile | null) {
     .in("lead_id", leadIds);
   let quotationQuery = client
     .from("quotations")
-    .select("id, lead_id, site_survey_id")
+    .select("id, quotation_code, status, lead_id, site_survey_id")
     .or(
       `lead_id.in.(${leadIds.join(",")}),site_survey_id.not.is.null`,
     );
@@ -389,20 +390,32 @@ export async function fetchLeads(profile: UserProfile | null) {
     surveyIdsByLead.set(survey.lead_id, rows);
   });
 
-  const leadIdsWithQuotation = new Set<string>();
-  const surveyIdsWithQuotation = new Set<string>();
   const quotationIdsByLead = new Map<string, string[]>();
   const quotationLeadById = new Map<string, string>();
+  const quotationSummariesByLead = new Map<string, Map<string, LeadQuotationSummary>>();
+
+  function addQuotationSummary(leadId: string, quotation: LeadQuotationSummary) {
+    const summaries =
+      quotationSummariesByLead.get(leadId) ?? new Map<string, LeadQuotationSummary>();
+    summaries.set(quotation.id, quotation);
+    quotationSummariesByLead.set(leadId, summaries);
+  }
+
   (quotationRows ?? []).forEach((quotation) => {
+    const quotationSummary = {
+      id: quotation.id,
+      quotation_code: quotation.quotation_code,
+      status: quotation.status,
+    };
+
     if (quotation.lead_id) {
-      leadIdsWithQuotation.add(quotation.lead_id);
       const rows = quotationIdsByLead.get(quotation.lead_id) ?? [];
       rows.push(quotation.id);
       quotationIdsByLead.set(quotation.lead_id, rows);
       quotationLeadById.set(quotation.id, quotation.lead_id);
+      addQuotationSummary(quotation.lead_id, quotationSummary);
     }
     if (quotation.site_survey_id) {
-      surveyIdsWithQuotation.add(quotation.site_survey_id);
       const surveyLeadId = [...surveyIdsByLead.entries()].find(([, surveyIds]) =>
         surveyIds.includes(quotation.site_survey_id ?? ""),
       )?.[0];
@@ -411,6 +424,7 @@ export async function fetchLeads(profile: UserProfile | null) {
         rows.push(quotation.id);
         quotationIdsByLead.set(surveyLeadId, rows);
         quotationLeadById.set(quotation.id, surveyLeadId);
+        addQuotationSummary(surveyLeadId, quotationSummary);
       }
     }
   });
@@ -463,13 +477,15 @@ export async function fetchLeads(profile: UserProfile | null) {
 
   return leads.map((lead) => {
     const surveyIds = surveyIdsByLead.get(lead.id) ?? [];
+    const quotationSummaries = Array.from(
+      quotationSummariesByLead.get(lead.id)?.values() ?? [],
+    );
     return {
       ...lead,
       action_state: {
         hasSiteSurvey: surveyIds.length > 0,
-        hasQuotation:
-          leadIdsWithQuotation.has(lead.id) ||
-          surveyIds.some((surveyId) => surveyIdsWithQuotation.has(surveyId)),
+        hasQuotation: quotationSummaries.length > 0,
+        quotations: quotationSummaries,
         projectId: projectIdsByLead.get(lead.id) ?? null,
       },
     };
@@ -533,95 +549,51 @@ export async function fetchLeadActionState(
     return {
       hasSiteSurvey: surveyIds.length > 0,
       hasQuotation: false,
+      quotations: [],
     };
   }
 
-  let directQuotationQuery = client
+  const quotationFilters = [`lead_id.eq.${leadId}`];
+
+  if (includeQuotationBySurvey && surveyIds.length > 0) {
+    quotationFilters.push(`site_survey_id.in.(${surveyIds.join(",")})`);
+  }
+
+  let quotationQuery = client
     .from("quotations")
-    .select("id")
-    .eq("lead_id", leadId)
-    .limit(1);
+    .select("id, quotation_code, status")
+    .or(quotationFilters.join(","));
 
   if (!profile?.is_super_admin) {
-    directQuotationQuery = directQuotationQuery.eq(
+    quotationQuery = quotationQuery.eq(
       "organization_id",
       requireOrganization(profile),
     );
   } else if (profile.organization_id) {
-    directQuotationQuery = directQuotationQuery.eq(
+    quotationQuery = quotationQuery.eq(
       "organization_id",
       profile.organization_id,
     );
   }
 
-  const { data: directQuotationRows, error: directQuotationError } =
-    await directQuotationQuery;
+  const { data: quotationRows, error: quotationError } = await quotationQuery;
 
-  if (directQuotationError) {
-    throw new Error(directQuotationError.message);
+  if (quotationError) {
+    throw new Error(quotationError.message);
   }
 
-  const directQuotationIds = (directQuotationRows ?? []).map(
-    (quotation) => quotation.id,
-  );
-
-  if (directQuotationIds.length > 0 || surveyIds.length === 0) {
-    return {
-      hasSiteSurvey: surveyIds.length > 0,
-      hasQuotation: directQuotationIds.length > 0,
-      projectId: await fetchProjectIdForLeadState(
-        profile,
-        leadId,
-        surveyIds,
-        directQuotationIds,
-      ),
-    };
-  }
-
-  if (!includeQuotationBySurvey) {
-    return {
-      hasSiteSurvey: surveyIds.length > 0,
-      hasQuotation: false,
-    };
-  }
-
-  let surveyQuotationQuery = client
-    .from("quotations")
-    .select("id")
-    .in("site_survey_id", surveyIds)
-    .limit(1);
-
-  if (!profile?.is_super_admin) {
-    surveyQuotationQuery = surveyQuotationQuery.eq(
-      "organization_id",
-      requireOrganization(profile),
-    );
-  } else if (profile.organization_id) {
-    surveyQuotationQuery = surveyQuotationQuery.eq(
-      "organization_id",
-      profile.organization_id,
-    );
-  }
-
-  const { data: surveyQuotationRows, error: surveyQuotationError } =
-    await surveyQuotationQuery;
-
-  if (surveyQuotationError) {
-    throw new Error(surveyQuotationError.message);
-  }
-
-  const surveyQuotationIds = (surveyQuotationRows ?? []).map(
-    (quotation) => quotation.id,
-  );
+  const quotations = (quotationRows ?? []) as LeadQuotationSummary[];
+  const quotationIds = quotations.map((quotation) => quotation.id);
 
   return {
     hasSiteSurvey: surveyIds.length > 0,
-    hasQuotation: surveyQuotationIds.length > 0,
+    hasQuotation: quotations.length > 0,
+    quotations,
     projectId: await fetchProjectIdForLeadState(
       profile,
       leadId,
       surveyIds,
-      surveyQuotationIds,
+      quotationIds,
     ),
   };
 }

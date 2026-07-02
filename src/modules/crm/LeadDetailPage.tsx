@@ -24,6 +24,7 @@ import {
 import type { Lead, LeadActionState, LeadFormValues, StaffOption } from "./types";
 import {
   AccessDenied,
+  Badge,
   Button,
   ConfirmDialog,
   DetailItem,
@@ -37,6 +38,11 @@ import {
 } from "./CrmComponents";
 import { LeadFormModal } from "./LeadsPage";
 import { LeadFollowupsPanel } from "./LeadFollowupsPanel";
+import {
+  quotationWorkflowPillLabel,
+  quotationWorkflowState,
+  type QuotationWorkflowState,
+} from "../shared/quotationWorkflow";
 
 export function LeadDetailPage() {
   const { id } = useParams();
@@ -47,6 +53,7 @@ export function LeadDetailPage() {
   const [leadActionState, setLeadActionState] = useState<LeadActionState>({
     hasSiteSurvey: false,
     hasQuotation: false,
+    quotations: [],
   });
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +87,7 @@ export function LeadDetailPage() {
     canViewQuotation && hasPermission(profile, permissions, "quotations", "create");
   const primaryActionClass =
     "inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700";
+  const quotationState = quotationWorkflowState(leadActionState.quotations);
 
   async function loadLead() {
     if (!canView || !id) {
@@ -229,9 +237,9 @@ export function LeadDetailPage() {
             <div className="space-y-3">
               <NextStepLabel />
               <div className="flex flex-wrap gap-2">
-                {leadActionState.hasSiteSurvey &&
-                leadActionState.hasQuotation &&
-                canViewProjects ? (
+                {quotationState !== "none" && quotationState !== "accepted" ? (
+                  <LeadQuotationWorkflowPill state={quotationState} />
+                ) : quotationState === "accepted" && canViewProjects ? (
                   <Link
                     className={primaryActionClass}
                     to={
@@ -242,31 +250,30 @@ export function LeadDetailPage() {
                   >
                     Go to Project
                   </Link>
+                ) : quotationState === "accepted" ? (
+                  <PlaceholderAction>Go to Project</PlaceholderAction>
                 ) : null}
-                {!leadActionState.hasSiteSurvey && canCreateSurvey ? (
-                  <Link
-                    className={primaryActionClass}
-                    to={`/site-surveys?new=1&leadId=${lead.id}`}
-                  >
-                    Create Site Survey
-                  </Link>
-                ) : !leadActionState.hasSiteSurvey ? (
-                  <PlaceholderAction>Create Site Survey</PlaceholderAction>
+                {quotationState === "none" ? (
+                  !leadActionState.hasSiteSurvey && canCreateSurvey ? (
+                    <Link
+                      className={primaryActionClass}
+                      to={`/site-surveys?new=1&leadId=${lead.id}`}
+                    >
+                      Create Site Survey
+                    </Link>
+                  ) : !leadActionState.hasSiteSurvey ? (
+                    <PlaceholderAction>Create Site Survey</PlaceholderAction>
+                  ) : null
                 ) : null}
-                {!leadActionState.hasQuotation && canCreateQuotation ? (
+                {quotationState === "none" && canCreateQuotation ? (
                   <Link
                     className={primaryActionClass}
                     to={`/quotations?new=1&leadId=${lead.id}`}
                   >
                     Create Quotation
                   </Link>
-                ) : !leadActionState.hasQuotation ? (
+                ) : quotationState === "none" ? (
                   <PlaceholderAction>Create Quotation</PlaceholderAction>
-                ) : null}
-                {leadActionState.hasSiteSurvey &&
-                leadActionState.hasQuotation &&
-                !canViewProjects ? (
-                  <PlaceholderAction>Go to Project</PlaceholderAction>
                 ) : null}
               </div>
             </div>
@@ -375,4 +382,13 @@ export function LeadDetailPage() {
       ) : null}
     </div>
   );
+}
+
+function LeadQuotationWorkflowPill({
+  state,
+}: {
+  state: Exclude<QuotationWorkflowState, "none">;
+}) {
+  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }

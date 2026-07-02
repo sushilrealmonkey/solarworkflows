@@ -35,6 +35,11 @@ import {
   recordPaletteTableRowClassName,
 } from "../shared/recordOriginStyles";
 import {
+  quotationWorkflowPillLabel,
+  quotationWorkflowState,
+  type QuotationWorkflowState,
+} from "../shared/quotationWorkflow";
+import {
   createSiteSurvey,
   deleteSiteSurvey,
   fetchSiteSurveys,
@@ -815,6 +820,10 @@ function surveyHasQuotation(survey: SiteSurveyWithRelations) {
   return Boolean(survey.quotations && survey.quotations.length > 0);
 }
 
+export function surveyQuotationWorkflowState(survey: SiteSurveyWithRelations) {
+  return quotationWorkflowState(survey.quotations);
+}
+
 function SurveyNextStepActions({
   survey,
   canCreateQuotation,
@@ -827,6 +836,7 @@ function SurveyNextStepActions({
   const className =
     "inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700";
   const projectPath = survey.project_id ? `/projects/${survey.project_id}` : "/projects";
+  const workflowState = surveyQuotationWorkflowState(survey);
 
   return (
     <div
@@ -834,7 +844,9 @@ function SurveyNextStepActions({
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      {surveyHasQuotation(survey) && canViewProjects ? (
+      {workflowState !== "none" && workflowState !== "accepted" ? (
+        <SiteSurveyQuotationApprovalPill state={workflowState} />
+      ) : workflowState === "accepted" && canViewProjects ? (
         <Link className={className} to={projectPath}>
           Go to Project
         </Link>
@@ -852,6 +864,15 @@ function SurveyNextStepActions({
       )}
     </div>
   );
+}
+
+export function SiteSurveyQuotationApprovalPill({
+  state = "waiting",
+}: {
+  state?: Exclude<QuotationWorkflowState, "none">;
+}) {
+  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }
 
 export function SurveyStatusBadge({

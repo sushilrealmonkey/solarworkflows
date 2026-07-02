@@ -42,8 +42,10 @@ import {
   surveyToForm,
 } from "./surveyUtils";
 import {
+  SiteSurveyQuotationApprovalPill,
   SiteSurveyFormModal,
   SurveyStatusSelect,
+  surveyQuotationWorkflowState,
 } from "./SiteSurveysPage";
 import type {
   SiteSurveyFormValues,
@@ -260,6 +262,7 @@ export function SiteSurveyDetailPage() {
   }
 
   const contact = survey ? getSurveyContact(survey) : null;
+  const workflowState = survey ? surveyQuotationWorkflowState(survey) : "none";
 
   return (
     <div className="space-y-6">
@@ -319,7 +322,9 @@ export function SiteSurveyDetailPage() {
                     onChange={setStatusTarget}
                   />
                 ) : null}
-                {surveyHasQuotation(survey) && canViewProjects ? (
+                {workflowState !== "none" && workflowState !== "accepted" ? (
+                  <SiteSurveyQuotationApprovalPill state={workflowState} />
+                ) : workflowState === "accepted" && canViewProjects ? (
                   <Link
                     className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
                     to={survey.project_id ? `/projects/${survey.project_id}` : "/projects"}

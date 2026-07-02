@@ -46,7 +46,10 @@ import {
   quotationValidUntilFromDateInput,
   quotationSnapshotFormValues,
 } from "./quotationUtils";
-import { QuotationStatusBadge } from "./QuotationsPage";
+import {
+  QuotationWorkflowPill,
+  QuotationStatusBadge,
+} from "./QuotationsPage";
 import type {
   QuotationFormValues,
   QuotationInventoryReservation,
@@ -64,6 +67,7 @@ import {
   fetchQuotationPdfPreviewUrl,
   generateAndStoreQuotationPdf,
 } from "./quotationPdfWorkflow";
+import { quotationWorkflowState } from "../shared/quotationWorkflow";
 
 export function QuotationDetailPage() {
   const { id } = useParams();
@@ -393,6 +397,9 @@ export function QuotationDetailPage() {
   const relatedSiteSurveyId =
     quotation?.related_site_survey_id ?? quotation?.site_survey_id ?? null;
   const openProjectId = existingProject?.id ?? quotation?.project_id ?? null;
+  const workflowState = quotationWorkflowState(
+    quotation && relatedSiteSurveyId ? [{ status: quotation.status }] : [],
+  );
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/quotations">
@@ -460,14 +467,9 @@ export function QuotationDetailPage() {
                       {preparingPdf ? "Preparing Quotation" : "Download Quotation"}
                     </PlaceholderAction>
                   )}
-                  {canUpdate ? (
-                    <QuotationStatusSelect
-                      disabled={updatingStatus}
-                      value={quotation.status ?? "draft"}
-                      onChange={setStatusTarget}
-                    />
-                  ) : null}
-                  {openProjectId && canViewProjects ? (
+                  {workflowState !== "none" && workflowState !== "accepted" ? (
+                    <QuotationWorkflowPill state={workflowState} />
+                  ) : openProjectId && canViewProjects && quotation.status === "accepted" ? (
                     <Link
                       className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
                       to={`/projects/${openProjectId}`}
@@ -487,6 +489,18 @@ export function QuotationDetailPage() {
                     <PlaceholderAction>Create Site Survey</PlaceholderAction>
                   ) : null}
                 </div>
+                {canUpdate ? (
+                  <div className="flex flex-col gap-2 lg:items-end">
+                    <p className="text-sm font-medium text-slate-600">
+                      Update status of quotation with the latest updates.
+                    </p>
+                    <QuotationStatusSelect
+                      disabled={updatingStatus}
+                      value={quotation.status ?? "draft"}
+                      onChange={setStatusTarget}
+                    />
+                  </div>
+                ) : null}
               </div>
             </header>
           </div>

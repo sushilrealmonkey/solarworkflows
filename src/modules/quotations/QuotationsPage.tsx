@@ -24,6 +24,11 @@ import {
   recordPaletteCardClassName,
   recordPaletteTableRowClassName,
 } from "../shared/recordOriginStyles";
+import {
+  quotationWorkflowPillLabel,
+  quotationWorkflowState,
+  type QuotationWorkflowState,
+} from "../shared/quotationWorkflow";
 import { deleteQuotation, fetchQuotations } from "./quotationApi";
 import {
   formatKw,
@@ -474,6 +479,9 @@ function QuotationNextStepActions({
 }) {
   const relatedSiteSurveyId =
     quotation.related_site_survey_id ?? quotation.site_survey_id;
+  const workflowState = quotationWorkflowState(
+    relatedSiteSurveyId ? [{ status: quotation.status }] : [],
+  );
   const projectPath = quotation.project_id
     ? `/projects/${quotation.project_id}`
     : "/projects";
@@ -486,7 +494,9 @@ function QuotationNextStepActions({
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      {relatedSiteSurveyId && canViewProjects ? (
+      {workflowState !== "none" && workflowState !== "accepted" ? (
+        <QuotationWorkflowPill state={workflowState} />
+      ) : relatedSiteSurveyId && quotation.status === "accepted" && canViewProjects ? (
         <Link className={className} to={projectPath}>
           Go to Project
         </Link>
@@ -504,6 +514,19 @@ function QuotationNextStepActions({
       )}
     </div>
   );
+}
+
+export function WaitingForQuotationApprovalPill() {
+  return <QuotationWorkflowPill state="waiting" />;
+}
+
+export function QuotationWorkflowPill({
+  state,
+}: {
+  state: Exclude<QuotationWorkflowState, "none">;
+}) {
+  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }
 
 export function QuotationStatusBadge({

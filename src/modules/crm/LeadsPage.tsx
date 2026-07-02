@@ -37,6 +37,7 @@ import type {
 } from "./types";
 import {
   AccessDenied,
+  Badge,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -55,6 +56,11 @@ import {
   recordPaletteCardClassName,
   recordPaletteTableRowClassName,
 } from "../shared/recordOriginStyles";
+import {
+  quotationWorkflowPillLabel,
+  quotationWorkflowState,
+  type QuotationWorkflowState,
+} from "../shared/quotationWorkflow";
 
 type LeadFilters = {
   search: string;
@@ -595,13 +601,14 @@ function LeadNextStepActions({
 }) {
   const hasSiteSurvey = Boolean(lead.action_state?.hasSiteSurvey);
   const hasQuotation = Boolean(lead.action_state?.hasQuotation);
+  const workflowState = quotationWorkflowState(lead.action_state?.quotations);
   const projectPath = lead.action_state?.projectId
     ? `/projects/${lead.action_state.projectId}`
     : "/projects";
   const className =
     "inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700";
   const buttons = [
-    hasSiteSurvey && hasQuotation && canViewProjects ? (
+    workflowState === "accepted" && canViewProjects ? (
       <Link
         className={className}
         key="project"
@@ -639,7 +646,9 @@ function LeadNextStepActions({
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      {buttons.length > 0 ? (
+      {workflowState !== "none" && workflowState !== "accepted" ? (
+        <LeadQuotationWorkflowPill state={workflowState} />
+      ) : buttons.length > 0 ? (
         <div className="flex flex-col gap-2">{buttons}</div>
       ) : (
         <span className="text-right text-sm font-medium text-slate-500">
@@ -650,4 +659,13 @@ function LeadNextStepActions({
       )}
     </div>
   );
+}
+
+function LeadQuotationWorkflowPill({
+  state,
+}: {
+  state: Exclude<QuotationWorkflowState, "none">;
+}) {
+  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }

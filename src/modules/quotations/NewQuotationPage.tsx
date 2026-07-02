@@ -6,6 +6,7 @@ import { useToast } from "../../components/ui/ToastProvider";
 import { formatDisplayDate } from "../../utils/dateFormat";
 import {
   AccessDenied,
+  AlertDialog,
   Button,
   EmptyState,
   LoadingSkeleton,
@@ -132,6 +133,7 @@ export function NewQuotationPage() {
   const [creatingPanelWattage, setCreatingPanelWattage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showBomRequiredAlert, setShowBomRequiredAlert] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const isEditing = Boolean(editQuotationId);
@@ -572,6 +574,12 @@ export function NewQuotationPage() {
 
     if (Object.values(nextErrors).some(Boolean)) {
       setActiveTab("Project");
+      return;
+    }
+
+    if (savedBomItems.length === 0) {
+      setActiveTab("BOM");
+      setShowBomRequiredAlert(true);
       return;
     }
 
@@ -1268,6 +1276,14 @@ export function NewQuotationPage() {
             </Button>
           </div>
         </Section>
+      ) : null}
+
+      {showBomRequiredAlert ? (
+        <AlertDialog
+          title="BOM details required"
+          description="Please fill BOM details first before saving the quotation."
+          onClose={() => setShowBomRequiredAlert(false)}
+        />
       ) : null}
     </form>
   );

@@ -62,6 +62,12 @@ export type ProformaInvoiceItem = {
   sort_order: number | null;
   created_at: string | null;
   updated_at: string | null;
+  inventory_item?: Pick<InvoiceInventoryItemOption, "id" | "item_code"> & {
+    catalog_product?: Pick<
+      NonNullable<InvoiceInventoryItemOption["catalog_product"]>,
+      "id" | "hsn_code"
+    > | null;
+  } | null;
 };
 
 export type ProformaInvoiceWithRelations = ProformaInvoice & {
