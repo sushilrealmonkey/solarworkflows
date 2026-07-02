@@ -119,6 +119,7 @@ export function InvoiceFormModal({
   const activeCreationMode = creationMode ?? values.creation_mode;
   const isProjectMode = activeCreationMode === "project";
   const hideItemGstPercent = isCreateFlow && isProjectMode;
+  const hasDuplicateProjectInvoice = Boolean(duplicateProjectInvoice);
   const selectedProject = options.projects.find(
     (project) => project.id === values.project_id,
   );
@@ -177,7 +178,10 @@ export function InvoiceFormModal({
       title={title}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Save Invoice"
+      submitLabel={
+        hasDuplicateProjectInvoice ? "Invoice Already Exists" : "Save Invoice"
+      }
+      submitDisabled={hasDuplicateProjectInvoice}
       submitting={saving}
     >
       {isCreateFlow ? (

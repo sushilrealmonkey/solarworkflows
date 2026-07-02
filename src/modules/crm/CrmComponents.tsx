@@ -193,6 +193,7 @@ export function Modal({
   onSubmit,
   submitLabel,
   submitting,
+  submitDisabled = false,
   noValidate = false,
   maxWidthClass = "sm:max-w-3xl",
 }: {
@@ -202,6 +203,7 @@ export function Modal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitLabel: string;
   submitting: boolean;
+  submitDisabled?: boolean;
   noValidate?: boolean;
   maxWidthClass?: string;
 }) {
@@ -230,7 +232,7 @@ export function Modal({
           <Button onClick={onClose} variant="secondary" disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit" disabled={submitting}>
+          <Button type="submit" disabled={submitting || submitDisabled}>
             {submitting ? "Saving..." : submitLabel}
           </Button>
         </div>

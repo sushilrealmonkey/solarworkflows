@@ -38,7 +38,7 @@ const purchaseOrderSelect = `
   creator:users_profile!purchase_orders_created_by_fkey(id, full_name, email, phone),
   items:purchase_order_items(
     *,
-    item:inventory_items(id, item_code, item_name, unit, brand, model)
+    item:inventory_items(id, item_code, item_name, unit, brand, model, catalog_product:products(id, hsn_code))
   )
 `;
 

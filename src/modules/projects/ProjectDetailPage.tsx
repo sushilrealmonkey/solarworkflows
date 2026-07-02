@@ -445,11 +445,33 @@ export function ProjectDetailPage() {
       return;
     }
 
+    const existingInvoice = invoices.find(isActiveInvoice);
+    if (existingInvoice) {
+      showToast(
+        `Invoice already exists for this project: ${
+          existingInvoice.invoice_code ?? "open invoice"
+        }.`,
+        "error",
+      );
+      return;
+    }
+
     navigate(`/invoices?projectId=${project.id}`);
   }
 
   function openMaterialInvoiceForm(material: InventoryTransactionWithRelations) {
     if (!project) {
+      return;
+    }
+
+    const existingInvoice = invoices.find(isActiveInvoice);
+    if (existingInvoice) {
+      showToast(
+        `Invoice already exists for this project: ${
+          existingInvoice.invoice_code ?? "open invoice"
+        }.`,
+        "error",
+      );
       return;
     }
 
@@ -821,7 +843,7 @@ export function ProjectDetailPage() {
               materials={projectMaterials}
               reservations={projectReservations}
               canCreate={canCreateInventory}
-              canCreateInvoice={canCreateInvoice}
+              canCreateInvoice={canCreateInvoice && !hasActiveProjectInvoice}
               onAdd={openMaterialIssueForm}
               onCreateInvoice={openMaterialInvoiceForm}
             />

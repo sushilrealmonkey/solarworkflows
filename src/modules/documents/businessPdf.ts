@@ -22,6 +22,7 @@ import {
   calculateDiscountedTurnkeyTotals,
   deriveQuotationMaterialSummary,
   discountedTurnkeyAmount,
+  formatIndianCurrencyInWords,
   hasTurnkeyGstAmount,
   quotationValidUntilFromDateInput,
 } from "../quotations/quotationUtils";
@@ -46,6 +47,7 @@ type PdfLineItem = {
   unitPrice: number | null;
   gstPercent: number | null;
   lineTotal: number | null;
+  hsnSac?: string | null;
 };
 
 type Totals = {
@@ -106,7 +108,6 @@ const contentWidth = pageWidth - margin * 2;
 const inrSymbol = "\u20b9";
 const ptToMm = 0.3527777778;
 const technicalCoverLogoBox = { width: 42, height: 28 };
-const invoiceLogoBox = { width: 38, height: 26 };
 const standardLogoBox = { width: 24, height: 24 };
 let jsPdfModulePromise: Promise<typeof import("jspdf")> | null = null;
 
@@ -241,36 +242,20 @@ export async function buildInvoicePdf(
   settings: OrganizationSettings,
 ) {
   const details: Array<[string, string]> = [
-    [
-      "Invoice Type",
-      invoice.project_id
-        ? "Project invoice"
-        : invoice.b2b_sale_id
-          ? "B2B sale invoice"
-          : "Manual item invoice",
-    ],
     ["Invoice Date", formatDate(invoice.invoice_date, settings.date_format)],
     ["Due Date", formatDate(invoice.due_date, settings.date_format)],
-    ["Status", labelize(invoice.status)],
   ];
 
-  if (invoice.project_id) {
+  if (invoice.b2b_sale_id) {
     details.splice(
-      3,
-      0,
-      ["Project", invoice.project?.project_code ?? invoice.project?.project_name ?? "-"],
-      ["Quotation", invoice.quotation?.quotation_code ?? "-"],
-    );
-  } else if (invoice.b2b_sale_id) {
-    details.splice(
-      3,
+      2,
       0,
       ["B2B Sale", invoice.b2b_sale?.sale_code ?? "-"],
     );
   }
 
   if (invoice.proforma_invoice_id) {
-    details.splice(3, 0, [
+    details.splice(2, 0, [
       "Proforma Invoice",
       invoice.proforma_invoice?.proforma_code ?? "-",
     ]);
@@ -278,7 +263,7 @@ export async function buildInvoicePdf(
 
   return buildBusinessPdf({
     kind: "invoice",
-    title: "Invoice",
+    title: "Tax Invoice",
     code: invoice.invoice_code ?? "Invoice",
     documentDate: invoice.invoice_date,
     dueDate: invoice.due_date,
@@ -309,6 +294,7 @@ export async function buildInvoicePdf(
       unitPrice: item.unit_price,
       gstPercent: item.gst_percent,
       lineTotal: item.line_total,
+      hsnSac: item.inventory_item?.catalog_product?.hsn_code ?? null,
     })),
     totals: {
       baseAmount: invoice.base_amount,
@@ -345,22 +331,13 @@ export async function buildProformaInvoicePdf(
     proformaInvoice.customer?.gst_number ||
     "";
   const details: Array<[string, string]> = [
-    [
-      "Proforma Type",
-      proformaInvoice.project_id
-        ? "Project proforma"
-        : proformaInvoice.b2b_sale_id
-          ? "B2B sale proforma"
-          : "Manual proforma",
-    ],
     ["PI Date", formatDate(proformaInvoice.proforma_date, settings.date_format)],
     ["Due Date", formatDate(proformaInvoice.due_date, settings.date_format)],
-    ["Status", labelize(proformaInvoice.status)],
   ];
 
   if (proformaInvoice.project_id) {
     details.splice(
-      3,
+      2,
       0,
       [
         "Project",
@@ -369,12 +346,6 @@ export async function buildProformaInvoicePdf(
           "-",
       ],
       ["Quotation", proformaInvoice.quotation?.quotation_code ?? "-"],
-    );
-  } else if (proformaInvoice.b2b_sale_id) {
-    details.splice(
-      3,
-      0,
-      ["B2B Sale", proformaInvoice.b2b_sale?.sale_code ?? "-"],
     );
   }
 
@@ -412,6 +383,7 @@ export async function buildProformaInvoicePdf(
       unitPrice: item.unit_price,
       gstPercent: item.gst_percent,
       lineTotal: item.line_total,
+      hsnSac: item.inventory_item?.catalog_product?.hsn_code ?? null,
     })),
     totals: {
       baseAmount: proformaInvoice.base_amount,
@@ -463,8 +435,6 @@ export async function buildPurchaseOrderPdf(
         "Expected Delivery",
         formatDate(order.expected_delivery_date, settings.date_format),
       ],
-      ["Status", labelize(order.status)],
-      ["Created By", order.creator?.full_name ?? "-"],
     ],
     items: (order.items ?? []).map((item) => ({
       name: item.item?.item_name ?? "Inventory item",
@@ -477,6 +447,7 @@ export async function buildPurchaseOrderPdf(
       unitPrice: item.unit_price,
       gstPercent: item.gst_percent,
       lineTotal: purchaseItemBaseAmount(item),
+      hsnSac: item.item?.catalog_product?.hsn_code ?? null,
     })),
     totals: {
       baseAmount: order.subtotal,
@@ -1217,13 +1188,23 @@ async function buildBusinessPdf(input: BusinessPdfInput) {
   };
 
   let y = margin;
+
+  if (input.kind !== "quotation") {
+    const logoDataUrl = await fetchImageAsDataUrl(
+      input.settings.company_logo_url || input.organization.logoUrl,
+    );
+    drawSimpleBusinessPdf(doc, input, colors, logoDataUrl);
+
+    return doc.output("blob");
+  }
+
   drawPageChrome(doc, colors.primary);
 
   const [logoDataUrl, trustSealDataUrl] = await Promise.all([
-    fetchImageAsDataUrl(input.settings.company_logo_url),
+    fetchImageAsDataUrl(input.settings.company_logo_url || input.organization.logoUrl),
     fetchImageAsDataUrl(trustSealImageUrl),
   ]);
-  const logoBox = input.kind === "invoice" ? invoiceLogoBox : standardLogoBox;
+  const logoBox = standardLogoBox;
   drawCompanyLogo(
     doc,
     logoDataUrl,
@@ -1302,6 +1283,708 @@ async function buildBusinessPdf(input: BusinessPdfInput) {
   drawSignature(doc, input, colors, y);
 
   return doc.output("blob");
+}
+
+function drawSimpleBusinessPdf(
+  doc: PdfDoc,
+  input: BusinessPdfInput,
+  colors: Record<string, string>,
+  logoDataUrl: PdfImageData | null,
+) {
+  doc.setLineWidth(0.2);
+  doc.setDrawColor("#222222");
+  doc.setTextColor("#111827");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text(input.title, pageWidth / 2, 13, { align: "center" });
+
+  let y = 17;
+  y = drawSimpleHeader(doc, input, colors, logoDataUrl, y);
+  y = drawSimpleParty(doc, input, y);
+  y = drawSimpleItemsTable(doc, input, y);
+  y = drawSimpleAmountWords(doc, input, input.totals.totalAmount, y);
+  y = drawSimpleTaxSummary(doc, input, y);
+  y = drawSimpleFooter(doc, input, y);
+
+  doc.setFont("helvetica", "italic");
+  doc.setFontSize(8);
+  doc.setTextColor("#111827");
+  doc.text(
+    "This document is valid only with authorized seal and signatory.",
+    pageWidth / 2,
+    Math.min(pageHeight - 7, y + 7),
+    { align: "center" },
+  );
+}
+
+function drawSimpleHeader(
+  doc: PdfDoc,
+  input: BusinessPdfInput,
+  colors: Record<string, string>,
+  logoDataUrl: PdfImageData | null,
+  y: number,
+) {
+  const leftWidth = 88;
+  const rightX = margin + leftWidth;
+  const detailCells = simpleDocumentDetailCells(input);
+  const companyLines = simpleCompanyLines(input);
+  const detailRowCount = Math.max(1, Math.ceil(detailCells.length / 2));
+  const height = Math.max(28, detailRowCount * 8.2, 11 + companyLines.length * 2.9);
+  drawSimpleRect(doc, margin, y, contentWidth, height);
+  doc.line(rightX, y, rightX, y + height);
+
+  drawCompanyLogo(
+    doc,
+    logoDataUrl,
+    input.organization.name,
+    colors.primary,
+    margin + 3,
+    y + 4,
+    18,
+    13,
+  );
+
+  const companyX = margin + 24;
+  const companyWidth = leftWidth - 27;
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor("#111827");
+  fitFontSize(doc, companyDisplayName(input), companyWidth, 9.4, 7);
+  doc.text(companyDisplayName(input), companyX, y + 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.7);
+  drawWrappedLines(
+    doc,
+    companyLines,
+    companyX,
+    y + 11,
+    companyWidth,
+    3,
+  );
+
+  drawSimpleDetailsGrid(doc, detailCells, rightX, y, contentWidth - leftWidth, height);
+
+  return y + height;
+}
+
+function drawSimpleDetailsGrid(
+  doc: PdfDoc,
+  rows: Array<[string, string]>,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  const cellWidth = width / 2;
+  const visibleRows = rows.slice(0, 8);
+  const rowCount = Math.max(1, Math.ceil(visibleRows.length / 2));
+  const rowHeight = height / rowCount;
+
+  doc.setDrawColor("#222222");
+  for (let index = 1; index < rowCount; index += 1) {
+    doc.line(x, y + rowHeight * index, x + width, y + rowHeight * index);
+  }
+
+  visibleRows.forEach(([label, value], index) => {
+    const column = index % 2;
+    const row = Math.floor(index / 2);
+    const isLastOddCell = column === 0 && index === visibleRows.length - 1;
+    const currentCellWidth = isLastOddCell ? width : cellWidth;
+    const cellX = x + column * cellWidth + 2;
+    const cellY = y + row * rowHeight + 2.7;
+    if (column === 0 && !isLastOddCell && index + 1 < visibleRows.length) {
+      doc.line(x + cellWidth, y + row * rowHeight, x + cellWidth, y + (row + 1) * rowHeight);
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.7);
+    doc.setTextColor("#374151");
+    doc.text(label, cellX, cellY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.4);
+    doc.setTextColor("#111827");
+    const lines = doc.splitTextToSize(value || "-", currentCellWidth - 5) as string[];
+    doc.text(lines.slice(0, 2), cellX, cellY + 3.8, { lineHeightFactor: 1.02 });
+  });
+}
+
+function drawSimpleParty(doc: PdfDoc, input: BusinessPdfInput, y: number) {
+  const lines = [
+    input.customer.code ? `Code: ${input.customer.code}` : "",
+    input.customer.phone ? `Phone: ${input.customer.phone}` : "",
+    input.customer.email ? `Email: ${input.customer.email}` : "",
+    input.customer.address ?? "",
+    ...(input.customer.extraLines ?? []),
+  ].filter(isPresentText);
+  const lineCount = lines.reduce((count, line) => {
+    const wrapped = doc.splitTextToSize(line, contentWidth - 8) as string[];
+    return count + Math.max(wrapped.length, 1);
+  }, 0);
+  const height = Math.max(24, 12 + lineCount * 3.2);
+
+  drawSimpleRect(doc, margin, y, contentWidth, height);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.9);
+  doc.setTextColor("#374151");
+  doc.text(input.partyTitle ?? "Customer Details", margin + 3, y + 4.2);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.7);
+  doc.setTextColor("#111827");
+  doc.text(input.customer.name, margin + 3, y + 9.2);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.2);
+  drawWrappedLines(doc, lines, margin + 3, y + 13, contentWidth - 6, 3.2);
+
+  return y + height;
+}
+
+function drawSimpleItemsTable(doc: PdfDoc, input: BusinessPdfInput, y: number) {
+  const items = input.items.filter(hasPrintableLineItem);
+  if (items.length === 0) {
+    return y;
+  }
+
+  const widths = [11, 69, 19, 23, 24, 12, 24];
+  y = drawSimpleItemsHeader(doc, y, widths);
+
+  items.forEach((item, index) => {
+    const descriptionLines = doc.splitTextToSize(
+      [displayValue(item.name), displayValue(item.description)]
+        .filter(isPresentText)
+        .join("\n"),
+      widths[1] - 4,
+    ) as string[];
+    const rowHeight = Math.max(13, descriptionLines.length * 3.2 + 5);
+    if (y + rowHeight > pageHeight - 44) {
+      doc.addPage();
+      y = drawSimpleItemsHeader(doc, margin, widths);
+    }
+
+    let x = margin;
+    drawSimpleRect(doc, x, y, widths[0], rowHeight);
+    doc.text(String(index + 1), x + widths[0] / 2, y + 5.4, { align: "center" });
+    x += widths[0];
+
+    drawSimpleRect(doc, x, y, widths[1], rowHeight);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.7);
+    doc.text(descriptionLines.slice(0, 1), x + 2, y + 5.4);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text(descriptionLines.slice(1), x + 2, y + 8.8, { lineHeightFactor: 1.05 });
+    x += widths[1];
+
+    drawSimpleCell(doc, item.hsnSac ?? "", x, y, widths[2], rowHeight, "center");
+    x += widths[2];
+    drawSimpleCell(doc, simpleQuantity(item), x, y, widths[3], rowHeight, "center", true);
+    x += widths[3];
+    drawSimpleCell(
+      doc,
+      formatOptionalAmount(item.unitPrice, input.settings.currency),
+      x,
+      y,
+      widths[4],
+      rowHeight,
+      "right",
+    );
+    x += widths[4];
+    drawSimpleCell(doc, formatUnit(item.unit), x, y, widths[5], rowHeight, "center");
+    x += widths[5];
+    drawSimpleCell(
+      doc,
+      formatOptionalAmount(item.lineTotal, input.settings.currency),
+      x,
+      y,
+      widths[6],
+      rowHeight,
+      "right",
+      true,
+    );
+    y += rowHeight;
+  });
+
+  simpleTableTotalRows(input).forEach((row) => {
+    if (y + 6.4 > pageHeight - 36) {
+      doc.addPage();
+      y = drawSimpleItemsHeader(doc, margin, widths);
+    }
+
+    drawSimpleTableSummaryRow(doc, row.label, row.amount, input, widths, y);
+    y += 6.4;
+  });
+
+  const totalHeight = 7.4;
+  if (y + totalHeight > pageHeight - 36) {
+    doc.addPage();
+    y = margin;
+  }
+  drawSimpleRect(doc, margin, y, widths.slice(0, 3).reduce(sumNumbers, 0), totalHeight);
+  drawSimpleCell(
+    doc,
+    "Total",
+    margin + widths.slice(0, 3).reduce(sumNumbers, 0),
+    y,
+    widths[3],
+    totalHeight,
+    "center",
+    true,
+  );
+  drawSimpleRect(
+    doc,
+    margin + widths.slice(0, 4).reduce(sumNumbers, 0),
+    y,
+    widths[4] + widths[5],
+    totalHeight,
+  );
+  drawSimpleCell(
+    doc,
+    formatAmount(input.totals.totalAmount, input.settings.currency),
+    margin + widths.slice(0, 6).reduce(sumNumbers, 0),
+    y,
+    widths[6],
+    totalHeight,
+    "right",
+    true,
+  );
+
+  return y + totalHeight;
+}
+
+function drawSimpleTableSummaryRow(
+  doc: PdfDoc,
+  label: string,
+  amount: number,
+  input: BusinessPdfInput,
+  widths: number[],
+  y: number,
+) {
+  const labelWidth = widths.slice(0, 6).reduce(sumNumbers, 0);
+  drawSimpleRect(doc, margin, y, labelWidth, 6.4);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.1);
+  doc.setTextColor("#111827");
+  doc.text(label, margin + labelWidth - 2, y + 4.6, { align: "right" });
+  drawSimpleCell(
+    doc,
+    formatAmount(amount, input.settings.currency),
+    margin + labelWidth,
+    y,
+    widths[6],
+    6.4,
+    "right",
+    true,
+  );
+}
+
+function drawSimpleItemsHeader(doc: PdfDoc, y: number, widths: number[]) {
+  const headers = ["Sl\nNo.", "Description of Goods", "HSN/SAC", "Quantity", "Rate", "per", "Amount"];
+  const height = 9.4;
+  let x = margin;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor("#111827");
+  headers.forEach((header, index) => {
+    drawSimpleRect(doc, x, y, widths[index], height);
+    doc.text(header.split("\n"), x + widths[index] / 2, y + 4.2, {
+      align: "center",
+      lineHeightFactor: 0.95,
+    });
+    x += widths[index];
+  });
+
+  return y + height;
+}
+
+function drawSimpleAmountWords(
+  doc: PdfDoc,
+  input: BusinessPdfInput,
+  value: number | null | undefined,
+  y: number,
+) {
+  const height = 13.5;
+  y = ensureSimpleSpace(doc, y, height);
+  drawSimpleRect(doc, margin, y, contentWidth, height);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.setTextColor("#374151");
+  doc.text("Amount Chargeable (in words)", margin + 2, y + 4);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor("#111827");
+  const lines = doc.splitTextToSize(
+    formatSimpleAmountInWords(value, input.settings.currency),
+    contentWidth - 4,
+  ) as string[];
+  doc.text(lines.slice(0, 2), margin + 2, y + 9, { lineHeightFactor: 1.05 });
+
+  return y + height;
+}
+
+function drawSimpleTaxSummary(doc: PdfDoc, input: BusinessPdfInput, y: number) {
+  const rows = simpleGstBreakdown(input.items);
+  if (rows.length === 0) {
+    return y;
+  }
+
+  const widths = [34, 33, 17, 28, 17, 28, 25];
+  const headerHeight = 8;
+  const rowHeight = 6.4;
+  const totalHeight = headerHeight + rowHeight * (rows.length + 1);
+  y = ensureSimpleSpace(doc, y, totalHeight + 14);
+
+  const headers = [
+    "HSN/SAC",
+    "Taxable Value",
+    "Rate",
+    "Central Tax",
+    "Rate",
+    "State Tax",
+    "Total Tax Amount",
+  ];
+  let x = margin;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.6);
+  headers.forEach((header, index) => {
+    drawSimpleRect(doc, x, y, widths[index], headerHeight);
+    doc.text(header, x + widths[index] / 2, y + 5.2, { align: "center" });
+    x += widths[index];
+  });
+  y += headerHeight;
+
+  rows.forEach((row) => {
+    drawTaxRow(doc, input, row, widths, y, false);
+    y += rowHeight;
+  });
+
+  const totals = rows.reduce(
+    (next, row) => ({
+      base: next.base + row.base,
+      cgst: next.cgst + row.cgst,
+      sgst: next.sgst + row.sgst,
+      gst: next.gst + row.gst,
+    }),
+    { base: 0, cgst: 0, sgst: 0, gst: 0 },
+  );
+  drawTaxRow(
+    doc,
+    input,
+    {
+      hsnSac: "Total",
+      percent: 0,
+      base: totals.base,
+      cgst: totals.cgst,
+      sgst: totals.sgst,
+      gst: totals.gst,
+    },
+    widths,
+    y,
+    true,
+  );
+  y += rowHeight;
+
+  drawSimpleRect(doc, margin, y, contentWidth, 14);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7);
+  doc.text("Tax Amount (in words)", margin + 2, y + 4);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.7);
+  doc.text(
+    doc.splitTextToSize(
+      formatSimpleAmountInWords(totals.gst, input.settings.currency),
+      contentWidth - 4,
+    ) as string[],
+    margin + 2,
+    y + 9,
+  );
+
+  return y + 14;
+}
+
+function drawSimpleFooter(doc: PdfDoc, input: BusinessPdfInput, y: number) {
+  const height = 31;
+  y = ensureSimpleSpace(doc, y, height + 9);
+  const leftWidth = 96;
+  const rightWidth = contentWidth - leftWidth;
+  drawSimpleRect(doc, margin, y, leftWidth, height);
+  drawSimpleRect(doc, margin + leftWidth, y, rightWidth, height);
+
+  const pan = panFromGstin(input.settings.gst_number || input.companyGstin);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor("#111827");
+  if (pan) {
+    doc.text(`Company's PAN: ${pan}`, margin + 2, y + 6.5);
+  }
+  doc.text("Declaration", margin + 2, y + 14);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.8);
+  doc.text(
+    doc.splitTextToSize(
+      "We declare that this document shows the actual details recorded in the system and that all particulars are true and correct.",
+      leftWidth - 4,
+    ) as string[],
+    margin + 2,
+    y + 18,
+    { lineHeightFactor: 1.05 },
+  );
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.8);
+  doc.text(
+    `for ${companyDisplayName(input)}`,
+    margin + leftWidth + rightWidth - 2,
+    y + 6.5,
+    { align: "right" },
+  );
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.8);
+  doc.text(
+    "Authorised Signatory",
+    margin + leftWidth + rightWidth - 2,
+    y + height - 4,
+    { align: "right" },
+  );
+
+  return y + height;
+}
+
+function drawTaxRow(
+  doc: PdfDoc,
+  input: BusinessPdfInput,
+  row: {
+    hsnSac: string;
+    percent: number;
+    base: number;
+    cgst: number;
+    sgst: number;
+    gst: number;
+  },
+  widths: number[],
+  y: number,
+  isTotal: boolean,
+) {
+  const values = [
+    row.hsnSac,
+    formatAmount(row.base, input.settings.currency),
+    isTotal ? "" : `${formatPercent(row.percent / 2)}%`,
+    formatAmount(row.cgst, input.settings.currency),
+    isTotal ? "" : `${formatPercent(row.percent / 2)}%`,
+    formatAmount(row.sgst, input.settings.currency),
+    formatAmount(row.gst, input.settings.currency),
+  ];
+  let x = margin;
+  doc.setFont("helvetica", isTotal ? "bold" : "normal");
+  doc.setFontSize(6.9);
+  values.forEach((value, index) => {
+    drawSimpleCell(
+      doc,
+      value,
+      x,
+      y,
+      widths[index],
+      6.4,
+      index === 0 ? "left" : "right",
+      isTotal,
+    );
+    x += widths[index];
+  });
+}
+
+function drawSimpleCell(
+  doc: PdfDoc,
+  value: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  align: "left" | "center" | "right" = "left",
+  bold = false,
+) {
+  drawSimpleRect(doc, x, y, width, height);
+  doc.setFont("helvetica", bold ? "bold" : "normal");
+  doc.setFontSize(height <= 6.5 ? 6.9 : 7.2);
+  doc.setTextColor("#111827");
+  const textX =
+    align === "right" ? x + width - 1.5 : align === "center" ? x + width / 2 : x + 1.5;
+  drawPdfText(doc, value || "-", textX, y + Math.min(5.1, height - 1.4), { align });
+}
+
+function drawSimpleRect(
+  doc: PdfDoc,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  doc.setDrawColor("#222222");
+  doc.setLineWidth(0.2);
+  doc.rect(x, y, width, height);
+}
+
+function simpleCompanyLines(input: BusinessPdfInput) {
+  return [
+    input.settings.company_details,
+    input.settings.address,
+    input.settings.contact_person ? `Contact: ${input.settings.contact_person}` : "",
+    input.settings.contact_phone ? `Phone: ${input.settings.contact_phone}` : "",
+    input.settings.contact_email ? `Email: ${input.settings.contact_email}` : "",
+    input.settings.gst_number || input.companyGstin
+      ? `GSTIN/UIN: ${input.settings.gst_number || input.companyGstin}`
+      : "",
+  ]
+    .map(cleanPdfText)
+    .filter(isPresentText);
+}
+
+function simpleDocumentDetailCells(input: BusinessPdfInput): Array<[string, string]> {
+  const cells: Array<[string, string]> = [
+    [simpleCodeLabel(input.kind), input.code],
+    ["Dated", formatDate(input.documentDate, input.settings.date_format)],
+  ];
+
+  if (input.dueDate) {
+    cells.push([
+      input.kind === "purchase_order" ? "Expected Delivery" : "Due Date",
+      formatDate(input.dueDate, input.settings.date_format),
+    ]);
+  }
+
+  const blockedLabels = new Set([
+    "invoice date",
+    "pi date",
+    "order date",
+    "due date",
+    "expected delivery",
+  ]);
+  input.details.forEach(([label, value]) => {
+    if (!blockedLabels.has(label.toLowerCase()) && isPresentText(value)) {
+      cells.push([label, value]);
+    }
+  });
+
+  return cells;
+}
+
+function simpleCodeLabel(kind: PdfDocumentKind) {
+  if (kind === "purchase_order") {
+    return "PO No.";
+  }
+
+  if (kind === "proforma_invoice") {
+    return "Proforma No.";
+  }
+
+  return "Invoice No.";
+}
+
+function simpleQuantity(item: PdfLineItem) {
+  if (item.quantity === null || item.quantity === undefined) {
+    return "";
+  }
+
+  return `${formatDecimal(item.quantity)} ${formatUnit(item.unit)}`;
+}
+
+function simpleTableTotalRows(input: BusinessPdfInput) {
+  const gstRows = simpleGstBreakdown(input.items);
+  const rows: Array<{ label: string; amount: number }> = [];
+  const hasMultipleTaxRows = gstRows.length > 1;
+
+  gstRows.forEach((row) => {
+    const hsnLabel =
+      hasMultipleTaxRows && row.hsnSac !== "-" ? ` HSN ${row.hsnSac}` : "";
+    const halfRate = formatPercent(row.percent / 2);
+    rows.push(
+      {
+        label: `CGST @ ${halfRate}%${hsnLabel}`,
+        amount: row.cgst,
+      },
+      {
+        label: `SGST @ ${halfRate}%${hsnLabel}`,
+        amount: row.sgst,
+      },
+    );
+  });
+
+  if (Number(input.totals.discountAmount ?? 0) > 0) {
+    rows.push({
+      label: "Discount",
+      amount: -Number(input.totals.discountAmount ?? 0),
+    });
+  }
+
+  return rows;
+}
+
+function simpleGstBreakdown(items: PdfLineItem[]) {
+  const rows = new Map<string, { hsnSac: string; percent: number; base: number; gst: number }>();
+  items.filter(hasPrintableLineItem).forEach((item) => {
+    const percent = Number(item.gstPercent ?? 0);
+    const base = Number(item.lineTotal ?? 0);
+    const gst = base * percent / 100;
+    if (percent <= 0 || gst <= 0) {
+      return;
+    }
+
+    const hsnSac = cleanPdfText(item.hsnSac) || "-";
+    const key = `${hsnSac}:${percent}`;
+    const current = rows.get(key) ?? { hsnSac, percent, base: 0, gst: 0 };
+    current.base += base;
+    current.gst += gst;
+    rows.set(key, current);
+  });
+
+  return Array.from(rows.values())
+    .map((row) => ({
+      ...row,
+      cgst: row.gst / 2,
+      sgst: row.gst / 2,
+    }))
+    .sort((first, second) =>
+      first.hsnSac.localeCompare(second.hsnSac) || first.percent - second.percent,
+    );
+}
+
+function ensureSimpleSpace(doc: PdfDoc, y: number, neededHeight: number) {
+  if (y + neededHeight <= pageHeight - 8) {
+    return y;
+  }
+
+  doc.addPage();
+  return margin;
+}
+
+function formatSimpleAmountInWords(
+  value: number | null | undefined,
+  currency: string | null,
+) {
+  const currencyCode = (currency || "INR").toUpperCase();
+  if (currencyCode === "INR") {
+    return `Indian ${formatIndianCurrencyInWords(value)}`;
+  }
+
+  return `${formatAmount(value, currency)} Only`;
+}
+
+function formatDecimal(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: Number.isInteger(value) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatPercent(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function panFromGstin(value: string | null | undefined) {
+  const gstin = cleanPdfText(value).replace(/\s+/g, "");
+  return gstin.length >= 12 ? gstin.slice(2, 12) : "";
+}
+
+function sumNumbers(total: number, value: number) {
+  return total + value;
 }
 
 function companyDisplayName(input: BusinessPdfInput) {

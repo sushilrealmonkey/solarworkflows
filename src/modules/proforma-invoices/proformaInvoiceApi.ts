@@ -195,7 +195,7 @@ export async function fetchProformaInvoiceItems(
   const client = requireSupabase();
   let query = client
     .from("proforma_invoice_items")
-    .select("*")
+    .select("*, inventory_item:inventory_items(id, item_code, catalog_product:products(id, hsn_code))")
     .eq("proforma_invoice_id", proformaInvoiceId)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });

@@ -200,6 +200,32 @@ export async function fetchProjectInvoices(
   return (data ?? []) as unknown as InvoiceWithRelations[];
 }
 
+export async function fetchActiveProjectInvoice(
+  profile: UserProfile | null,
+  projectId: string,
+) {
+  const client = requireSupabase();
+  let query = client
+    .from("invoices")
+    .select(invoiceSelect)
+    .eq("project_id", projectId)
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  }
+
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as unknown as InvoiceWithRelations | null;
+}
+
 export async function fetchInvoice(profile: UserProfile | null, id: string) {
   const client = requireSupabase();
   let query = client.from("invoices").select(invoiceSelect).eq("id", id);
@@ -224,7 +250,7 @@ export async function fetchInvoiceItems(
   const client = requireSupabase();
   let query = client
     .from("invoice_items")
-    .select("*")
+    .select("*, inventory_item:inventory_items(id, item_code, catalog_product:products(id, hsn_code))")
     .eq("invoice_id", invoiceId)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
@@ -247,6 +273,20 @@ export async function createInvoice(
   values: InvoiceFormValues,
 ) {
   const client = requireSupabase();
+  const projectId = nullable(values.project_id);
+
+  if (projectId) {
+    const existingInvoice = await fetchActiveProjectInvoice(profile, projectId);
+
+    if (existingInvoice) {
+      throw new Error(
+        `An active invoice already exists for this project: ${
+          existingInvoice.invoice_code ?? "open invoice"
+        }.`,
+      );
+    }
+  }
+
   const { data, error } = await client
     .from("invoices")
     .insert({

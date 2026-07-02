@@ -28,6 +28,7 @@ import {
   createInvoice,
   createInvoicePayment,
   deleteInvoice,
+  fetchActiveProjectInvoice,
   fetchInvoice,
   fetchInvoiceItems,
   fetchInvoiceLinkOptions,
@@ -459,6 +460,37 @@ export function InvoicesPage() {
 
     if (!formState) {
       return;
+    }
+
+    if (formState.mode === "create" && formState.values.project_id) {
+      try {
+        const existingInvoice =
+          duplicateProjectInvoice ??
+          (await fetchActiveProjectInvoice(profile, formState.values.project_id));
+
+        if (existingInvoice) {
+          setFormErrors({
+            project_id: `An active invoice already exists for this project: ${
+              existingInvoice.invoice_code ?? "open invoice"
+            }.`,
+          });
+          showToast(
+            `Invoice already exists for this project: ${
+              existingInvoice.invoice_code ?? "open invoice"
+            }.`,
+            "error",
+          );
+          return;
+        }
+      } catch (nextError) {
+        showToast(
+          nextError instanceof Error
+            ? nextError.message
+            : "Unable to verify project invoice status.",
+          "error",
+        );
+        return;
+      }
     }
 
     const includeItems = true;

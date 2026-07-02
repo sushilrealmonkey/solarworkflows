@@ -44,7 +44,12 @@ export type PurchaseOrderItemWithRelations = PurchaseOrderItem & {
   item?: Pick<
     InventoryItem,
     "id" | "item_code" | "item_name" | "unit" | "brand" | "model"
-  > | null;
+  > & {
+    catalog_product?: Pick<
+      NonNullable<InventoryItem["catalog_product"]>,
+      "id" | "hsn_code"
+    > | null;
+  } | null;
 };
 
 export type PurchaseOrderVendorSummary = Pick<
