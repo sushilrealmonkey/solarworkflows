@@ -101,6 +101,7 @@ export type SurveyCustomerSummary = Pick<
 export type SiteSurveyWithRelations = SiteSurvey & {
   lead?: SurveyLeadSummary | null;
   customer?: SurveyCustomerSummary | null;
+  assigned_staff?: Pick<StaffOption, "id" | "full_name"> | null;
   quotations?: SiteSurveyQuotationSummary[] | null;
   project_id?: string | null;
 };

@@ -222,7 +222,8 @@ export async function fetchDashboardFollowups(profile: UserProfile | null) {
     .select(
       `
       *,
-      lead:leads(id, lead_code, full_name, phone, city)
+      lead:leads(id, lead_code, full_name, phone, city),
+      assigned_staff:users_profile!lead_followups_assigned_to_fkey(id, full_name)
     `,
     )
     .in("status", ["pending", "missed"])
@@ -248,7 +249,8 @@ export async function fetchDashboardUpcomingSurveys(profile: UserProfile | null)
       `
       *,
       lead:leads(id, lead_code, customer_id, converted_customer_id, full_name, phone, alternate_phone, email, address, city, district, state, pincode, roof_type, estimated_load_kw, assigned_to),
-      customer:customers(id, customer_code, full_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to)
+      customer:customers(id, customer_code, full_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to),
+      assigned_staff:users_profile!site_surveys_assigned_to_fkey(id, full_name)
     `,
     )
     .in("survey_status", ["scheduled", "in_progress", "rescheduled"])
@@ -498,7 +500,8 @@ export async function fetchDashboardProjects(profile: UserProfile | null) {
       completed_at,
       created_at,
       customer:customers(id, customer_code, full_name, business_name, phone, city),
-      quotation:quotations(id, quotation_code, total_amount, net_payable_amount, status)
+      quotation:quotations(id, quotation_code, total_amount, net_payable_amount, status),
+      project_manager:users_profile!projects_assigned_project_manager_fkey(id, full_name, phone, email, status, organization_id)
     `,
     )
     .order("created_at", { ascending: false })

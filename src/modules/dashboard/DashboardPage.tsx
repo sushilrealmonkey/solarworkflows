@@ -520,6 +520,7 @@ function buildEpcDashboardModel(
         date: scheduleDateLabel(survey.scheduled_date, today),
         activity: "Site Survey",
         project: getSurveyContact(survey).name,
+        assignee: survey.assigned_staff?.full_name ?? "Unassigned",
         to: `/site-surveys/${survey.id}`,
       })),
     ...purchaseOrders
@@ -530,6 +531,7 @@ function buildEpcDashboardModel(
         date: scheduleDateLabel(order.expected_delivery_date, today),
         activity: "Material Delivery",
         project: order.vendor?.vendor_name ?? order.purchase_code ?? "Purchase order",
+        assignee: "Unassigned",
         to: "/purchases",
       })),
     ...activeProjects
@@ -540,6 +542,7 @@ function buildEpcDashboardModel(
         date: scheduleDateLabel(project.expected_completion_date, today),
         activity: "Project Milestone",
         project: project.project_name ?? project.project_code ?? "Project",
+        assignee: project.project_manager?.full_name ?? "Unassigned",
         to: `/projects/${project.id}`,
       })),
   ].slice(0, 6);
@@ -971,7 +974,18 @@ function TodaysWorkPanel({
   return (
     <AdminPanel
       title="Today's Follow-ups"
-      action={<span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">{followups.length}</span>}
+      action={
+        <div className="flex items-center gap-3">
+          <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+            {followups.length}
+          </span>
+          {followups.length > 5 ? (
+            <Link className="text-sm font-semibold text-[#06173f]" to="/leads">
+              View all
+            </Link>
+          ) : null}
+        </div>
+      }
     >
       {loading ? <LoadingRows count={3} /> : null}
       {!loading && followups.length === 0 ? (
@@ -994,6 +1008,9 @@ function TodaysWorkPanel({
                 </span>
                 <span className="block truncate text-xs text-slate-500">
                   {formatDateTime(getFollowupDueDate(followup))}
+                </span>
+                <span className="block truncate text-xs text-slate-500">
+                  Assigned to {followup.assigned_staff?.full_name ?? "Unassigned"}
                 </span>
               </span>
               <span className="col-span-2 text-xs font-semibold text-slate-600 sm:col-span-1">
@@ -1064,7 +1081,7 @@ function SchedulePanel({
   return (
     <AdminPanel
       title="Upcoming Schedule"
-      action={<Link className="text-sm font-semibold text-[#06173f]" to="/site-surveys">View calendar</Link>}
+      action={<Link className="text-sm font-semibold text-[#06173f]" to="/site-surveys">View all</Link>}
     >
       {loading ? <LoadingRows count={4} /> : null}
       {!loading && rows.length === 0 ? (
@@ -1074,7 +1091,7 @@ function SchedulePanel({
       ) : null}
       {!loading && rows.length > 0 ? (
         <div className="space-y-2">
-          {rows.map((row) => (
+          {rows.slice(0, 5).map((row) => (
             <Link
               className="grid gap-1 rounded-lg border border-stone-100 bg-stone-50 p-2.5 text-xs hover:bg-orange-50 sm:grid-cols-[5rem_minmax(0,1fr)] sm:p-3 sm:text-sm"
               key={`${row.date}-${row.activity}-${row.project}`}
@@ -1087,6 +1104,9 @@ function SchedulePanel({
                 </span>
                 <span className="block truncate text-xs text-slate-500">
                   {row.project}
+                </span>
+                <span className="block truncate text-xs text-slate-500">
+                  Assigned to {row.assignee}
                 </span>
               </span>
             </Link>

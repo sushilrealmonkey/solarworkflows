@@ -107,6 +107,7 @@ export type LeadFollowupWithLead = LeadFollowup & {
     phone: string;
     city: string | null;
   } | null;
+  assigned_staff?: Pick<StaffOption, "id" | "full_name"> | null;
 };
 
 export type CustomerFormValues = {
