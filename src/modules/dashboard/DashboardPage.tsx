@@ -188,6 +188,22 @@ function EpcAdminDashboard() {
 
       {error ? <ErrorPanel message={error} /> : null}
 
+      <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
+        <TodaysWorkPanel
+          loading={loading}
+          followups={adminData.todayFollowups}
+        />
+        <OverduePanel
+          loading={loading}
+          overdueFollowups={adminData.overdueFollowups.length}
+          pendingSurveyReports={adminData.pendingSurveyReports}
+          overdueAmount={adminData.overdueAmount}
+          delayedProjects={adminData.delayedProjects.length}
+          currencyFormatter={compactCurrencyFormatter}
+        />
+        <SchedulePanel loading={loading} rows={adminData.scheduleRows} />
+      </section>
+
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <CommandMetricCard
           label="Pipeline Value"
@@ -272,22 +288,6 @@ function EpcAdminDashboard() {
           }
           loading={loading}
         />
-      </section>
-
-      <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
-        <TodaysWorkPanel
-          loading={loading}
-          followups={adminData.todayFollowups}
-        />
-        <OverduePanel
-          loading={loading}
-          overdueFollowups={adminData.overdueFollowups.length}
-          pendingSurveyReports={adminData.pendingSurveyReports}
-          overdueAmount={adminData.overdueAmount}
-          delayedProjects={adminData.delayedProjects.length}
-          currencyFormatter={compactCurrencyFormatter}
-        />
-        <SchedulePanel loading={loading} rows={adminData.scheduleRows} />
       </section>
 
       <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
@@ -1035,14 +1035,18 @@ function OverduePanel({
       {!loading ? (
         <div className="space-y-2">
           {alerts.map(([label, to]) => (
-            <Link
-              className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2.5 text-xs font-semibold text-slate-700 hover:bg-orange-50 sm:text-sm"
+            <div
+              className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2.5 text-xs font-semibold text-slate-700 sm:text-sm"
               key={label}
-              to={to}
             >
               <span>{label}</span>
-              <span className="text-[#06173f]">Open</span>
-            </Link>
+              <Link
+                className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:text-sm"
+                to={to}
+              >
+                Open
+              </Link>
+            </div>
           ))}
         </div>
       ) : null}
@@ -1454,7 +1458,7 @@ function ComboRevenueChart({
       >
         <svg
           aria-hidden="true"
-          className="pointer-events-none absolute left-3 top-3 h-32 sm:h-40"
+          className="pointer-events-none absolute left-3 top-3 z-10 h-32 sm:h-40"
           preserveAspectRatio="none"
           style={{ width: `${chartWidth}px` }}
           viewBox={`0 0 ${chartWidth} 160`}
