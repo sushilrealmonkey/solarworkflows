@@ -2,13 +2,518 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="theme-color" content="#0f766e" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bizlee</title>
+    <title>Bizlee Solar EPC CRM + ERP</title>
+    <meta
+      name="description"
+      content="Bizlee helps Solar EPC companies manage enquiries, site surveys, quotations, projects, inventory, payments, and invoices from one mobile-first workspace."
+    />
+    <link rel="icon" type="image/svg+xml" href="assets/brand/bizlee-favicon.svg" />
+    <link rel="apple-touch-icon" href="assets/brand/bizlee-favicon.svg" />
+    <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <header class="site-header" data-header>
+      <a class="brand" href="#top" aria-label="Bizlee home">
+        <img class="brand-logo brand-logo-on-dark" src="assets/bizlee-logo-on-dark.png" alt="Bizlee" />
+        <img class="brand-logo brand-logo-default" src="assets/brand/bizlee-logo.svg" alt="" aria-hidden="true" />
+      </a>
+
+      <div class="header-actions">
+        <a class="login-link" href="https://app.getbizlee.com/login">Login</a>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="hero-message">
+            <h1>Everything your solar <br />business needs.</h1>
+            <p>
+              No more Excel sheets or WhatsApp chaos. <br />
+              Manage leads, quotes, projects, invoices, <br />
+              and payments in one place.
+            </p>
+            <div class="hero-actions">
+              <div class="hero-cta-group">
+                <a class="btn btn-primary btn-large" href="#pricing">Request Pricing</a>
+                <p class="hero-cta-note">Get pricing, setup details, and a quick product walkthrough</p>
+              </div>
+            </div>
+          </div>
+          <figure class="hero-dashboard-preview">
+            <picture>
+              <source media="(max-width: 640px)" srcset="assets/Bizlee-mobile.png" />
+              <img src="assets/Bizlee1new.png" alt="Bizlee solar business overview dashboard" />
+            </picture>
+          </figure>
+        </div>
+
+      </section>
+
+      <section class="problem-section">
+        <div class="section-intro wide">
+          <p class="eyebrow">The daily reality</p>
+          <h2>Solar installation work gets messy when everything is scattered.</h2>
+        </div>
+        <div class="problem-grid">
+          <article>
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="m3 11 18-5v12L3 14v-3Z" />
+                <path d="M11.6 16.8a3 3 0 0 1-5.8-1.6" />
+              </svg>
+            </span>
+            <h3>Leads come from everywhere</h3>
+            <p>Website, calls, WhatsApp, referrals, ads, and field teams all create enquiry trails.</p>
+          </article>
+          <article>
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+            </span>
+            <h3>Site surveys are hard to track</h3>
+            <p>Teams lose sight of which sites are pending, completed, or waiting for quotation.</p>
+          </article>
+          <article>
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                <path d="M14 2v6h6" />
+                <path d="M8 13h8" />
+                <path d="M8 17h5" />
+              </svg>
+            </span>
+            <h3>Quotations take manual effort</h3>
+            <p>Products, system size, pricing, taxes, and discounts get recreated repeatedly.</p>
+          </article>
+          <article>
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </span>
+            <h3>Projects lose visibility</h3>
+            <p>Material, installation, payment, and handover updates spread across tools.</p>
+          </article>
+          <article>
+            <span aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <path d="M2 10h20" />
+                <path d="M6 15h4" />
+              </svg>
+            </span>
+            <h3>Payments feel disconnected</h3>
+            <p>Teams do not know what is paid, pending, overdue, or already invoiced.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="connected-flow" data-flow-section>
+        <div class="flow-pin">
+          <div class="section-intro">
+            <p class="eyebrow">Lead to handover</p>
+            <h2 class="synced-title">
+              <span>One Workflow.</span>
+              <span class="title-check" aria-hidden="true"></span>
+              <span>All synced.</span>
+            </h2>
+          </div>
+          <div class="flow-stage" aria-label="Connected Solar EPC workflow" data-flow-stage>
+            <div class="flow-logo">
+              <img src="assets/brand/bizlee-logo.svg" alt="Bizlee" />
+            </div>
+            <div class="flow-track">
+              <span data-flow-pill>Lead</span>
+              <span data-flow-pill>Survey</span>
+              <span data-flow-pill>Quote</span>
+              <span data-flow-pill>Customer</span>
+              <span data-flow-pill>Project</span>
+              <span data-flow-pill>Material</span>
+              <span data-flow-pill>Payment</span>
+              <span data-flow-pill>Invoice</span>
+              <span data-flow-pill>Handover</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="product-tour" id="product-tour">
+        <div class="section-intro">
+          <p class="eyebrow">Product tour</p>
+          <h2>See how Bizlee works for a Solar EPC company.</h2>
+        </div>
+        <div class="tour-layout" data-tour>
+          <article class="tour-card active" data-tour-card>
+            <button class="tour-card-trigger" id="tour-tab-0" type="button" aria-controls="tour-panel-0" aria-expanded="true" data-tour-tab="0">
+              <span class="tour-number">01</span>
+              <span class="tour-card-title">Capture solar enquiry</span>
+              <span class="tour-card-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="tour-panel" id="tour-panel-0" role="region" aria-labelledby="tour-tab-0">
+              <p>Track lead source, system requirement, address, follow-up date, owner, and next action from one mobile-first view.</p>
+              <div class="mini-product">
+                <div class="mini-product-bar"><strong>Lead details</strong><span>New enquiry</span></div>
+                <div class="mini-product-content">
+                  <div class="mini-row"><span>Customer</span><strong>Mehta Residence</strong></div>
+                  <div class="mini-row"><span>Requirement</span><strong>10kW rooftop</strong></div>
+                  <div class="mini-row"><span>Next action</span><strong>Assign survey</strong></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="tour-card" data-tour-card>
+            <button class="tour-card-trigger" id="tour-tab-1" type="button" aria-controls="tour-panel-1" aria-expanded="false" data-tour-tab="1">
+              <span class="tour-number">02</span>
+              <span class="tour-card-title">Schedule site survey</span>
+              <span class="tour-card-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="tour-panel" id="tour-panel-1" role="region" aria-labelledby="tour-tab-1">
+              <p>Assign survey owners, update visit status, and keep site notes connected to the lead before quotation starts.</p>
+              <div class="mini-product">
+                <div class="mini-product-bar"><strong>Site survey</strong><span>Scheduled</span></div>
+                <div class="mini-product-content">
+                  <div class="mini-row"><span>Survey owner</span><strong>Amit Sharma</strong></div>
+                  <div class="mini-row"><span>Visit window</span><strong>Tomorrow, 11:00 AM</strong></div>
+                  <div class="mini-row"><span>Status</span><strong>Scheduled</strong></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="tour-card" data-tour-card>
+            <button class="tour-card-trigger" id="tour-tab-2" type="button" aria-controls="tour-panel-2" aria-expanded="false" data-tour-tab="2">
+              <span class="tour-number">03</span>
+              <span class="tour-card-title">Create solar quotation</span>
+              <span class="tour-card-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="tour-panel" id="tour-panel-2" role="region" aria-labelledby="tour-tab-2">
+              <p>Organize panels, inverter, structure, installation cost, taxes, discounts, and final quote value in one place.</p>
+              <div class="mini-product">
+                <div class="mini-product-bar"><strong>Solar quotation</strong><span>Draft</span></div>
+                <div class="mini-product-content">
+                  <div class="mini-row"><span>System size</span><strong>10kW</strong></div>
+                  <div class="mini-row"><span>Products</span><strong>Panels + inverter</strong></div>
+                  <div class="mini-row"><span>Quote value</span><strong>₹6.85L</strong></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="tour-card" data-tour-card>
+            <button class="tour-card-trigger" id="tour-tab-3" type="button" aria-controls="tour-panel-3" aria-expanded="false" data-tour-tab="3">
+              <span class="tour-number">04</span>
+              <span class="tour-card-title">Start project execution</span>
+              <span class="tour-card-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="tour-panel" id="tour-panel-3" role="region" aria-labelledby="tour-tab-3">
+              <p>Carry customer and quotation details forward, then track material assignment, installation dates, and handover progress.</p>
+              <div class="mini-product">
+                <div class="mini-product-bar"><strong>Project execution</strong><span>In progress</span></div>
+                <div class="mini-product-content">
+                  <div class="mini-row"><span>Project stage</span><strong>Material assigned</strong></div>
+                  <div class="mini-row"><span>Installation</span><strong>Scheduled</strong></div>
+                  <div class="mini-row"><span>Handover</span><strong>Pending</strong></div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="tour-card" data-tour-card>
+            <button class="tour-card-trigger" id="tour-tab-4" type="button" aria-controls="tour-panel-4" aria-expanded="false" data-tour-tab="4">
+              <span class="tour-number">05</span>
+              <span class="tour-card-title">Manage payment and invoice</span>
+              <span class="tour-card-arrow" aria-hidden="true">↗</span>
+            </button>
+            <div class="tour-panel" id="tour-panel-4" role="region" aria-labelledby="tour-tab-4">
+              <p>See collected, pending, overdue, and invoiced amounts so sales, accounts, and project teams stay aligned.</p>
+              <div class="mini-product">
+                <div class="mini-product-bar"><strong>Payment overview</strong><span>Part paid</span></div>
+                <div class="mini-product-content">
+                  <div class="mini-row"><span>Advance collected</span><strong>₹2.05L</strong></div>
+                  <div class="mini-row"><span>Balance due</span><strong>₹4.80L</strong></div>
+                  <div class="mini-row"><span>Invoice</span><strong>Pending</strong></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="features-section" id="features">
+        <video class="features-background-video" autoplay muted loop playsinline preload="metadata" aria-hidden="true">
+          <source src="assets/video/sky-solar.mp4" type="video/mp4" />
+        </video>
+        <div class="section-intro wide">
+          <p class="eyebrow">Core features</p>
+          <h2>Everything your Solar EPC team needs in one workspace.</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <div class="feature-card-header">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2h6v2M9 12l2 2 4-4"/></svg></span>
+              <h3>Lead, Enquiry &amp; Site Survey Management</h3>
+            </div>
+            <div class="feature-card-copy">
+              <p>Manage solar enquiries, lead sources, customer requirements, follow-ups, addresses, and site survey status.</p>
+            </div>
+          </article>
+          <article>
+            <div class="feature-card-header">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg></span>
+              <h3>Solar Quotation &amp; Customer Management</h3>
+            </div>
+            <div class="feature-card-copy">
+              <p>Create solar quotations and keep customer details, requirements, quotation history, and approval status connected.</p>
+            </div>
+          </article>
+          <article>
+            <div class="feature-card-header">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M8 5V3h8v2M3 11h18M10 14h4"/></svg></span>
+              <h3>Solar Project Management</h3>
+            </div>
+            <div class="feature-card-copy">
+              <p>Move approved customers into project execution with stages, tasks, material status, documents, installation updates, and handover tracking.</p>
+            </div>
+          </article>
+          <article>
+            <div class="feature-card-header">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 13h6M9 17h6"/></svg></span>
+              <h3>B2B Sales &amp; Customer Management</h3>
+            </div>
+            <div class="feature-card-copy">
+              <p>Manage B2B solar product customers, sales orders, proforma invoices, payments, invoices, and dispatch from the same system.</p>
+            </div>
+          </article>
+          <article>
+            <div class="feature-card-header">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5zM3 12l9 5 9-5M3 17l9 5 9-5"/></svg></span>
+              <h3>Product, Inventory &amp; Purchase Management</h3>
+            </div>
+            <div class="feature-card-copy">
+              <p>Manage solar products, stock levels, categories, vendors, purchase orders, product receiving, and stock updates.</p>
+            </div>
+          </article>
+          <article>
+            <div class="feature-card-header">
+              <span aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 3v18h18M7 16l4-5 3 3 5-7"/></svg></span>
+              <h3>Payments, Invoices &amp; Business Dashboard</h3>
+            </div>
+            <div class="feature-card-copy">
+              <p>Track EPC project payments, B2B sales payments, pending invoices, received amounts, reports, and daily business insights.</p>
+            </div>
+          </article>
+        </div>
+        <div class="features-cta">
+          <a class="btn btn-primary btn-large" href="#pricing">Request Pricing</a>
+        </div>
+      </section>
+
+      <section class="why-section" id="why-bizlee">
+        <div class="section-intro wide">
+          <p class="eyebrow">Why Bizlee</p>
+          <h2>Built for how Solar EPC teams actually work.</h2>
+        </div>
+        <div class="why-showcase" data-why-showcase aria-label="Why teams choose Bizlee">
+          <ol class="why-card-stack">
+            <li class="why-point-card">
+              <div class="why-card-title">
+                <span class="why-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect>
+                    <path d="M10 18h4"></path>
+                  </svg>
+                </span>
+                <h3>Mobile-first for field teams</h3>
+              </div>
+              <p>Sales and site teams can update work from anywhere.</p>
+            </li>
+            <li class="why-point-card">
+              <div class="why-card-title">
+                <span class="why-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 7h6a4 4 0 0 1 0 8H9"></path>
+                    <path d="M17 17h-6a4 4 0 0 1 0-8h4"></path>
+                  </svg>
+                </span>
+                <h3>Lead to project continuity</h3>
+              </div>
+              <p>No need to recreate customer details at every stage.</p>
+            </li>
+            <li class="why-point-card">
+              <div class="why-card-title">
+                <span class="why-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M7 3.5h7l3 3v14H7z"></path>
+                    <path d="M14 3.5v4h4"></path>
+                    <path d="M9.5 12h5"></path>
+                    <path d="M9.5 15.5h3.5"></path>
+                  </svg>
+                </span>
+                <h3>Quotation-ready product data</h3>
+              </div>
+              <p>Products, pricing, taxes, and system details stay organized.</p>
+            </li>
+            <li class="why-point-card">
+              <div class="why-card-title">
+                <span class="why-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M2.8 12s3.4-6 9.2-6 9.2 6 9.2 6-3.4 6-9.2 6-9.2-6-9.2-6z"></path>
+                    <circle cx="12" cy="12" r="2.4"></circle>
+                  </svg>
+                </span>
+                <h3>Clear project visibility</h3>
+              </div>
+              <p>Track each solar project from approval to installation.</p>
+            </li>
+            <li class="why-point-card">
+              <div class="why-card-title">
+                <span class="why-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <rect x="3" y="5" width="18" height="14" rx="2.5"></rect>
+                    <path d="M3 9h18"></path>
+                    <path d="M7 15h4"></path>
+                  </svg>
+                </span>
+                <h3>Payment clarity</h3>
+              </div>
+              <p>Know what is collected, pending, overdue, or invoiced.</p>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="faq-section" id="faq">
+        <div class="faq-layout">
+          <div class="faq-intro">
+            <p class="eyebrow">Common questions</p>
+            <h2>Frequently<br />asked questions.</h2>
+            <p class="faq-support">Can’t find what you’re looking for? Call <a href="tel:+919571567555">9571567555</a></p>
+          </div>
+
+          <div class="faq-list">
+            <details>
+              <summary>Is Bizlee only for Solar EPC companies right now?</summary>
+              <p>Yes. Bizlee is currently focused on Solar EPC companies. More industry-specific versions can be added later.</p>
+            </details>
+            <details>
+              <summary>Can Bizlee manage solar leads and site surveys?</summary>
+              <p>Yes. You can manage enquiries, lead sources, follow-ups, site survey status, and customer details.</p>
+            </details>
+            <details>
+              <summary>Can we create quotations inside Bizlee?</summary>
+              <p>Yes. Bizlee can help organize quotation workflows using customer details, products, system size, pricing, taxes, and discounts.</p>
+            </details>
+            <details>
+              <summary>Can Bizlee track solar projects?</summary>
+              <p>Yes. Once a lead is converted, you can track project stages, tasks, materials, payments, and completion status.</p>
+            </details>
+            <details>
+              <summary>Can we sell solar products to B2B customers using Bizlee?</summary>
+              <p>Yes. Along with EPC project workflows, Bizlee also supports B2B solar product sales. You can manage B2B customers, sales orders, proforma invoices, payment tracking, invoices, and product dispatch in one place.</p>
+            </details>
+            <details>
+              <summary>Will you help with setup?</summary>
+              <p>Yes. Early Solar EPC teams should get guided setup support.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="early-access" id="pricing">
+        <div class="early-access-copy">
+          <p class="eyebrow">Early access</p>
+          <h2>Launching for Solar EPC companies.</h2>
+          <p>
+            We are onboarding selected Solar EPC businesses to help them organize leads, quotations, projects,
+            inventory, payments, and invoices inside Bizlee. Share your details and our team will get back with
+            pricing, setup details, and a quick product walkthrough.
+          </p>
+        </div>
+        <form class="pricing-form">
+          <div class="pricing-form-heading">
+            <p class="eyebrow">Request pricing</p>
+          </div>
+          <label>
+            <span>Name <span class="required-marker" aria-hidden="true">*</span></span>
+            <input type="text" name="name" autocomplete="name" required />
+          </label>
+          <label>
+            Company name
+            <input type="text" name="company" autocomplete="organization" />
+          </label>
+          <label>
+            <span>Mobile number <span class="required-marker" aria-hidden="true">*</span></span>
+            <input type="tel" name="mobile" autocomplete="tel" required />
+          </label>
+          <label>
+            Email
+            <input type="email" name="email" autocomplete="email" />
+          </label>
+          <label>
+            City
+            <input type="text" name="city" autocomplete="address-level2" />
+          </label>
+          <label>
+            Monthly solar enquiries
+            <select name="monthly-enquiries">
+              <option>Less than 25</option>
+              <option>25-100</option>
+              <option>100-300</option>
+              <option>300+</option>
+            </select>
+          </label>
+          <button class="btn btn-primary btn-large" type="submit">Request Pricing</button>
+          <p class="form-status" aria-live="polite" data-form-status></p>
+        </form>
+      </section>
+
+    </main>
+
+    <footer class="site-footer">
+      <a class="footer-wordmark" href="#top" aria-label="Bizlee home">
+        <img class="footer-wordmark-white" src="assets/brand/bizlee-logo.svg" alt="Bizlee" />
+        <img class="footer-wordmark-icon" src="assets/brand/bizlee-logo.svg" alt="" aria-hidden="true" />
+      </a>
+      <p class="footer-tagline">India's mobile first business management system for growing teams</p>
+      <div class="footer-meta">
+        <p>&copy; 2026 Bizlee. All rights reserved.</p>
+        <nav class="footer-legal" aria-label="Legal">
+          <a href="privacy-policy.html">Privacy Policy</a>
+          <a href="terms-and-conditions.html">Terms &amp; Conditions</a>
+        </nav>
+        <a
+          class="creator-credit"
+          href="https://www.realmonkey.co/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Created by Realmonkey (opens in a new tab)"
+        >
+          <span>Created by</span>
+          <img src="assets/realmonkey-logo-white.svg" alt="Realmonkey" />
+        </a>
+      </div>
+    </footer>
+
+    <a
+      class="whatsapp-floating-button"
+      href="https://wa.me/919571567555?text=Hi%20Bizlee%20team%2C%20I%E2%80%99m%20interested%20in%20Bizlee%20Solar%20for%20my%20Solar%20EPC%20business.%20Please%20share%20pricing%20and%20setup%20details."
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Chat with Bizlee on WhatsApp"
+      data-sticky-cta
+    >
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M16.03 4.5c-6.26 0-11.35 4.99-11.35 11.13 0 2.1.6 4.15 1.73 5.91L4.5 27.5l6.18-1.82a11.52 11.52 0 0 0 5.35 1.31c6.26 0 11.35-4.99 11.35-11.13S22.29 4.5 16.03 4.5Zm0 20.53c-1.75 0-3.46-.48-4.95-1.38l-.36-.21-3.67 1.08 1.13-3.53-.24-.36a9.19 9.19 0 0 1-1.5-5c0-5.06 4.3-9.17 9.59-9.17s9.59 4.11 9.59 9.17-4.3 9.4-9.59 9.4Zm5.26-6.87c-.29-.14-1.7-.82-1.96-.91-.26-.1-.45-.14-.64.14-.19.27-.74.91-.9 1.1-.17.18-.33.21-.62.07-.29-.14-1.22-.44-2.33-1.41-.86-.75-1.44-1.68-1.61-1.96-.17-.27-.02-.42.13-.56.13-.13.29-.33.43-.49.14-.17.19-.28.29-.47.1-.18.05-.35-.02-.49-.07-.14-.64-1.5-.88-2.06-.23-.54-.47-.46-.64-.47h-.55c-.19 0-.5.07-.76.35-.26.27-1 1-1 2.43s1.03 2.81 1.17 3c.14.18 2.03 3.04 4.92 4.26.69.29 1.22.46 1.64.59.69.21 1.32.18 1.82.11.55-.08 1.7-.68 1.94-1.34.24-.66.24-1.23.17-1.34-.07-.12-.26-.19-.55-.33Z" />
+      </svg>
+      <span>Chat with us</span>
+    </a>
+
+    <script src="script.js"></script>
   </body>
 </html>
