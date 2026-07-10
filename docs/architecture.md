@@ -62,6 +62,11 @@ workspace/admin status changes, EPC profile edits, and guarded EPC company
 delete, run through Supabase Edge Functions instead of exposing service-role
 capabilities to the browser.
 
+Verified self-service workspace creation uses the narrowly scoped
+`self_create_epc_workspace` RPC. The security-definer function validates the
+confirmed Auth user, prevents duplicate tenant membership, creates both tenant
+identifiers, and assigns only the new workspace's locked Admin role.
+
 ## Data Boundary
 
 Business tables must be tenant-owned. Existing schema uses a mix of

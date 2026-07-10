@@ -118,6 +118,18 @@ Super admins are routed to `/companies` after login. The app sidebar should show
 only platform navigation for super admins; tenant operational modules remain for
 tenant users and are still protected by Supabase RLS.
 
+## Self-Service EPC Workspace Setup
+
+Verified email/password and Google users without an existing tenant profile are
+routed to `/onboarding`. The browser calls `self_create_epc_workspace`, which
+validates the confirmed Auth email and creates linked `companies`,
+`organizations`, `organization_settings`, `users_profile`, `profiles`, roles,
+permissions, and Admin role assignment records in one transaction.
+
+The RPC is executable only by `authenticated`, rejects duplicate membership,
+and creates both `company_id` and `organization_id` for the new tenant. Client
+metadata is not used for authorization decisions.
+
 ## EPC Admin Invite Setup
 
 Super admins invite EPC company admins through the platform Companies page. That

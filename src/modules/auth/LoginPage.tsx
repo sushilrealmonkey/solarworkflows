@@ -65,13 +65,9 @@ export function LoginPage() {
       );
 
       if (accessResult.status === "unassigned") {
+        setIsRedirecting(true);
         await refresh();
-        setAccessNotice({
-          title: "Access not assigned",
-          description:
-            "This account is authenticated, but no workspace access is assigned.",
-          tone: "warning",
-        });
+        navigate("/onboarding", { replace: true });
         return;
       }
 

@@ -20,6 +20,20 @@ export type SignupResult =
   | LoginAccessResult
   | { status: "confirmation_required"; message: string };
 
+export type WorkspaceOnboardingInput = {
+  workspaceName: string;
+  fullName: string;
+  phone: string;
+};
+
+export type WorkspaceOnboardingResult = {
+  organization_id: string;
+  company_id: string;
+  workspace_slug: string;
+  admin_role_id: string;
+  admin_profile_id: string;
+};
+
 let otpVerification:
   | {
       tokenHash: string;
@@ -126,20 +140,22 @@ export async function syncCurrentAuthUserProfile(): Promise<LoginAccessResult> {
   );
 
   if (syncError) {
-    await supabase.auth.signOut();
+    if (!syncError.message.toLowerCase().includes("no invited user profile")) {
+      throw new Error(syncError.message);
+    }
+
     return {
       status: "unassigned",
-      message: "Access not assigned",
+      message: "Workspace setup required",
     };
   }
 
   const profile = syncedProfile as SyncedProfile | null;
 
   if (!profile) {
-    await supabase.auth.signOut();
     return {
       status: "unassigned",
-      message: "Access not assigned",
+      message: "Workspace setup required",
     };
   }
 
@@ -247,6 +263,46 @@ export async function signInWithGoogle(redirectTo: string) {
   }
 }
 
+export async function createEpcWorkspaceForCurrentUser(
+  input: WorkspaceOnboardingInput,
+): Promise<WorkspaceOnboardingResult> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const workspaceName = input.workspaceName.trim().replace(/\s+/g, " ");
+  const fullName = input.fullName.trim().replace(/\s+/g, " ");
+  const phone = input.phone.trim();
+
+  if (workspaceName.length < 2 || workspaceName.length > 120) {
+    throw new Error("Workspace name must be between 2 and 120 characters.");
+  }
+
+  if (fullName.length < 2 || fullName.length > 120) {
+    throw new Error("Full name must be between 2 and 120 characters.");
+  }
+
+  if (phone && !/^[0-9+() -]{6,20}$/.test(phone)) {
+    throw new Error("Enter a valid phone number.");
+  }
+
+  const { data, error } = await supabase.rpc("self_create_epc_workspace", {
+    workspace_name: workspaceName,
+    admin_full_name: fullName,
+    admin_phone: phone || null,
+  });
+
+  if (error) {
+    throw new Error(mapWorkspaceOnboardingError(error.message));
+  }
+
+  if (!data || typeof data !== "object") {
+    throw new Error("The workspace could not be created. Please try again.");
+  }
+
+  return data as WorkspaceOnboardingResult;
+}
+
 export async function completeInvitedPassword(
   password: string,
 ): Promise<LoginAccessResult> {
@@ -344,4 +400,26 @@ function mapOAuthError(message: string) {
   }
 
   return message || "Google login could not be started. Please try again.";
+}
+
+function mapWorkspaceOnboardingError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("verified email")) {
+    return "Confirm your email address before creating a workspace.";
+  }
+
+  if (normalizedMessage.includes("already has workspace access")) {
+    return "This account already has workspace access. Refresh and sign in again.";
+  }
+
+  if (normalizedMessage.includes("email is already assigned")) {
+    return "This email is already assigned to a workspace. Sign in or ask an administrator for help.";
+  }
+
+  if (normalizedMessage.includes("phone number is already assigned")) {
+    return "This phone number is already assigned to another account.";
+  }
+
+  return message || "The workspace could not be created. Please try again.";
 }

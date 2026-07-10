@@ -20,13 +20,7 @@ export function ProtectedRoute() {
   }
 
   if (status === "unassigned") {
-    return (
-      <AccessStateScreen
-        eyebrow="Access not assigned"
-        title="Access not assigned"
-        description="Your login is valid, but no organization user profile is assigned to this account yet."
-      />
-    );
+    return <Navigate to="/onboarding" replace />;
   }
 
   if (status === "inactive") {

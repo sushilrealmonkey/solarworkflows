@@ -41,6 +41,10 @@ the repository. It does not approve new business logic by itself.
 - Super admins can add EPC company workspaces through the platform Companies
   page. That workflow creates the organization, settings row, default Admin
   role, role permissions, and first admin profile.
+- Verified email/password or Google users without tenant access are routed to
+  `/onboarding`. They can create one EPC workspace; the transactional setup
+  creates linked company and organization records, seeds the locked standard
+  roles, and assigns the creator the Admin role.
 - Super admins can resend admin setup links and mark EPC workspaces or primary
   admin profiles active/inactive from the EPC Companies page.
 - Super admins can open `/companies/:id` to review full EPC company details,

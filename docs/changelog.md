@@ -3,6 +3,16 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-07-10
+
+- Added verified email/password signup and Google sign-in with a shared Auth
+  callback route.
+- Added self-service EPC workspace onboarding for verified, unassigned users.
+  Onboarding creates company and organization tenant records, seeds the locked
+  standard roles, and assigns the creator the Admin role.
+- Added database guardrails that reject unverified identities, anonymous calls,
+  duplicate workspace membership, and duplicate email or phone assignments.
+
 ## 2026-06-29
 
 - Added a shared record-title UI pattern for Enquiry, Site Survey, Quotation,

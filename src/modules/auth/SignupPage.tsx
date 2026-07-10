@@ -72,13 +72,9 @@ export function SignupPage() {
       }
 
       if (result.status === "unassigned") {
+        setIsRedirecting(true);
         await refresh();
-        setNotice({
-          title: "Account created",
-          description:
-            "Your email is verified, but workspace access still needs to be assigned by an administrator.",
-          tone: "warning",
-        });
+        navigate("/onboarding", { replace: true });
         return;
       }
 
@@ -119,8 +115,8 @@ export function SignupPage() {
           Create your account
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
-          Use your email address. Workspace access is assigned separately by an
-          administrator.
+          Use your email address. After verification, you can create your EPC
+          workspace and continue as its Admin.
         </p>
 
         {notice ? <SignupNoticeCard notice={notice} /> : null}

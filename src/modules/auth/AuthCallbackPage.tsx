@@ -53,12 +53,7 @@ export function AuthCallbackPage() {
 
       if (accessResult.status === "unassigned") {
         await refresh();
-        setCallbackState({
-          status: "error",
-          title: "Workspace access not assigned",
-          message:
-            "Your identity is verified, but an administrator still needs to assign workspace access.",
-        });
+        navigate("/onboarding", { replace: true });
         return;
       }
 
