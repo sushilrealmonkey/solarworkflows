@@ -16,6 +16,10 @@ export type LoginAccessResult =
   | { status: "unassigned"; message: string }
   | { status: "inactive"; profile: SyncedProfile; message: string };
 
+export type SignupResult =
+  | LoginAccessResult
+  | { status: "confirmation_required"; message: string };
+
 let otpVerification:
   | {
       tokenHash: string;
@@ -184,6 +188,65 @@ export async function signInWithPasswordAndSyncProfile(
   return syncCurrentAuthUserProfile();
 }
 
+export async function signUpWithPasswordAndSyncProfile(
+  email: string,
+  password: string,
+  emailRedirectTo: string,
+): Promise<SignupResult> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!isValidLoginEmail(normalizedEmail)) {
+    throw new Error("Enter a valid email address.");
+  }
+
+  if (!isValidNewPassword(password)) {
+    throw new Error("Use at least 8 characters for your password.");
+  }
+
+  const { data, error } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password,
+    options: {
+      emailRedirectTo,
+    },
+  });
+
+  if (error) {
+    throw new Error(mapPasswordError(error.message));
+  }
+
+  if (!data.session) {
+    return {
+      status: "confirmation_required",
+      message:
+        "Check your inbox and confirm your email address to finish creating your account.",
+    };
+  }
+
+  return syncCurrentAuthUserProfile();
+}
+
+export async function signInWithGoogle(redirectTo: string) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo,
+    },
+  });
+
+  if (error) {
+    throw new Error(mapOAuthError(error.message));
+  }
+}
+
 export async function completeInvitedPassword(
   password: string,
 ): Promise<LoginAccessResult> {
@@ -268,4 +331,17 @@ function mapPasswordResetError(message: string) {
   }
 
   return message || "The password reset email could not be sent. Please try again.";
+}
+
+function mapOAuthError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("provider is not enabled") ||
+    normalizedMessage.includes("unsupported provider")
+  ) {
+    return "Google login is not enabled for this Supabase project yet.";
+  }
+
+  return message || "Google login could not be started. Please try again.";
 }

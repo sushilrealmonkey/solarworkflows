@@ -166,15 +166,19 @@ additional_redirect_urls = [
   "https://app.getbizlee.com/create-password",
   "https://app.getbizlee.com/reset-password",
   "http://127.0.0.1:3000",
+  "http://127.0.0.1:3000/auth/callback",
   "http://127.0.0.1:3000/create-password",
   "http://127.0.0.1:3000/reset-password",
   "http://localhost:3000",
+  "http://localhost:3000/auth/callback",
   "http://localhost:3000/create-password",
   "http://localhost:3000/reset-password",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5173/auth/callback",
   "http://127.0.0.1:5173/create-password",
   "http://127.0.0.1:5173/reset-password",
   "http://localhost:5173",
+  "http://localhost:5173/auth/callback",
   "http://localhost:5173/create-password",
   "http://localhost:5173/reset-password",
 ]
@@ -196,7 +200,7 @@ enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
 enable_manual_linking = false
 # Passwords shorter than this value will be rejected as weak. Minimum 6, recommended 8 or more.
-minimum_password_length = 6
+minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
 password_requirements = ""
@@ -353,6 +357,15 @@ url = ""
 # If enabled, the nonce check will be skipped. Required for local sign in with Google auth.
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
+email_optional = false
+
+# Google OAuth credentials are configured through environment variables so no
+# tenant- or deployment-specific values are committed to the repository.
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET)"
+skip_nonce_check = false
 email_optional = false
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.

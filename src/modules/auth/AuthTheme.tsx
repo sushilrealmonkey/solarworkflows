@@ -15,7 +15,7 @@ export function AuthThemeShell({
   children,
 }: AuthThemeShellProps) {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#06173f] px-4 py-5 text-white sm:px-6 lg:px-8">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#06173f] px-4 py-5 text-white sm:px-6 lg:px-8">
       <AuthDarkBackground />
       <div className="relative z-10 mx-auto grid min-h-[calc(100vh-2.5rem)] w-full max-w-6xl items-center gap-6 lg:grid-cols-[0.9fr_1fr] lg:gap-12">
         <section className="relative hidden px-1 py-4 text-white lg:flex lg:min-h-[34rem] lg:flex-col lg:justify-center lg:px-0">

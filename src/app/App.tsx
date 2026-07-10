@@ -10,6 +10,8 @@ import { LoginDesignsPage } from "../modules/auth/LoginDesignsPage";
 import { CreatePasswordPage } from "../modules/auth/CreatePasswordPage";
 import { ForgotPasswordPage } from "../modules/auth/ForgotPasswordPage";
 import { ResetPasswordPage } from "../modules/auth/ResetPasswordPage";
+import { SignupPage } from "../modules/auth/SignupPage";
+import { AuthCallbackPage } from "../modules/auth/AuthCallbackPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
 import { DashboardPage } from "../modules/dashboard/DashboardPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
@@ -58,6 +60,8 @@ export default function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/create-password" element={<CreatePasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<DefaultWorkspaceRedirect />} />

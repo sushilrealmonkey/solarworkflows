@@ -7,6 +7,7 @@ import {
   isValidLoginEmail,
   isValidPassword,
   normalizeEmail,
+  signInWithGoogle,
   signInWithPasswordAndSyncProfile,
 } from "../../services/authAccess";
 
@@ -24,6 +25,7 @@ export function LoginDarkPage() {
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningInWithGoogle, setIsSigningInWithGoogle] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [accessNotice, setAccessNotice] = useState<AccessNotice | null>(null);
@@ -37,7 +39,20 @@ export function LoginDarkPage() {
     return <Navigate to={redirectTo} replace />;
   }
 
-  const isBusy = isSigningIn || isRedirecting;
+  const isBusy = isSigningIn || isSigningInWithGoogle || isRedirecting;
+
+  async function handleGoogleLogin() {
+    setErrorMessage(null);
+    setAccessNotice(null);
+
+    try {
+      setIsSigningInWithGoogle(true);
+      await signInWithGoogle(`${window.location.origin}/auth/callback`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      setIsSigningInWithGoogle(false);
+    }
+  }
 
   async function handlePasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -98,7 +113,7 @@ export function LoginDarkPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#06173f] px-4 py-5 text-white sm:px-6 lg:px-8">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#06173f] px-4 py-5 text-white sm:px-6 lg:px-8">
       <DarkBackground />
       <div className="relative z-10 mx-auto grid min-h-[calc(100vh-2.5rem)] w-full max-w-6xl items-center gap-6 lg:grid-cols-[0.85fr_1fr] lg:gap-12">
         <section className="order-2 hidden px-1 pb-4 lg:order-1 lg:flex lg:min-h-[34rem] lg:items-center lg:justify-center lg:px-0 lg:pb-0">
@@ -235,11 +250,28 @@ export function LoginDarkPage() {
 
             <div className="mt-6 flex items-center gap-4">
               <span className="h-px flex-1 bg-white/15" />
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                or
+              </span>
               <span className="h-px flex-1 bg-white/15" />
             </div>
+            <button
+              className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/[0.08] px-4 py-3.5 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isBusy}
+              onClick={handleGoogleLogin}
+              type="button"
+            >
+              <GoogleIcon />
+              {isSigningInWithGoogle ? "Opening Google" : "Continue with Google"}
+            </button>
             <p className="mx-auto mt-4 max-w-sm text-center text-sm leading-6 text-slate-300">
-              New to Bizlee? Use your invite email to set up your workspace
-              access.
+              New here?{" "}
+              <Link
+                className="font-semibold text-orange-300 transition hover:text-orange-200"
+                to="/signup"
+              >
+                Create an account
+              </Link>
             </p>
           </div>
         </section>
@@ -256,6 +288,7 @@ export function LoginMobilePage() {
   const [password, setPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSigningInWithGoogle, setIsSigningInWithGoogle] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [accessNotice, setAccessNotice] = useState<AccessNotice | null>(null);
@@ -269,7 +302,20 @@ export function LoginMobilePage() {
     return <Navigate to={redirectTo} replace />;
   }
 
-  const isBusy = isSigningIn || isRedirecting;
+  const isBusy = isSigningIn || isSigningInWithGoogle || isRedirecting;
+
+  async function handleGoogleLogin() {
+    setErrorMessage(null);
+    setAccessNotice(null);
+
+    try {
+      setIsSigningInWithGoogle(true);
+      await signInWithGoogle(`${window.location.origin}/auth/callback`);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+      setIsSigningInWithGoogle(false);
+    }
+  }
 
   async function handlePasswordLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -330,7 +376,7 @@ export function LoginMobilePage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#06173f] px-4 py-4 text-white">
+    <main className="relative min-h-screen overflow-x-hidden bg-[#06173f] px-4 py-4 text-white">
       <MobileDarkBackground />
       <div className="relative z-10 mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[27rem] flex-col">
         <header className="flex shrink-0 flex-col items-center pt-2 text-center">
@@ -451,9 +497,30 @@ export function LoginMobilePage() {
               </Link>
             </form>
 
+            <div className="mt-4 flex items-center gap-3">
+              <span className="h-px flex-1 bg-white/15" />
+              <span className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                or
+              </span>
+              <span className="h-px flex-1 bg-white/15" />
+            </div>
+            <button
+              className="mt-4 flex w-full items-center justify-center gap-3 rounded-xl border border-white/15 bg-white/[0.08] px-4 py-3 text-sm font-semibold text-white transition hover:border-white/30 hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isBusy}
+              onClick={handleGoogleLogin}
+              type="button"
+            >
+              <GoogleIcon />
+              {isSigningInWithGoogle ? "Opening Google" : "Continue with Google"}
+            </button>
             <p className="mx-auto mt-5 max-w-xs border-t border-white/15 pt-4 text-center text-xs leading-5 text-slate-300">
-              New to Bizlee? Use your invite email to set up your workspace
-              access.
+              New here?{" "}
+              <Link
+                className="font-semibold text-orange-300 transition hover:text-orange-200"
+                to="/signup"
+              >
+                Create an account
+              </Link>
             </p>
           </div>
         </section>
@@ -625,6 +692,29 @@ function ArrowRightIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 24 24">
+      <path
+        d="M21.35 12.23c0-.71-.06-1.4-.18-2.07H12v3.91h5.24a4.48 4.48 0 0 1-1.94 2.94v2.54h3.14c1.84-1.7 2.91-4.2 2.91-7.32Z"
+        fill="#4285F4"
+      />
+      <path
+        d="M12 21.75c2.62 0 4.82-.87 6.44-2.2l-3.14-2.54c-.87.58-1.98.92-3.3.92-2.53 0-4.68-1.71-5.45-4.01H3.31v2.62A9.72 9.72 0 0 0 12 21.75Z"
+        fill="#34A853"
+      />
+      <path
+        d="M6.55 13.92A5.84 5.84 0 0 1 6.25 12c0-.67.12-1.32.3-1.92V7.46H3.31A9.72 9.72 0 0 0 2.25 12c0 1.63.39 3.17 1.06 4.54l3.24-2.62Z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M12 6.07c1.43 0 2.71.49 3.72 1.45l2.79-2.79A9.36 9.36 0 0 0 12 2.25a9.72 9.72 0 0 0-8.69 5.21l3.24 2.62C7.32 7.78 9.47 6.07 12 6.07Z"
+        fill="#EA4335"
       />
     </svg>
   );
