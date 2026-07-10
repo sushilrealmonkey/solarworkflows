@@ -58,6 +58,14 @@ export function isValidNewPassword(password: string) {
   return password.length >= 8;
 }
 
+export function normalizePhone(phone: string) {
+  return phone.trim().replace(/\s+/g, " ");
+}
+
+export function isValidPhoneNumber(phone: string) {
+  return /^[0-9+() -]{6,20}$/.test(normalizePhone(phone));
+}
+
 export function verifyInviteToken(
   tokenHash: string,
   type: "invite" | "recovery",
@@ -206,6 +214,7 @@ export async function signInWithPasswordAndSyncProfile(
 
 export async function signUpWithPasswordAndSyncProfile(
   email: string,
+  phone: string,
   password: string,
   emailRedirectTo: string,
 ): Promise<SignupResult> {
@@ -214,6 +223,7 @@ export async function signUpWithPasswordAndSyncProfile(
   }
 
   const normalizedEmail = normalizeEmail(email);
+  const normalizedPhone = normalizePhone(phone);
 
   if (!isValidLoginEmail(normalizedEmail)) {
     throw new Error("Enter a valid email address.");
@@ -223,11 +233,18 @@ export async function signUpWithPasswordAndSyncProfile(
     throw new Error("Use at least 8 characters for your password.");
   }
 
+  if (!isValidPhoneNumber(normalizedPhone)) {
+    throw new Error("Enter a valid mobile number.");
+  }
+
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password,
     options: {
       emailRedirectTo,
+      data: {
+        phone: normalizedPhone,
+      },
     },
   });
 
@@ -272,7 +289,7 @@ export async function createEpcWorkspaceForCurrentUser(
 
   const workspaceName = input.workspaceName.trim().replace(/\s+/g, " ");
   const fullName = input.fullName.trim().replace(/\s+/g, " ");
-  const phone = input.phone.trim();
+  const phone = normalizePhone(input.phone);
 
   if (workspaceName.length < 2 || workspaceName.length > 120) {
     throw new Error("Workspace name must be between 2 and 120 characters.");
@@ -282,7 +299,7 @@ export async function createEpcWorkspaceForCurrentUser(
     throw new Error("Full name must be between 2 and 120 characters.");
   }
 
-  if (phone && !/^[0-9+() -]{6,20}$/.test(phone)) {
+  if (phone && !isValidPhoneNumber(phone)) {
     throw new Error("Enter a valid phone number.");
   }
 

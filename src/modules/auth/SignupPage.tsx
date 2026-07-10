@@ -5,7 +5,9 @@ import { safeAuthenticatedRedirect } from "../../app/redirects";
 import {
   isValidLoginEmail,
   isValidNewPassword,
+  isValidPhoneNumber,
   normalizeEmail,
+  normalizePhone,
   signUpWithPasswordAndSyncProfile,
 } from "../../services/authAccess";
 import { AuthThemeCard, AuthThemeShell } from "./AuthTheme";
@@ -20,6 +22,7 @@ export function SignupPage() {
   const { status, profile, refresh } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
@@ -38,9 +41,15 @@ export function SignupPage() {
     setNotice(null);
 
     const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = normalizePhone(phone);
 
     if (!isValidLoginEmail(normalizedEmail)) {
       setErrorMessage("Enter a valid email address.");
+      return;
+    }
+
+    if (!isValidPhoneNumber(normalizedPhone)) {
+      setErrorMessage("Enter a valid mobile number.");
       return;
     }
 
@@ -58,6 +67,7 @@ export function SignupPage() {
       setIsSubmitting(true);
       const result = await signUpWithPasswordAndSyncProfile(
         normalizedEmail,
+        normalizedPhone,
         password,
         `${window.location.origin}/auth/callback`,
       );
@@ -106,7 +116,7 @@ export function SignupPage() {
   return (
     <AuthThemeShell
       badge="Create account"
-      mobileDescription="Register securely with your work email and a password."
+      mobileDescription="Register securely with your work email, mobile number, and a password."
       title="Start with a secure workspace account"
     >
       <AuthThemeCard>
@@ -115,8 +125,8 @@ export function SignupPage() {
           Create your account
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
-          Use your email address. After verification, you can create your EPC
-          workspace and continue as its Admin.
+          Use your email address and mobile number. After email verification,
+          you can create your EPC workspace and continue as its Admin.
         </p>
 
         {notice ? <SignupNoticeCard notice={notice} /> : null}
@@ -134,6 +144,22 @@ export function SignupPage() {
               required
               type="email"
               value={email}
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-semibold text-white">Mobile number</span>
+            <input
+              autoComplete="tel"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.08] px-4 py-3 text-base text-white outline-none transition placeholder:text-slate-400 focus:border-orange-400 focus:bg-white/[0.11] focus:ring-4 focus:ring-orange-400/15 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isBusy}
+              inputMode="tel"
+              maxLength={20}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="+91 98765 43210"
+              required
+              type="tel"
+              value={phone}
             />
           </label>
 

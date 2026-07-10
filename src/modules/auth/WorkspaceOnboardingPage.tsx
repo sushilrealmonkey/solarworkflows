@@ -2,7 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { safeAuthenticatedRedirect } from "../../app/redirects";
-import { createEpcWorkspaceForCurrentUser } from "../../services/authAccess";
+import {
+  createEpcWorkspaceForCurrentUser,
+  normalizePhone,
+} from "../../services/authAccess";
 import { AuthThemeCard, AuthThemeShell } from "./AuthTheme";
 
 export function WorkspaceOnboardingPage() {
@@ -10,7 +13,9 @@ export function WorkspaceOnboardingPage() {
   const navigate = useNavigate();
   const [workspaceName, setWorkspaceName] = useState("");
   const [fullName, setFullName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(() =>
+    getSignupPhone(session?.user.user_metadata),
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -251,4 +256,9 @@ function getErrorMessage(error: unknown) {
   }
 
   return "The workspace could not be created. Please try again.";
+}
+
+function getSignupPhone(metadata: Record<string, unknown> | undefined) {
+  const phone = metadata?.phone;
+  return typeof phone === "string" ? normalizePhone(phone) : "";
 }
