@@ -50,13 +50,15 @@ begin
 end;
 $$;
 
--- Exercise the complete verified-user path without persisting test data.
+-- Exercise the complete verified-email or verified-phone path without
+-- persisting test data.
 begin;
 
 do $$
 declare
   candidate_user_id uuid;
   candidate_email text;
+  candidate_phone text;
   onboarding_result jsonb;
   created_organization_id uuid;
   created_company_id uuid;
@@ -65,18 +67,29 @@ declare
 begin
   select
     users.id,
-    lower(users.email)
+    lower(users.email),
+    users.phone
   into
     candidate_user_id,
-    candidate_email
+    candidate_email,
+    candidate_phone
   from auth.users
-  where users.email_confirmed_at is not null
-    and users.email is not null
+  where (
+      (users.email_confirmed_at is not null and users.email is not null)
+      or (users.phone_confirmed_at is not null and users.phone is not null)
+    )
     and not exists (
       select 1
       from public.users_profile
       where users_profile.auth_user_id = users.id
-        or lower(users_profile.email) = lower(users.email)
+        or (
+          users.email is not null
+          and lower(users_profile.email) = lower(users.email)
+        )
+        or (
+          users.phone is not null
+          and users_profile.phone = users.phone
+        )
     )
     and not exists (
       select 1
@@ -87,7 +100,7 @@ begin
   limit 1;
 
   if candidate_user_id is null then
-    raise notice 'Skipping success-path onboarding test: no verified unassigned Auth user is available';
+    raise notice 'Skipping success-path onboarding test: no verified unassigned Auth identity is available';
     return;
   end if;
 
@@ -97,6 +110,7 @@ begin
     json_build_object(
       'sub', candidate_user_id,
       'email', candidate_email,
+      'phone', candidate_phone,
       'role', 'authenticated'
     )::text,
     true
@@ -131,7 +145,10 @@ begin
       and users_profile.organization_id = created_organization_id
       and users_profile.company_id = created_company_id
       and users_profile.status = 'active'
-      and users_profile.email_verified = true
+      and (
+        users_profile.email_verified = true
+        or users_profile.phone_verified = true
+      )
   ) then
     raise exception 'Onboarding did not create the active verified admin profile';
   end if;

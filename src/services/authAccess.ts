@@ -66,6 +66,14 @@ export function isValidPhoneNumber(phone: string) {
   return /^[0-9+() -]{6,20}$/.test(normalizePhone(phone));
 }
 
+export function normalizeSmsPhone(phone: string) {
+  return normalizePhone(phone).replace(/[() .-]/g, "");
+}
+
+export function isValidSmsPhone(phone: string) {
+  return /^\+[1-9]\d{7,14}$/.test(normalizeSmsPhone(phone));
+}
+
 export function verifyInviteToken(
   tokenHash: string,
   type: "invite" | "recovery",
@@ -214,7 +222,6 @@ export async function signInWithPasswordAndSyncProfile(
 
 export async function signUpWithPasswordAndSyncProfile(
   email: string,
-  phone: string,
   password: string,
   emailRedirectTo: string,
 ): Promise<SignupResult> {
@@ -223,7 +230,6 @@ export async function signUpWithPasswordAndSyncProfile(
   }
 
   const normalizedEmail = normalizeEmail(email);
-  const normalizedPhone = normalizePhone(phone);
 
   if (!isValidLoginEmail(normalizedEmail)) {
     throw new Error("Enter a valid email address.");
@@ -233,18 +239,11 @@ export async function signUpWithPasswordAndSyncProfile(
     throw new Error("Use at least 8 characters for your password.");
   }
 
-  if (!isValidPhoneNumber(normalizedPhone)) {
-    throw new Error("Enter a valid mobile number.");
-  }
-
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password,
     options: {
       emailRedirectTo,
-      data: {
-        phone: normalizedPhone,
-      },
     },
   });
 
@@ -258,6 +257,61 @@ export async function signUpWithPasswordAndSyncProfile(
       message:
         "Check your inbox and confirm your email address to finish creating your account.",
     };
+  }
+
+  return syncCurrentAuthUserProfile();
+}
+
+export async function requestPhoneSignupOtp(phone: string) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedPhone = normalizeSmsPhone(phone);
+
+  if (!isValidSmsPhone(normalizedPhone)) {
+    throw new Error("Enter a mobile number with its country code.");
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    phone: normalizedPhone,
+    options: {
+      shouldCreateUser: true,
+    },
+  });
+
+  if (error) {
+    throw new Error(mapPhoneAuthError(error.message));
+  }
+}
+
+export async function verifyPhoneSignupOtpAndSyncProfile(
+  phone: string,
+  token: string,
+): Promise<LoginAccessResult> {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedPhone = normalizeSmsPhone(phone);
+  const normalizedToken = token.trim();
+
+  if (!isValidSmsPhone(normalizedPhone)) {
+    throw new Error("Enter a mobile number with its country code.");
+  }
+
+  if (!/^\d{6}$/.test(normalizedToken)) {
+    throw new Error("Enter the 6-digit SMS code.");
+  }
+
+  const { error } = await supabase.auth.verifyOtp({
+    phone: normalizedPhone,
+    token: normalizedToken,
+    type: "sms",
+  });
+
+  if (error) {
+    throw new Error(mapPhoneAuthError(error.message));
   }
 
   return syncCurrentAuthUserProfile();
@@ -419,11 +473,47 @@ function mapOAuthError(message: string) {
   return message || "Google login could not be started. Please try again.";
 }
 
+function mapPhoneAuthError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("provider is not enabled") ||
+    normalizedMessage.includes("unsupported provider") ||
+    normalizedMessage.includes("sms provider")
+  ) {
+    return "SMS signup is not enabled for this Supabase project yet.";
+  }
+
+  if (normalizedMessage.includes("rate limit")) {
+    return "Please wait before requesting another SMS code.";
+  }
+
+  if (
+    normalizedMessage.includes("invalid phone") ||
+    normalizedMessage.includes("phone number")
+  ) {
+    return "Enter a valid mobile number with its country code.";
+  }
+
+  if (
+    normalizedMessage.includes("token") ||
+    normalizedMessage.includes("otp") ||
+    normalizedMessage.includes("expired")
+  ) {
+    return "That SMS code is invalid or expired. Request a new code.";
+  }
+
+  return message || "SMS verification could not be completed. Please try again.";
+}
+
 function mapWorkspaceOnboardingError(message: string) {
   const normalizedMessage = message.toLowerCase();
 
-  if (normalizedMessage.includes("verified email")) {
-    return "Confirm your email address before creating a workspace.";
+  if (
+    normalizedMessage.includes("verified email or phone") ||
+    normalizedMessage.includes("verified email address")
+  ) {
+    return "Verify your email address or mobile number before creating a workspace.";
   }
 
   if (normalizedMessage.includes("already has workspace access")) {
