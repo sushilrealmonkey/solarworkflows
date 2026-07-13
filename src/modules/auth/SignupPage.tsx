@@ -17,6 +17,8 @@ import { AuthThemeCard, AuthThemeShell } from "./AuthTheme";
 
 type SignupMethod = "phone" | "email";
 
+const SHOW_PHONE_SIGNUP = false;
+
 type SignupNotice = {
   title: string;
   description: string;
@@ -26,7 +28,7 @@ type SignupNotice = {
 export function SignupPage() {
   const { status, profile, refresh } = useAuth();
   const navigate = useNavigate();
-  const [signupMethod, setSignupMethod] = useState<SignupMethod>("phone");
+  const [signupMethod, setSignupMethod] = useState<SignupMethod>("email");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -194,8 +196,8 @@ export function SignupPage() {
   return (
     <AuthThemeShell
       badge="Create account"
-      mobileDescription="Sign up with a mobile number and SMS code, or use email and password."
-      title="Choose how you want to sign up"
+      mobileDescription="Create an account with your email address and password."
+      title="Create your account"
     >
       <AuthThemeCard>
         <p className="text-sm font-semibold text-orange-300">Account setup</p>
@@ -203,32 +205,33 @@ export function SignupPage() {
           Create your account
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
-          Verify your mobile number by SMS, or create an account with your email
-          address and password.
+          Create an account with your email address and password.
         </p>
 
-        <div
-          aria-label="Signup method"
-          className="mt-6 grid grid-cols-2 rounded-xl border border-white/10 bg-white/[0.05] p-1"
-          role="group"
-        >
-          <SignupMethodButton
-            active={signupMethod === "phone"}
-            disabled={isBusy}
-            label="Mobile & SMS"
-            onClick={() => selectSignupMethod("phone")}
-          />
-          <SignupMethodButton
-            active={signupMethod === "email"}
-            disabled={isBusy}
-            label="Email & password"
-            onClick={() => selectSignupMethod("email")}
-          />
-        </div>
+        {SHOW_PHONE_SIGNUP ? (
+          <div
+            aria-label="Signup method"
+            className="mt-6 grid grid-cols-2 rounded-xl border border-white/10 bg-white/[0.05] p-1"
+            role="group"
+          >
+            <SignupMethodButton
+              active={signupMethod === "phone"}
+              disabled={isBusy}
+              label="Mobile & SMS"
+              onClick={() => selectSignupMethod("phone")}
+            />
+            <SignupMethodButton
+              active={signupMethod === "email"}
+              disabled={isBusy}
+              label="Email & password"
+              onClick={() => selectSignupMethod("email")}
+            />
+          </div>
+        ) : null}
 
         {notice ? <SignupNoticeCard notice={notice} /> : null}
 
-        {signupMethod === "phone" ? (
+        {SHOW_PHONE_SIGNUP && signupMethod === "phone" ? (
           <form className="mt-6 space-y-4" onSubmit={handlePhoneSignup}>
             <label className="block">
               <span className="text-sm font-semibold text-white">Mobile number</span>

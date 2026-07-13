@@ -96,8 +96,7 @@ export function WorkspaceOnboardingPage() {
               Set up your company
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              We will create an isolated EPC workspace and assign you the locked
-              Admin role.
+              We will create a workspace for your company.
             </p>
 
             <div className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3">
@@ -113,7 +112,7 @@ export function WorkspaceOnboardingPage() {
               <TextField
                 autoComplete="organization"
                 disabled={isSubmitting}
-                label="EPC workspace name"
+                label="Workspace name"
                 maxLength={120}
                 onChange={setWorkspaceName}
                 placeholder="Example Solar Solutions"
