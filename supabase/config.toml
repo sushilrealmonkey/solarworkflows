@@ -293,10 +293,11 @@ max_frequency = "5s"
 # [auth.sms.test_otp]
 # 4152127777 = "123456"
 
-# Configure logged in session timeouts.
-# [auth.sessions]
-# Force log out after the specified duration.
-# timebox = "24h"
+# Keep a login active on the user's current phone or desktop for up to 30 days.
+# The client refreshes the short-lived JWT during this session.
+[auth.sessions]
+# Force reauthentication after 30 days, even when the user remains active.
+timebox = "720h"
 # Force log out if the user has been inactive longer than the specified duration.
 # inactivity_timeout = "8h"
 
