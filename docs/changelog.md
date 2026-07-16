@@ -3,6 +3,28 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-07-16
+
+- Implemented AI Assistant Phase 1: `/today` screen with an AI daily brief and
+  streaming data chat (`src/modules/assistant/`), `assistant-brief` and
+  `assistant-chat` edge functions with a shared read-only tool layer running
+  under the caller's JWT, and the `daily_briefs` per-user cache table with RLS.
+- Switched the assistant's model provider from the planned Anthropic API to
+  OpenAI chat completions (product decision); default model `gpt-5.6`,
+  overridable via the `ASSISTANT_MODEL` edge function secret alongside
+  `OPENAI_API_KEY`.
+- Verified end to end on the linked Supabase project: brief generation from
+  live tenant data, per-day cache hits with token usage logged, streaming chat
+  with tool calls and in-app record links, JWT-gated function access, and CORS
+  for local and allowlisted app origins.
+
+## 2026-07-15
+
+- Added the AI Assistant Phase 1 technical specification (`ai-assistant-phase1-spec.md`)
+  covering the planned Today screen daily brief + chat experience, the
+  caller-JWT tool layer, the `daily_briefs` table, and build order. Spec only —
+  no implementation yet.
+
 ## 2026-07-10
 
 - Added verified email/password signup and Google sign-in with a shared Auth

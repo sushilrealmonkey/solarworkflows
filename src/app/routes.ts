@@ -21,6 +21,13 @@ export const routes: AppRoute[] = [
     description: "A tenant-aware overview for future solar operations metrics.",
   },
   {
+    path: "/today",
+    label: "Today",
+    moduleKey: "dashboard",
+    description:
+      "AI daily brief and assistant chat over the organization's own data.",
+  },
+  {
     path: "/customers/project-based",
     label: "Customers",
     moduleKey: "customers",
