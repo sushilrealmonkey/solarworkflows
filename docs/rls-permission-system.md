@@ -47,3 +47,13 @@ This keeps company data separated at the database layer. If a request reaches Su
 Every future business table must include `company_id` unless it is truly global reference data. This includes clients, quotations, invoices, payments, inventory, purchases, vendors, projects, expenses, contractor records, documents, and reports.
 
 Without `company_id`, RLS cannot reliably prove which tenant owns a row. Adding `company_id` from the beginning keeps policies simple, audit-friendly, and safe for a multi-tenant SaaS platform.
+
+## Security Notes
+
+### `settings:update` is effectively admin-equivalent
+
+A user with the `settings:update` permission can create a custom (non-system) role via `create_settings_role` and grant it *every* permission through `apply_role_permissions`, then assign that role to any staff member. System roles remain locked (only a super admin can change their permissions), but custom roles are not. Treat `settings:update` as an administrative capability and grant it only to trusted admins — it is not a safe permission to hand to general staff.
+
+### Deactivation revokes access at the database layer
+
+Setting a user's status to `inactive` (via `update_settings_staff` or the admin-status edge function) denies them across both RBAC paths: `user_has_permission()` and the legacy `has_permission()` / `get_current_user_company_id()` helpers all require an active profile. Deactivation also keeps the `profiles` and `users_profile` status columns in sync and terminates the user's live auth sessions, so a deactivated user cannot continue operating with a still-valid token. Client-side sign-out is a convenience, not the enforcement point — RLS is.

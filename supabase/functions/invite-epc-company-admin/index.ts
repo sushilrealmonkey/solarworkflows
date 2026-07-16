@@ -46,6 +46,13 @@ const corsHeaders = {
 };
 
 Deno.serve(async (request) => {
+  const response = await handleInviteRequest(request);
+  response.headers.set("Access-Control-Allow-Origin", resolveCorsOrigin(request));
+  response.headers.append("Vary", "Origin");
+  return response;
+});
+
+async function handleInviteRequest(request: Request): Promise<Response> {
   if (request.method === "OPTIONS") {
     return jsonResponse({}, 204);
   }
@@ -165,7 +172,7 @@ Deno.serve(async (request) => {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return jsonResponse({ error: message }, 400);
   }
-});
+}
 
 async function sendAdminSetupLink(
   serviceClient: ReturnType<typeof createClient>,
@@ -404,17 +411,39 @@ async function updateAdminStatus(
     return jsonResponse({ error: "Invalid admin status" }, 400);
   }
 
-  const { error } = await serviceClient
+  const { data: updatedProfile, error } = await serviceClient
     .from("users_profile")
     .update({
       status,
       updated_at: new Date().toISOString(),
     })
     .eq("id", adminProfileId)
-    .eq("is_super_admin", false);
+    .eq("is_super_admin", false)
+    .select("auth_user_id")
+    .maybeSingle();
 
   if (error) {
     return jsonResponse({ error: error.message }, 400);
+  }
+
+  const authUserId =
+    typeof updatedProfile?.auth_user_id === "string"
+      ? updatedProfile.auth_user_id
+      : null;
+
+  if (authUserId) {
+    // Keep the legacy profiles row aligned so status-aware RLS policies deny
+    // deactivated admins, and terminate live sessions on deactivation.
+    await serviceClient
+      .from("profiles")
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq("id", authUserId);
+
+    if (status === "inactive") {
+      await serviceClient.rpc("revoke_tenant_user_sessions", {
+        target_auth_user_id: authUserId,
+      });
+    }
   }
 
   return jsonResponse({
@@ -709,16 +738,50 @@ function requireEnv(name: string) {
   return value;
 }
 
-function resolveAppBaseUrl(request: Request) {
-  const originBaseUrl = request.headers.get("Origin");
-  const configuredBaseUrl = Deno.env.get("APP_BASE_URL");
-  const appBaseUrl = originBaseUrl || configuredBaseUrl;
+function normalizeBaseUrl(value: string | null | undefined) {
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed.replace(/\/+$/, "") : "";
+}
 
-  if (!appBaseUrl) {
-    throw new Error("Request origin is unavailable and APP_BASE_URL is not configured");
+function appOriginAllowList() {
+  const configuredBaseUrl = normalizeBaseUrl(Deno.env.get("APP_BASE_URL"));
+  return new Set(
+    [
+      configuredBaseUrl,
+      ...(Deno.env.get("APP_ALLOWED_ORIGINS") ?? "")
+        .split(",")
+        .map((entry) => normalizeBaseUrl(entry)),
+    ]
+      .filter((value) => value.length > 0)
+      .map((value) => value.toLowerCase()),
+  );
+}
+
+function resolveAppBaseUrl(request: Request) {
+  const configuredBaseUrl = normalizeBaseUrl(Deno.env.get("APP_BASE_URL"));
+  const originBaseUrl = normalizeBaseUrl(request.headers.get("Origin"));
+
+  // Honor the request Origin only when it is an allow-listed app origin, so a
+  // spoofed Origin header cannot redirect invite/setup emails off-domain.
+  if (originBaseUrl && appOriginAllowList().has(originBaseUrl.toLowerCase())) {
+    return originBaseUrl;
   }
 
-  return appBaseUrl.replace(/\/+$/, "");
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  throw new Error("APP_BASE_URL is not configured");
+}
+
+function resolveCorsOrigin(request: Request) {
+  const originBaseUrl = normalizeBaseUrl(request.headers.get("Origin"));
+
+  if (originBaseUrl && appOriginAllowList().has(originBaseUrl.toLowerCase())) {
+    return originBaseUrl;
+  }
+
+  return normalizeBaseUrl(Deno.env.get("APP_BASE_URL")) || "*";
 }
 
 function jsonResponse(body: unknown, status = 200) {

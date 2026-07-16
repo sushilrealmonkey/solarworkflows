@@ -33,6 +33,13 @@ const corsHeaders = {
 };
 
 Deno.serve(async (request) => {
+  const response = await handleInviteRequest(request);
+  response.headers.set("Access-Control-Allow-Origin", resolveCorsOrigin(request));
+  response.headers.append("Vary", "Origin");
+  return response;
+});
+
+async function handleInviteRequest(request: Request): Promise<Response> {
   if (request.method === "OPTIONS") {
     return jsonResponse({}, 204);
   }
@@ -76,6 +83,30 @@ Deno.serve(async (request) => {
       return jsonResponse({ error: inviteMetadata.error }, 400);
     }
 
+    // Authorize and persist the staff profile BEFORE any privileged action.
+    // create_settings_staff enforces the settings:update permission and email
+    // uniqueness, so the service-role invite below only runs for authorized callers
+    // and can no longer be abused to send arbitrary invitation emails.
+    const { data: staffData, error: staffError } = await callerClient.rpc(
+      "create_settings_staff",
+      {
+        full_name: payload.full_name,
+        phone: payload.phone,
+        email: payload.email,
+        role_id: payload.role_id,
+        status: payload.status,
+      },
+    );
+
+    if (staffError || !staffData) {
+      return jsonResponse(
+        { error: staffError?.message ?? "Unable to create staff profile" },
+        400,
+      );
+    }
+
+    const staff = staffData as StaffProfileRow;
+
     const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
         autoRefreshToken: false,
@@ -95,32 +126,14 @@ Deno.serve(async (request) => {
       });
 
     if (inviteError || !inviteData.user) {
+      // The invite failed after the profile was created; remove the orphan row.
+      await serviceClient.from("users_profile").delete().eq("id", staff.id);
       return jsonResponse(
         { error: inviteError?.message ?? "Unable to send staff invite" },
         400,
       );
     }
 
-    const { data: staffData, error: staffError } = await callerClient.rpc(
-      "create_settings_staff",
-      {
-        full_name: payload.full_name,
-        phone: payload.phone,
-        email: payload.email,
-        role_id: payload.role_id,
-        status: payload.status,
-      },
-    );
-
-    if (staffError || !staffData) {
-      await serviceClient.auth.admin.deleteUser(inviteData.user.id);
-      return jsonResponse(
-        { error: staffError?.message ?? "Unable to create staff profile" },
-        400,
-      );
-    }
-
-    const staff = staffData as StaffProfileRow;
     const { data: updatedStaff, error: updateError } = await serviceClient
       .from("users_profile")
       .update({
@@ -149,7 +162,7 @@ Deno.serve(async (request) => {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return jsonResponse({ error: message }, 400);
   }
-});
+}
 
 function validateInviteBody(body: InviteStaffRequestBody) {
   const fullName = normalizeText(body.full_name);
@@ -265,16 +278,50 @@ function requireEnv(name: string) {
   return value;
 }
 
-function resolveAppBaseUrl(request: Request) {
-  const originBaseUrl = request.headers.get("Origin");
-  const configuredBaseUrl = Deno.env.get("APP_BASE_URL");
-  const appBaseUrl = originBaseUrl || configuredBaseUrl;
+function normalizeBaseUrl(value: string | null | undefined) {
+  const trimmed = (value ?? "").trim();
+  return trimmed ? trimmed.replace(/\/+$/, "") : "";
+}
 
-  if (!appBaseUrl) {
-    throw new Error("Request origin is unavailable and APP_BASE_URL is not configured");
+function appOriginAllowList() {
+  const configuredBaseUrl = normalizeBaseUrl(Deno.env.get("APP_BASE_URL"));
+  return new Set(
+    [
+      configuredBaseUrl,
+      ...(Deno.env.get("APP_ALLOWED_ORIGINS") ?? "")
+        .split(",")
+        .map((entry) => normalizeBaseUrl(entry)),
+    ]
+      .filter((value) => value.length > 0)
+      .map((value) => value.toLowerCase()),
+  );
+}
+
+function resolveAppBaseUrl(request: Request) {
+  const configuredBaseUrl = normalizeBaseUrl(Deno.env.get("APP_BASE_URL"));
+  const originBaseUrl = normalizeBaseUrl(request.headers.get("Origin"));
+
+  // Honor the request Origin only when it is an allow-listed app origin, so a
+  // spoofed Origin header cannot redirect invite/setup emails off-domain.
+  if (originBaseUrl && appOriginAllowList().has(originBaseUrl.toLowerCase())) {
+    return originBaseUrl;
   }
 
-  return appBaseUrl.replace(/\/+$/, "");
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  throw new Error("APP_BASE_URL is not configured");
+}
+
+function resolveCorsOrigin(request: Request) {
+  const originBaseUrl = normalizeBaseUrl(request.headers.get("Origin"));
+
+  if (originBaseUrl && appOriginAllowList().has(originBaseUrl.toLowerCase())) {
+    return originBaseUrl;
+  }
+
+  return normalizeBaseUrl(Deno.env.get("APP_BASE_URL")) || "*";
 }
 
 function jsonResponse(body: unknown, status = 200) {
