@@ -22,7 +22,7 @@ export const routes: AppRoute[] = [
   },
   {
     path: "/today",
-    label: "Today",
+    label: "Bizlee AI",
     moduleKey: "dashboard",
     description:
       "AI daily brief and assistant chat over the organization's own data.",
