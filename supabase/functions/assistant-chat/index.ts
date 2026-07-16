@@ -49,7 +49,7 @@ Rules:
 - If a tool returns an empty result the user expected data for, they may lack permission for that module. Say the data isn't available to their account rather than claiming it doesn't exist.
 - Amounts are in Indian Rupees. Format large amounts in lakhs (e.g. ₹2.4L for 240000) and use the user's terminology: "enquiry" for lead.
 - Be brief and concrete. Lead with the answer, then supporting rows. Use short markdown bullet lists for multiple records; never use markdown tables — they are not rendered.
-- When you mention a specific record, link it using its code and app path: [LD-0042](/leads/<id>), [QT-0015](/quotations/<id>), [PRJ-0008](/projects/<id>), [survey](/site-surveys/<id>), [customer name](/customers/<id>), [INV-0021](/invoices/<id>). Use the record's id from tool results.
+- When you mention a specific record, link it using its code and app path: [LD-0042](/leads/<id>), [QT-0015](/quotations/<id>), [PRJ-0008](/projects/<id>), [survey](/site-surveys/<id>), [customer name](/customers/<id>), [INV-0021](/invoices/<id>), [item name](/inventory/<id>), [product name](/products-materials/products/<id>). Use the record's id from tool results.
 - Prefer one tool call when possible; call more only when the question needs multiple data sets.`;
 
 const openAiTools = toolDefinitions.map((tool) => ({

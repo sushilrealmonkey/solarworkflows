@@ -86,10 +86,43 @@ export const toolDefinitions = [
   {
     name: "get_low_stock",
     description:
-      "List active inventory items at or below their minimum stock level.",
+      "List active inventory items at or below their minimum stock level. Returns only low items — use get_inventory_items for full stock levels or totals.",
     input_schema: {
       type: "object",
       properties: {},
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_inventory_items",
+    description:
+      "List active inventory items with current and minimum stock levels, plus the total item count. Optionally filter by a name/code/brand/category fragment, e.g. 'panel' or 'inverter'. Use this for any question about stock levels or what is in inventory.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description:
+            "Optional name, code, brand, model, or category fragment to filter by",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "get_products",
+    description:
+      "List the product/material catalog (product master) with code, name, brand, model, category, and unit, plus the total product count. Optionally filter by a name/code/brand fragment. Prices are not included.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Optional name, code, brand, or model fragment to filter by",
+        },
+      },
       required: [],
       additionalProperties: false,
     },
@@ -307,6 +340,67 @@ async function getLowStock(client: SupabaseClient) {
     (item) => Number(item.current_stock ?? 0) <= Number(item.minimum_stock ?? 0),
   );
   return { count: low.length, items: low.slice(0, ROW_LIMIT) };
+}
+
+async function getInventoryItems(
+  client: SupabaseClient,
+  input: Record<string, unknown>,
+) {
+  let query = client
+    .from("inventory_items")
+    .select(
+      "id, item_code, item_name, item_category, brand, model, unit, current_stock, minimum_stock",
+      { count: "exact" },
+    )
+    .eq("status", "active")
+    .order("item_name", { ascending: true })
+    .limit(ROW_LIMIT);
+
+  const raw = String(input.query ?? "").trim();
+  if (raw) {
+    const term = `%${raw.replace(/[%_]/g, "\\$&")}%`;
+    query = query.or(
+      `item_name.ilike.${term},item_code.ilike.${term},item_category.ilike.${term},brand.ilike.${term},model.ilike.${term}`,
+    );
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(error.message);
+  return {
+    total_matching_items: count ?? data?.length ?? 0,
+    returned: data?.length ?? 0,
+    items: data ?? [],
+  };
+}
+
+async function getProducts(
+  client: SupabaseClient,
+  input: Record<string, unknown>,
+) {
+  let query = client
+    .from("products")
+    .select(
+      "id, product_code, product_name, brand, model_number, unit, status, category:product_categories(name)",
+      { count: "exact" },
+    )
+    .order("product_name", { ascending: true })
+    .limit(ROW_LIMIT);
+
+  const raw = String(input.query ?? "").trim();
+  if (raw) {
+    const term = `%${raw.replace(/[%_]/g, "\\$&")}%`;
+    query = query.or(
+      `product_name.ilike.${term},product_code.ilike.${term},brand.ilike.${term},model_number.ilike.${term}`,
+    );
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw new Error(error.message);
+  return {
+    total_matching_products: count ?? data?.length ?? 0,
+    returned: data?.length ?? 0,
+    products: data ?? [],
+  };
 }
 
 async function getStockRisk(client: SupabaseClient) {
@@ -539,6 +633,8 @@ const executors: Record<string, ToolExecutor> = {
   get_recent_enquiries: getRecentEnquiries,
   get_stale_enquiries: getStaleEnquiries,
   get_low_stock: (client) => getLowStock(client),
+  get_inventory_items: getInventoryItems,
+  get_products: getProducts,
   get_stock_risk: (client) => getStockRisk(client),
   get_overdue_invoices: (client, _input, localDate) =>
     getOverdueInvoices(client, localDate),
