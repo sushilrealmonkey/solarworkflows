@@ -473,7 +473,10 @@ export function PurchaseDetailPage() {
                 <DetailItem label="Phone" value={order.vendor?.phone ?? "-"} />
               </DetailSection>
 
-              <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+              <section
+                className="scroll-mt-6 rounded-xl border border-stone-200 bg-white p-5 shadow-sm"
+                id="purchase-order-items"
+              >
                 <h2 className="text-base font-semibold text-slate-950">Items</h2>
                 <div className="mt-4 overflow-x-auto rounded-lg border border-stone-200">
                   <table className="w-full min-w-[680px] border-collapse text-left text-sm">
@@ -529,7 +532,7 @@ export function PurchaseDetailPage() {
               </section>
             </div>
 
-            <aside className="space-y-6">
+            <aside id="purchase-order-actions" className="scroll-mt-6 space-y-6">
               <PurchaseNextStepSection
                 canDownloadPdf={canGeneratePurchasePdf}
                 canReceive={
@@ -564,6 +567,20 @@ export function PurchaseDetailPage() {
             archivedAt={order.archived_at}
             canDelete={canDelete}
             canUpdate={canManageStatus}
+            dependencyTargets={{
+              documents: {
+                actionLabel: "View PO actions",
+                targetId: "purchase-order-actions",
+              },
+              purchase_order_items: {
+                actionLabel: "View PO items",
+                targetId: "purchase-order-items",
+              },
+              receiving_history: {
+                actionLabel: "View received items",
+                targetId: "purchase-order-items",
+              },
+            }}
             moduleKey="purchase_orders"
             onChanged={async (action) => {
               if (action === "delete") {
