@@ -1,5 +1,6 @@
 import { supabase } from "../../services/supabaseClient";
 import type { UserProfile } from "../../app/AuthProvider";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   Customer,
   CustomerSegment,
@@ -121,12 +122,6 @@ export async function fetchCustomers(
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (options.archiveScope !== "all") {
-    query = options.archiveScope === "archived"
-      ? query.not("archived_at", "is", null)
-      : query.is("archived_at", null);
-  }
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -143,7 +138,7 @@ export async function fetchCustomers(
     throw new Error(error.message);
   }
 
-  return (data ?? []) as Customer[];
+  return filterByArchiveScope((data ?? []) as Customer[], options.archiveScope);
 }
 
 export async function fetchCustomer(profile: UserProfile | null, id: string) {
@@ -332,10 +327,6 @@ export async function fetchLeads(profile: UserProfile | null, archiveScope: "act
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") {
-    query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-  }
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -348,7 +339,7 @@ export async function fetchLeads(profile: UserProfile | null, archiveScope: "act
     throw new Error(error.message);
   }
 
-  const leads = (data ?? []) as Lead[];
+  const leads = filterByArchiveScope((data ?? []) as Lead[], archiveScope);
   const leadIds = leads.map((lead) => lead.id);
 
   if (leadIds.length === 0) {

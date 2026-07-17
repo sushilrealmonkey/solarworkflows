@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   InventoryItem,
   InventoryBatch,
@@ -392,9 +393,12 @@ export async function fetchInventoryItems(profile: UserProfile | null, archiveSc
   }
 
   return attachReservationTotals(
-    ((data ?? []) as InventoryItemPublicRow[]).map((row) =>
-      redactLegacyInventoryPricing(row.item_data),
-    ).filter((item) => archiveScope === "all" || (archiveScope === "archived" ? Boolean(item.archived_at) : !item.archived_at)),
+    filterByArchiveScope(
+      ((data ?? []) as InventoryItemPublicRow[]).map((row) =>
+        redactLegacyInventoryPricing(row.item_data),
+      ),
+      archiveScope,
+    ),
   );
 }
 

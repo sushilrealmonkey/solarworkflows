@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   Product,
   ProductCategory,
@@ -152,9 +153,10 @@ export async function fetchProductCategories(profile: UserProfile | null, archiv
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as ProductCategoryPublicRow[]).map(
-    (row) => row.category_data,
-  ).filter((category) => archiveScope === "all" || (archiveScope === "archived" ? Boolean(category.archived_at) : !category.archived_at));
+  return filterByArchiveScope(
+    ((data ?? []) as ProductCategoryPublicRow[]).map((row) => row.category_data),
+    archiveScope,
+  );
 }
 
 export async function createProductCategory(
@@ -208,9 +210,12 @@ export async function fetchProducts(profile: UserProfile | null, archiveScope: "
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as ProductPublicRow[]).map((row) =>
-    redactLegacyProductPricing(row.product_data),
-  ).filter((product) => archiveScope === "all" || (archiveScope === "archived" ? Boolean(product.archived_at) : !product.archived_at));
+  return filterByArchiveScope(
+    ((data ?? []) as ProductPublicRow[]).map((row) =>
+      redactLegacyProductPricing(row.product_data),
+    ),
+    archiveScope,
+  );
 }
 
 export async function fetchProductBrandSuggestions(

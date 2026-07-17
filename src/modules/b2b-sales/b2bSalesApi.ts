@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type { PaymentWithRelations } from "../payments/types";
 import type {
   B2BInventoryItemOption,
@@ -143,8 +144,6 @@ export async function fetchB2BSales(profile: UserProfile | null, archiveScope: "
     .select(b2bSaleSelect)
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -157,7 +156,10 @@ export async function fetchB2BSales(profile: UserProfile | null, archiveScope: "
     throw new Error(error.message);
   }
 
-  return (data ?? []) as unknown as B2BSaleWithRelations[];
+  return filterByArchiveScope(
+    (data ?? []) as unknown as B2BSaleWithRelations[],
+    archiveScope,
+  );
 }
 
 export async function fetchB2BSale(profile: UserProfile | null, id: string) {

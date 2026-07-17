@@ -1,6 +1,7 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
 import type { Lead } from "../crm/types";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   SiteSurvey,
   SiteSurveyFile,
@@ -119,8 +120,6 @@ export async function fetchSiteSurveys(profile: UserProfile | null, archiveScope
     .select(surveySelect)
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -135,7 +134,7 @@ export async function fetchSiteSurveys(profile: UserProfile | null, archiveScope
 
   const surveysWithQuotations = await attachSurveyQuotationSummaries(
     profile,
-    (data ?? []) as SiteSurveyWithRelations[],
+    filterByArchiveScope((data ?? []) as SiteSurveyWithRelations[], archiveScope),
   );
   const surveys = await attachSurveyProjectIds(profile, surveysWithQuotations);
   return addSurveyFileUrls(surveys);

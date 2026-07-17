@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   PurchaseOrder,
   PurchaseOrderFormValues,
@@ -90,8 +91,6 @@ async function fetchPurchaseOrdersDirect(
     .select(purchaseOrderSelect)
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (filters?.vendorId) {
     query = query.eq("vendor_id", filters.vendorId);
   }
@@ -118,13 +117,15 @@ async function fetchPurchaseOrdersDirect(
     }),
   );
 
+  const scopedOrders = filterByArchiveScope(orders, archiveScope);
+
   if (filters?.itemId) {
-    return orders.filter((order) =>
+    return scopedOrders.filter((order) =>
       (order.items ?? []).some((item) => item.item_id === filters.itemId),
     );
   }
 
-  return orders;
+  return scopedOrders;
 }
 
 export async function fetchPurchaseOrders(
@@ -154,9 +155,12 @@ export async function fetchPurchaseOrders(
       throw new Error(error.message);
     }
 
-    const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
-      (row) => row.order_data as PurchaseOrderWithRelations,
-    ).filter((order) => options.archiveScope === "all" || (options.archiveScope === "archived" ? Boolean(order.archived_at) : !order.archived_at));
+    const orders = filterByArchiveScope(
+      ((data ?? []) as Array<{ order_data: unknown }>).map(
+        (row) => row.order_data as PurchaseOrderWithRelations,
+      ),
+      options.archiveScope,
+    );
 
     return filters?.vendorId
       ? orders.filter((order) => order.vendor_id === filters.vendorId)
@@ -177,9 +181,12 @@ export async function fetchPurchaseOrders(
       throw error;
     }
 
-    const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
-      (row) => row.order_data as PurchaseOrderWithRelations,
-    ).filter((order) => options.archiveScope === "all" || (options.archiveScope === "archived" ? Boolean(order.archived_at) : !order.archived_at));
+    const orders = filterByArchiveScope(
+      ((data ?? []) as Array<{ order_data: unknown }>).map(
+        (row) => row.order_data as PurchaseOrderWithRelations,
+      ),
+      options.archiveScope,
+    );
 
     return filters?.vendorId
       ? orders.filter((order) => order.vendor_id === filters.vendorId)

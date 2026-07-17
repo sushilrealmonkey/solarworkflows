@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type { PaymentWithRelations } from "../payments/types";
 import type { QuotationItem } from "../quotations/types";
 import type {
@@ -153,8 +154,6 @@ export async function fetchProformaInvoices(profile: UserProfile | null, archive
     .select(proformaSelect)
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -167,7 +166,10 @@ export async function fetchProformaInvoices(profile: UserProfile | null, archive
     throw new Error(error.message);
   }
 
-  return (data ?? []) as unknown as ProformaInvoiceWithRelations[];
+  return filterByArchiveScope(
+    (data ?? []) as unknown as ProformaInvoiceWithRelations[],
+    archiveScope,
+  );
 }
 
 export async function fetchProformaInvoice(

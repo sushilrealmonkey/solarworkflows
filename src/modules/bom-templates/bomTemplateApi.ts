@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   BomTemplate,
   BomTemplateFormValues,
@@ -71,8 +72,6 @@ export async function fetchBomTemplates(profile: UserProfile | null, archiveScop
     .order("display_order", { ascending: true })
     .order("name", { ascending: true });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (!profile?.is_super_admin) {
     query = query.eq("tenant_id", requireTenant(profile));
   } else if (profile.organization_id) {
@@ -85,7 +84,7 @@ export async function fetchBomTemplates(profile: UserProfile | null, archiveScop
     throw new Error(error.message);
   }
 
-  return (data ?? []) as BomTemplate[];
+  return filterByArchiveScope((data ?? []) as BomTemplate[], archiveScope);
 }
 
 export async function fetchBomTemplate(

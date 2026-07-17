@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   Payment,
   PaymentFormValues,
@@ -100,8 +101,6 @@ export async function fetchPayments(profile: UserProfile | null, archiveScope: "
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -114,7 +113,10 @@ export async function fetchPayments(profile: UserProfile | null, archiveScope: "
     throw new Error(error.message);
   }
 
-  return (data ?? []) as unknown as PaymentWithRelations[];
+  return filterByArchiveScope(
+    (data ?? []) as unknown as PaymentWithRelations[],
+    archiveScope,
+  );
 }
 
 export async function fetchPayment(profile: UserProfile | null, id: string) {

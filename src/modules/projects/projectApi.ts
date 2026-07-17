@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   SiteSurveyWithRelations,
   SurveyCustomerSummary,
@@ -116,8 +117,6 @@ export async function fetchProjects(profile: UserProfile | null, archiveScope: "
     .select(projectSelect)
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -130,7 +129,7 @@ export async function fetchProjects(profile: UserProfile | null, archiveScope: "
     throw new Error(error.message);
   }
 
-  return (data ?? []) as ProjectWithRelations[];
+  return filterByArchiveScope((data ?? []) as ProjectWithRelations[], archiveScope);
 }
 
 export async function fetchProject(profile: UserProfile | null, id: string) {

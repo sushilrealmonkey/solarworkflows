@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type { Vendor, VendorFormValues } from "./types";
 
 function requireSupabase() {
@@ -51,8 +52,6 @@ export async function fetchVendors(profile: UserProfile | null, archiveScope: "a
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
-
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
   } else if (profile.organization_id) {
@@ -65,7 +64,7 @@ export async function fetchVendors(profile: UserProfile | null, archiveScope: "a
     throw new Error(error.message);
   }
 
-  return (data ?? []) as Vendor[];
+  return filterByArchiveScope((data ?? []) as Vendor[], archiveScope);
 }
 
 export async function fetchVendor(profile: UserProfile | null, id: string) {
