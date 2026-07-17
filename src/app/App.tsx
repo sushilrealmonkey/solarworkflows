@@ -15,6 +15,7 @@ import { AuthCallbackPage } from "../modules/auth/AuthCallbackPage";
 import { WorkspaceOnboardingPage } from "../modules/auth/WorkspaceOnboardingPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
 import { DashboardPage } from "../modules/dashboard/DashboardPage";
+import { TodayPage } from "../modules/assistant/TodayPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
 import { CustomerDetailPage } from "../modules/crm/CustomerDetailPage";
 import { LeadsPage } from "../modules/crm/LeadsPage";
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/companies/:id" element={<CompanyDetailPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/today" element={<TodayPage />} />
           <Route
             path="/customers"
             element={<Navigate to="/customers/project-based" replace />}

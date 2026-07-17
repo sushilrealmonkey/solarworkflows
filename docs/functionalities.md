@@ -8,6 +8,7 @@ the repository. It does not approve new business logic by itself.
 | Area | Current intent |
 | --- | --- |
 | Dashboard | Tenant-aware overview and operational widgets; super admins see EPC-level platform metrics and recent activity. |
+| Bizlee AI (Assistant) | Tenant-only `/today` screen (nav label "Bizlee AI") with an AI daily brief (prioritized cards with severity, record links, and tappable prompts, cached per user per day in `daily_briefs`) and a streaming data chatbot. Both run through edge functions (`assistant-brief`, `assistant-chat`) that call OpenAI with a fixed read-only tool layer executing under the caller's JWT, so RLS governs all data access. Super admins are excluded. |
 | CRM | Nested Project Based and B2B/Direct customer lists, enquiry list/detail workflows, customer details, follow-ups, universal record titles, and next-step workflow actions. |
 | Site Surveys | Site survey list/detail workflows, survey records, customer/enquiry links, status updates, and quotation/project next-step actions. |
 | Quotations | Quotation list/detail/create/edit workflows, proposal fields, discounts, payment terms, warranties, stored PDFs, BOM-related data, and accepted-quotation inventory reservations. |

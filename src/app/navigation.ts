@@ -26,6 +26,7 @@ function navigationRoute(path: string): NavigationItem {
 }
 
 export const navigationItems: NavigationItem[] = [
+  navigationRoute("/today"),
   navigationRoute("/dashboard"),
   navigationRoute("/companies"),
   {

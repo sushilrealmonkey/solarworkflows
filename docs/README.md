@@ -23,6 +23,7 @@ business logic that has not been approved for implementation.
 | [Data Model Guide](data-model-guide.md) | Summarizes current table families, tenant ownership conventions, and RLS expectations. |
 | [RLS Permission System](rls-permission-system.md) | Documents Supabase RLS and permission enforcement. |
 | [QA Testing Plan](QA_TESTING_PLAN.md) | Provides local/staging QA data and role-based test scenarios. |
+| [AI Assistant Phase 1 Spec](ai-assistant-phase1-spec.md) | Planned Today screen daily brief + chat: architecture, tool layer, schema, and build order. Not implemented yet. |
 | [Change Log](changelog.md) | Tracks notable project documentation and implementation changes. |
 
 ## Maintenance Rules
