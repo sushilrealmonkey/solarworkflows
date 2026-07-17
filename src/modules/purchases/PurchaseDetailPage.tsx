@@ -1,12 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   DetailItem,
   DetailSection,
   EmptyState,
@@ -14,6 +13,7 @@ import {
   PencilIcon,
   PlaceholderAction,
 } from "../crm/CrmComponents";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import {
   formatDate,
   hasAdminPricingAccess,
@@ -33,7 +33,6 @@ import {
   fetchPurchaseVendorOptions,
   receivePurchaseOrderItems,
   updatePurchaseOrder,
-  updatePurchaseOrderStatus,
 } from "./purchaseApi";
 import {
   emptyPurchaseReceiveForm,
@@ -53,7 +52,6 @@ import type {
   PurchaseOrderFormValues,
   PurchaseOrderWithRelations,
   PurchaseReceiveFormValues,
-  PurchaseStatus,
 } from "./types";
 import type { InventoryItem } from "../inventory/types";
 import type { Vendor } from "../vendors/types";
@@ -67,6 +65,7 @@ type PurchaseVendorOption = Pick<
 
 export function PurchaseDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { profile, permissions, roleNames, organization } = useAuth();
   const { showToast } = useToast();
   const [order, setOrder] = useState<PurchaseOrderWithRelations | null>(null);
@@ -80,7 +79,6 @@ export function PurchaseDetailPage() {
   const [editing, setEditing] = useState<PurchaseOrderFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<PurchaseFormErrors | null>(null);
   const [saving, setSaving] = useState(false);
-  const [statusTarget, setStatusTarget] = useState<PurchaseStatus | null>(null);
   const [receiveForm, setReceiveForm] = useState<PurchaseReceiveFormValues | null>(
     null,
   );
@@ -106,6 +104,18 @@ export function PurchaseDetailPage() {
   const canManageStatus =
     hasPermission(profile, permissions, "inventory", "update") &&
     canUpdatePricing;
+  const canCreateItems = hasPermission(
+    profile,
+    permissions,
+    "inventory",
+    "create",
+  );
+  const canDelete = hasPermission(
+    profile,
+    permissions,
+    "inventory",
+    "delete",
+  );
   const canReceive =
     hasPermission(profile, permissions, "inventory", "create") &&
     hasPermission(profile, permissions, "inventory", "update");
@@ -116,8 +126,17 @@ export function PurchaseDetailPage() {
     "create",
   );
   const canGeneratePurchasePdf = canCreateDocuments && canViewPricing;
+  const purchaseHasReceipt = Boolean(
+    order?.items?.some((item) => (item.received_quantity ?? 0) > 0) ||
+      order?.status === "partially_received" ||
+      order?.status === "received",
+  );
   const canEditPurchaseOrder =
-    canManageStatus && order?.status === "draft";
+    canViewPricing &&
+    canManageStatus &&
+    !purchaseHasReceipt &&
+    !order?.archived_at &&
+    order?.status !== "cancelled";
 
   async function loadOrder() {
     if (!canView || !id) {
@@ -136,7 +155,12 @@ export function PurchaseDetailPage() {
         fetchInventoryItems(profile),
       ]);
       setOrder(nextOrder);
-      setVendors(nextVendors);
+      setVendors(
+        nextOrder?.vendor &&
+          !nextVendors.some((vendor) => vendor.id === nextOrder.vendor?.id)
+          ? [...nextVendors, nextOrder.vendor]
+          : nextVendors,
+      );
       setItems(nextItems);
       setPriceDefaults(
         canViewPricing ? await fetchPurchasePriceDefaults(nextItems) : new Map(),
@@ -181,13 +205,29 @@ export function PurchaseDetailPage() {
     setReceiveFormErrors(null);
   }
 
-  function openEditForm() {
+  async function openEditForm() {
     if (!order) {
       return;
     }
 
-    setFormErrors(null);
-    setEditing(purchaseOrderToForm(order));
+    try {
+      const nextVendors = await fetchPurchaseVendorOptions();
+      setVendors(
+        order.vendor &&
+          !nextVendors.some((vendor) => vendor.id === order.vendor?.id)
+          ? [...nextVendors, order.vendor]
+          : nextVendors,
+      );
+      setFormErrors(null);
+      setEditing(purchaseOrderToForm(order));
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load the latest suppliers.",
+        "error",
+      );
+    }
   }
 
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
@@ -206,7 +246,7 @@ export function PurchaseDetailPage() {
 
     try {
       setSaving(true);
-      await updatePurchaseOrder(order.id, editing);
+      await updatePurchaseOrder(profile, order.id, editing);
       const nextOrder = await fetchPurchaseOrder(profile, order.id);
 
       if (canGeneratePurchasePdf) {
@@ -239,30 +279,6 @@ export function PurchaseDetailPage() {
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function confirmStatusUpdate() {
-    if (!order || !statusTarget) {
-      return;
-    }
-
-    try {
-      setUpdating(true);
-      const nextOrder = await updatePurchaseOrderStatus(order.id, statusTarget);
-      setOrder((current) => (current ? { ...current, ...nextOrder } : nextOrder));
-      setStatusTarget(null);
-      showToast("Purchase status updated.", "success");
-      await loadOrder();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Purchase status update failed.",
-        "error",
-      );
-    } finally {
-      setUpdating(false);
     }
   }
 
@@ -516,16 +532,14 @@ export function PurchaseDetailPage() {
             <aside className="space-y-6">
               <PurchaseNextStepSection
                 canDownloadPdf={canGeneratePurchasePdf}
-                canMarkOrdered={canManageStatus && order.status === "draft"}
                 canReceive={
-                  canReceive &&
+                  canReceive && !order.archived_at &&
                   (order.status === "ordered" ||
                     order.status === "partially_received")
                 }
                 downloadUrl={pdfPreviewUrl}
                 preparingPdf={preparingPdf}
                 onDownload={() => void handleDownloadPdf()}
-                onMarkOrdered={() => setStatusTarget("ordered")}
                 onReceive={openReceiveForm}
               />
 
@@ -545,18 +559,24 @@ export function PurchaseDetailPage() {
             </aside>
           </div>
 
-          {statusTarget ? (
-            <ConfirmDialog
-              title="Update purchase status?"
-              description={`Set ${formatPurchaseCode(order.purchase_code)} to ${labelize(statusTarget)}.`}
-              confirming={updating}
-              confirmLabel="Update Status"
-              confirmingLabel="Updating..."
-              confirmVariant={statusTarget === "cancelled" ? "danger" : "primary"}
-              onCancel={() => setStatusTarget(null)}
-              onConfirm={confirmStatusUpdate}
-            />
-          ) : null}
+          <RecordLifecyclePanel
+            archiveReason={order.archive_reason}
+            archivedAt={order.archived_at}
+            canDelete={canDelete}
+            canUpdate={canManageStatus}
+            moduleKey="purchase_orders"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Purchase order permanently deleted.", "success");
+                navigate("/purchases");
+                return;
+              }
+              showToast(action === "archive" ? "Purchase order archived." : "Purchase order restored.", "success");
+              await loadOrder();
+            }}
+            recordId={order.id}
+            recordLabel={formatPurchaseCode(order.purchase_code)}
+          />
 
           {receiveForm ? (
             <PurchaseReceiveFormModal
@@ -584,11 +604,14 @@ export function PurchaseDetailPage() {
               vendors={vendors}
               items={items}
               priceDefaults={priceDefaults}
+              canAddItems={canCreateItems}
+              canRemoveItems={canDelete}
               onClose={() => setEditing(null)}
               onSubmit={handleEditSubmit}
               saving={saving}
             />
           ) : null}
+
         </>
       ) : null}
     </div>
@@ -597,21 +620,17 @@ export function PurchaseDetailPage() {
 
 function PurchaseNextStepSection({
   canDownloadPdf,
-  canMarkOrdered,
   canReceive,
   downloadUrl,
   preparingPdf,
   onDownload,
-  onMarkOrdered,
   onReceive,
 }: {
   canDownloadPdf: boolean;
-  canMarkOrdered: boolean;
   canReceive: boolean;
   downloadUrl: string | null;
   preparingPdf: boolean;
   onDownload: () => void;
-  onMarkOrdered: () => void;
   onReceive: () => void;
 }) {
   return (
@@ -624,11 +643,6 @@ function PurchaseNextStepSection({
           url={downloadUrl}
           onDownload={onDownload}
         />
-        {canMarkOrdered ? (
-          <Button onClick={onMarkOrdered} variant="secondary">
-            Mark Ordered
-          </Button>
-        ) : null}
         {canReceive ? (
           <Button onClick={onReceive} variant="secondary">
             Material Received

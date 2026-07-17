@@ -94,6 +94,9 @@ export type InventoryItem = {
   shortage_qty?: number | null;
   created_at: string | null;
   updated_at: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
   product_master?: Pick<InventoryMasterOption, "id" | "name"> | null;
   brand_master?: Pick<InventoryMasterOption, "id" | "name"> | null;
   model_master?: Pick<InventoryModelOption, "id" | "name"> | null;

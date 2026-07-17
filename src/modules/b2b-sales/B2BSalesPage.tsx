@@ -11,6 +11,8 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Button,
@@ -97,6 +99,7 @@ export function B2BSalesPage() {
     inventoryItems: [],
   });
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<B2BSaleFilters>({
     search: "",
@@ -171,7 +174,7 @@ export function B2BSalesPage() {
       setLoading(true);
       setError(null);
       const [nextSales, nextOptions] = await Promise.all([
-        fetchB2BSales(profile),
+        fetchB2BSales(profile, archiveScope),
         fetchB2BSaleOptions(profile, canViewPricing),
       ]);
       setSales(nextSales);
@@ -191,7 +194,7 @@ export function B2BSalesPage() {
     void loadData();
     // loadData closes over permissions, role names, and the active profile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, canViewPricing, profile?.id]);
+  }, [archiveScope, canView, canViewPricing, profile?.id]);
 
   useEffect(() => {
     if (!linkedCustomerId) {
@@ -689,6 +692,8 @@ export function B2BSalesPage() {
         />
         {canCreate ? <Button onClick={openCreateForm}>Create Sales Order</Button> : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-4">
         <SearchInput

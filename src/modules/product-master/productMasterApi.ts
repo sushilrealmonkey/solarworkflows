@@ -142,7 +142,7 @@ function legacyProductPrice(product: Pick<
   };
 }
 
-export async function fetchProductCategories(profile: UserProfile | null) {
+export async function fetchProductCategories(profile: UserProfile | null, archiveScope: "active" | "archived" | "all" = "active") {
   const client = requireSupabase();
   void profile;
 
@@ -154,7 +154,7 @@ export async function fetchProductCategories(profile: UserProfile | null) {
 
   return ((data ?? []) as ProductCategoryPublicRow[]).map(
     (row) => row.category_data,
-  );
+  ).filter((category) => archiveScope === "all" || (archiveScope === "archived" ? Boolean(category.archived_at) : !category.archived_at));
 }
 
 export async function createProductCategory(
@@ -198,7 +198,7 @@ export async function updateProductCategory(
   return data as ProductCategory;
 }
 
-export async function fetchProducts(profile: UserProfile | null) {
+export async function fetchProducts(profile: UserProfile | null, archiveScope: "active" | "archived" | "all" = "active") {
   const client = requireSupabase();
   void profile;
 
@@ -210,7 +210,7 @@ export async function fetchProducts(profile: UserProfile | null) {
 
   return ((data ?? []) as ProductPublicRow[]).map((row) =>
     redactLegacyProductPricing(row.product_data),
-  );
+  ).filter((product) => archiveScope === "all" || (archiveScope === "archived" ? Boolean(product.archived_at) : !product.archived_at));
 }
 
 export async function fetchProductBrandSuggestions(

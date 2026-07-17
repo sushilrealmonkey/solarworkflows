@@ -3,6 +3,8 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   AlertDialog,
@@ -46,6 +48,7 @@ export function CategoryMasterPage() {
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [categoryForm, setCategoryForm] =
     useState<ProductCategoryFormState | null>(null);
@@ -94,8 +97,8 @@ export function CategoryMasterPage() {
       setLoading(true);
       setError(null);
       const [nextCategories, nextProducts] = await Promise.all([
-        fetchProductCategories(profile),
-        fetchProducts(profile),
+        fetchProductCategories(profile, archiveScope),
+        fetchProducts(profile, "all"),
       ]);
       setCategories(nextCategories);
       setProducts(nextProducts);
@@ -114,7 +117,7 @@ export function CategoryMasterPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   if (!canView) {
     return (
@@ -235,6 +238,8 @@ export function CategoryMasterPage() {
           </div>
         ) : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       {loading ? <LoadingSkeleton /> : null}
       {error ? <EmptyState title="Could not load categories" description={error} /> : null}

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
@@ -67,9 +67,11 @@ import type {
   B2BSaleOptions,
   B2BSaleWithRelations,
 } from "./types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function B2BSaleDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { profile, permissions, roleNames, organization } = useAuth();
   const { showToast } = useToast();
   const [sale, setSale] = useState<B2BSaleWithRelations | null>(null);
@@ -458,7 +460,7 @@ export function B2BSaleDetailPage() {
     canUpdate &&
     canDispatchInventory &&
     sale?.status !== "dispatched" &&
-    sale?.status !== "cancelled";
+    sale?.status !== "cancelled" && !sale?.archived_at;
 
   return (
     <div className="space-y-6">
@@ -482,7 +484,7 @@ export function B2BSaleDetailPage() {
               recordType="Sales Order"
               name={sale.sale_code ?? "Sales Order"}
               action={
-                canUpdate && sale.status !== "dispatched" && sale.status !== "cancelled" ? (
+                canUpdate && !sale.archived_at && ["draft", "confirmed"].includes(sale.status ?? "") && !hasInvoice && !hasProforma && payments.length === 0 ? (
                   <button
                     aria-label="Edit sales order"
                     className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
@@ -585,6 +587,25 @@ export function B2BSaleDetailPage() {
               <B2BSaleTotalsCard sale={sale} />
             </aside>
           </div>
+
+          <RecordLifecyclePanel
+            archiveReason={sale.archive_reason}
+            archivedAt={sale.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="b2b_sales"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Sales order permanently deleted.", "success");
+                navigate("/b2b-sales");
+                return;
+              }
+              showToast(action === "archive" ? "Sales order archived." : "Sales order restored.", "success");
+              await loadSale();
+            }}
+            recordId={sale.id}
+            recordLabel={sale.sale_code || "Sales order"}
+          />
         </>
       ) : null}
 

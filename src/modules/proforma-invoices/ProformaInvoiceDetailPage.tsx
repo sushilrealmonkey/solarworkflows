@@ -32,7 +32,6 @@ import { PaymentStatusBadge } from "../payments/PaymentComponents";
 import type { PaymentWithRelations } from "../payments/types";
 import {
   createProformaInvoicePayment,
-  deleteProformaInvoice,
   fetchProformaInvoice,
   fetchProformaInvoiceItems,
   fetchProformaInvoiceLinkOptions,
@@ -66,6 +65,7 @@ import {
   fetchProformaInvoicePdfPreviewUrl,
   generateAndStoreProformaInvoicePdf,
 } from "./proformaInvoicePdfWorkflow";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 type StatusAction = "sent" | "cancelled";
 
@@ -95,8 +95,6 @@ export function ProformaInvoiceDetailPage() {
   const [savingPayment, setSavingPayment] = useState(false);
   const [statusTarget, setStatusTarget] = useState<StatusAction | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [preparingPdf, setPreparingPdf] = useState(false);
 
@@ -267,28 +265,6 @@ export function ProformaInvoiceDetailPage() {
     setPaymentForm(emptyProformaPaymentForm());
   }
 
-  async function handleDelete() {
-    if (!proformaInvoice) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteProformaInvoice(proformaInvoice.id);
-      showToast("Proforma invoice deleted.", "success");
-      navigate("/proforma-invoices");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Proforma invoice delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   function openEditForm() {
     if (!proformaInvoice) {
       return;
@@ -370,8 +346,7 @@ export function ProformaInvoiceDetailPage() {
               recordType="Proforma Invoice"
               name={proformaInvoice.proforma_code ?? "Proforma Invoice"}
               action={
-                canUpdate &&
-                !["converted", "cancelled"].includes(proformaInvoice.status ?? "") ? (
+                canUpdate && proformaInvoice.status === "draft" && !proformaInvoice.archived_at ? (
                   <button
                     aria-label="Edit proforma invoice"
                     className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
@@ -468,18 +443,32 @@ export function ProformaInvoiceDetailPage() {
             </aside>
           </div>
 
-          {(canUpdate && proformaInvoice.status !== "cancelled") || canDelete ? (
+          {canUpdate && !proformaInvoice.archived_at && ["draft", "sent"].includes(proformaInvoice.status ?? "") && !payments.some((payment) => payment.status === "received") ? (
             <ProformaDangerZone
-              canCancel={
-                canUpdate &&
-                !["converted", "cancelled"].includes(proformaInvoice.status ?? "")
-              }
-              canDelete={canDelete}
+              canCancel
               updatingStatus={updatingStatus}
               onCancel={() => setStatusTarget("cancelled")}
-              onDelete={() => setConfirmingDelete(true)}
             />
           ) : null}
+
+          <RecordLifecyclePanel
+            archiveReason={proformaInvoice.archive_reason}
+            archivedAt={proformaInvoice.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="proforma_invoices"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Proforma invoice permanently deleted.", "success");
+                navigate("/proforma-invoices");
+                return;
+              }
+              showToast(action === "archive" ? "Proforma invoice archived." : "Proforma invoice restored.", "success");
+              await loadProformaInvoice();
+            }}
+            recordId={proformaInvoice.id}
+            recordLabel={proformaInvoice.proforma_code || "Proforma invoice"}
+          />
         </>
       ) : null}
 
@@ -491,8 +480,8 @@ export function ProformaInvoiceDetailPage() {
           errors={formErrors}
           options={options}
           includeItems
-          canAddItems={canCreate && canUpdate}
-          canRemoveItems={canDelete && canUpdate}
+          canAddItems={canCreate && canUpdate && proformaInvoice?.status === "draft"}
+          canRemoveItems={canDelete && canUpdate && proformaInvoice?.status === "draft"}
           onClose={() => setEditing(null)}
           onSubmit={handleEditSubmit}
           saving={saving}
@@ -526,16 +515,6 @@ export function ProformaInvoiceDetailPage() {
           confirmVariant={statusTarget === "cancelled" ? "danger" : "primary"}
           onCancel={() => setStatusTarget(null)}
           onConfirm={confirmStatusAction}
-        />
-      ) : null}
-
-      {confirmingDelete && proformaInvoice ? (
-        <ConfirmDialog
-          title="Delete proforma invoice?"
-          description={`This will remove ${proformaInvoice.proforma_code ?? "this proforma invoice"} and its itemized bill.`}
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
         />
       ) : null}
 
@@ -623,16 +602,12 @@ function DownloadProformaAction({
 
 function ProformaDangerZone({
   canCancel,
-  canDelete,
   updatingStatus,
   onCancel,
-  onDelete,
 }: {
   canCancel: boolean;
-  canDelete: boolean;
   updatingStatus: boolean;
   onCancel: () => void;
-  onDelete: () => void;
 }) {
   return (
     <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
@@ -640,7 +615,7 @@ function ProformaDangerZone({
         <div>
           <h2 className="text-base font-semibold text-rose-900">Danger Zone</h2>
           <p className="mt-1 text-sm leading-6 text-rose-700">
-            Cancel or delete this proforma invoice from billing records.
+            Cancel this proforma invoice while retaining its billing history.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -651,11 +626,6 @@ function ProformaDangerZone({
               variant="danger"
             >
               Cancel Proforma
-            </Button>
-          ) : null}
-          {canDelete ? (
-            <Button onClick={onDelete} variant="danger">
-              Delete Proforma
             </Button>
           ) : null}
         </div>

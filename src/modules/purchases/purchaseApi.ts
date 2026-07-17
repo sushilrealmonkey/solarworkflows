@@ -5,7 +5,6 @@ import type {
   PurchaseOrderFormValues,
   PurchaseReceiveFormValues,
   PurchaseOrderWithRelations,
-  PurchaseStatus,
 } from "./types";
 import { numberValue } from "./purchaseUtils";
 import type { Vendor } from "../vendors/types";
@@ -82,6 +81,7 @@ function hidePurchasePricing(
 async function fetchPurchaseOrdersDirect(
   profile: UserProfile | null,
   filters?: { vendorId?: string; itemId?: string },
+  archiveScope: "active" | "archived" | "all" = "active",
 ) {
   const client = requireSupabase();
   const vendorOptions = await fetchPurchaseVendorOptions();
@@ -89,6 +89,8 @@ async function fetchPurchaseOrdersDirect(
     .from("purchase_orders")
     .select(purchaseOrderSelect)
     .order("created_at", { ascending: false });
+
+  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
 
   if (filters?.vendorId) {
     query = query.eq("vendor_id", filters.vendorId);
@@ -128,7 +130,7 @@ async function fetchPurchaseOrdersDirect(
 export async function fetchPurchaseOrders(
   profile: UserProfile | null,
   filters?: { vendorId?: string; itemId?: string },
-  options: { includePricing?: boolean } = {},
+  options: { includePricing?: boolean; archiveScope?: "active" | "archived" | "all" } = {},
 ) {
   const client = requireSupabase();
   const includePricing = options.includePricing !== false;
@@ -140,7 +142,7 @@ export async function fetchPurchaseOrders(
 
     if (error) {
       if (isMissingPurchaseSafeRpcError(error)) {
-        const fallbackOrders = await fetchPurchaseOrdersDirect(profile, filters);
+        const fallbackOrders = await fetchPurchaseOrdersDirect(profile, filters, options.archiveScope);
 
         return fallbackOrders
           .map(hidePurchasePricing)
@@ -154,7 +156,7 @@ export async function fetchPurchaseOrders(
 
     const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
       (row) => row.order_data as PurchaseOrderWithRelations,
-    );
+    ).filter((order) => options.archiveScope === "all" || (options.archiveScope === "archived" ? Boolean(order.archived_at) : !order.archived_at));
 
     return filters?.vendorId
       ? orders.filter((order) => order.vendor_id === filters.vendorId)
@@ -162,7 +164,7 @@ export async function fetchPurchaseOrders(
   }
 
   try {
-    return await fetchPurchaseOrdersDirect(profile, filters);
+    return await fetchPurchaseOrdersDirect(profile, filters, options.archiveScope);
   } catch (error) {
     const { data, error: publicError } = await client.rpc(
       "purchase_order_public_rows",
@@ -177,7 +179,7 @@ export async function fetchPurchaseOrders(
 
     const orders = ((data ?? []) as Array<{ order_data: unknown }>).map(
       (row) => row.order_data as PurchaseOrderWithRelations,
-    );
+    ).filter((order) => options.archiveScope === "all" || (options.archiveScope === "archived" ? Boolean(order.archived_at) : !order.archived_at));
 
     return filters?.vendorId
       ? orders.filter((order) => order.vendor_id === filters.vendorId)
@@ -282,6 +284,7 @@ export async function createPurchaseOrder(
       vendor_id: values.vendor_id,
       order_date: values.order_date || new Date().toISOString().slice(0, 10),
       expected_delivery_date: nullable(values.expected_delivery_date),
+      status: "ordered",
       notes: nullable(values.notes),
       created_by: profile?.id ?? null,
     })
@@ -312,11 +315,12 @@ export async function createPurchaseOrder(
 }
 
 export async function updatePurchaseOrder(
+  profile: UserProfile | null,
   id: string,
   values: PurchaseOrderFormValues,
 ) {
   const client = requireSupabase();
-  const { data: orderData, error: orderError } = await client
+  let orderQuery = client
     .from("purchase_orders")
     .update({
       vendor_id: values.vendor_id,
@@ -324,17 +328,23 @@ export async function updatePurchaseOrder(
       expected_delivery_date: nullable(values.expected_delivery_date),
       notes: nullable(values.notes),
     })
-    .eq("id", id)
-    .eq("status", "draft")
+    .eq("id", id);
+
+  if (!profile?.is_super_admin) {
+    orderQuery = orderQuery.eq(
+      "organization_id",
+      requireOrganization(profile),
+    );
+  } else if (profile.organization_id) {
+    orderQuery = orderQuery.eq("organization_id", profile.organization_id);
+  }
+
+  const { data: orderData, error: orderError } = await orderQuery
     .select("*")
     .single();
 
   if (orderError) {
-    throw new Error(
-      orderError.code === "PGRST116"
-        ? "Only draft purchase orders can be edited."
-        : orderError.message,
-    );
+    throw new Error(orderError.message);
   }
 
   const order = orderData as PurchaseOrder;
@@ -402,6 +412,30 @@ export async function updatePurchaseOrder(
   return order;
 }
 
+export async function deletePurchaseOrder(
+  profile: UserProfile | null,
+  id: string,
+) {
+  const client = requireSupabase();
+  let query = client.from("purchase_orders").delete().eq("id", id);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query.select("id").maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data) {
+    throw new Error("Purchase order was not found or you do not have delete access.");
+  }
+}
+
 export async function fetchPurchasePriceDefaults(items: InventoryItem[]) {
   const client = requireSupabase();
   const productIds = Array.from(
@@ -455,25 +489,6 @@ export async function fetchPurchasePriceDefaults(items: InventoryItem[]) {
       },
     ]),
   );
-}
-
-export async function updatePurchaseOrderStatus(
-  id: string,
-  status: PurchaseStatus,
-) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("purchase_orders")
-    .update({ status })
-    .eq("id", id)
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as PurchaseOrder;
 }
 
 export async function receivePurchaseOrder(id: string) {

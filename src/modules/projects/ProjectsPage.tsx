@@ -9,6 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Badge,
@@ -76,6 +78,7 @@ export function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectWithRelations[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<ProjectFilters>({
     search: "",
@@ -97,7 +100,7 @@ export function ProjectsPage() {
       setLoading(true);
       setError(null);
       const [nextProjects, nextStaff] = await Promise.all([
-        fetchProjects(profile),
+        fetchProjects(profile, archiveScope),
         fetchStaffOptions(profile),
       ]);
       setProjects(nextProjects);
@@ -115,7 +118,7 @@ export function ProjectsPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const filteredProjects = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -185,6 +188,8 @@ export function ProjectsPage() {
           description="Track accepted solar installations created from quotation approval through commissioning."
         />
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-4">
         <SearchInput

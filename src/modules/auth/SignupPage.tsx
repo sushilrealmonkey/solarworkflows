@@ -111,7 +111,7 @@ export function SignupPage() {
 
     const normalizedPhone = getIndiaSmsPhone(phone);
 
-    if (!/^\d{10}$/.test(phone) || !isValidSmsPhone(normalizedPhone)) {
+    if (!/^[6-9]\d{9}$/.test(phone) || !isValidSmsPhone(normalizedPhone)) {
       setErrorMessage("Enter a valid 10-digit Indian mobile number.");
       return;
     }

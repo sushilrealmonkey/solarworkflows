@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -56,9 +56,11 @@ import type {
   ProductStatus,
   ProductUsageSummary,
 } from "./types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function ProductDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { profile, permissions, roleNames } = useAuth();
   const { showToast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
@@ -94,6 +96,7 @@ export function ProductDetailPage() {
     "product_master",
     "update",
   );
+  const canDelete = hasPermission(profile, permissions, "product_master", "delete");
   const canViewPricing = hasAdminPricingAccess(
     profile,
     permissions,
@@ -302,7 +305,7 @@ export function ProductDetailPage() {
                 .filter(Boolean)
                 .join(" / ")}
             />
-            {canUpdate ? (
+            {canUpdate && !product.archived_at ? (
               <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => {
@@ -340,7 +343,7 @@ export function ProductDetailPage() {
           {canViewPricing ? (
             <DetailSection title="Admin Pricing">
               <ProductPricingGrid price={productPrice} />
-              {canUpdatePricing ? (
+              {canUpdatePricing && !product.archived_at ? (
                 <div className="sm:col-span-2">
                   <Button
                     onClick={() => {
@@ -394,6 +397,25 @@ export function ProductDetailPage() {
             <DetailItem label="Updated" value={formatDate(product.updated_at)} />
             <DetailItem label="Notes" value={product.notes ?? "-"} />
           </DetailSection>
+
+          <RecordLifecyclePanel
+            archiveReason={product.archive_reason}
+            archivedAt={product.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="products"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Product permanently deleted.", "success");
+                navigate("/products-materials/products");
+                return;
+              }
+              showToast(action === "archive" ? "Product archived." : "Product restored.", "success");
+              await loadProduct();
+            }}
+            recordId={product.id}
+            recordLabel={product.product_code || product.product_name}
+          />
         </>
       ) : null}
 

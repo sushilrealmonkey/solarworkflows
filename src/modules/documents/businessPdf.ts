@@ -3227,14 +3227,6 @@ function valueWithUnit(value: number | string | null | undefined, unit: string) 
   return value === null || value === undefined ? "-" : `${value} ${unit}`;
 }
 
-function labelize(value: string | null | undefined) {
-  if (!value) {
-    return "-";
-  }
-
-  return titleCaseWithAcronyms(value);
-}
-
 function normalizeHex(value: string | null | undefined, fallback: string) {
   const candidate = value || fallback;
   return /^#[0-9a-fA-F]{6}$/.test(candidate) ? candidate : fallback;

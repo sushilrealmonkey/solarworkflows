@@ -31,7 +31,6 @@ import type { PaymentWithRelations } from "../payments/types";
 import {
   createInvoicePayment,
   createInvoiceItem,
-  deleteInvoice,
   deleteInvoiceItem,
   fetchInvoice,
   fetchInvoiceItems,
@@ -75,6 +74,7 @@ import {
   fetchInvoicePdfPreviewUrl,
   generateAndStoreInvoicePdf,
 } from "./invoicePdfWorkflow";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 type StatusAction = "sent" | "cancelled";
 
@@ -113,8 +113,6 @@ export function InvoiceDetailPage() {
     null,
   );
   const [deletingItem, setDeletingItem] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [statusTarget, setStatusTarget] = useState<StatusAction | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
@@ -137,8 +135,9 @@ export function InvoiceDetailPage() {
     "documents",
     "create",
   );
-  const canAddItems = canCreate && canUpdate;
-  const canDeleteItems = canDelete && canUpdate;
+  const invoiceIsEditable = invoice?.status === "draft" && !invoice.archived_at;
+  const canAddItems = canCreate && canUpdate && invoiceIsEditable;
+  const canDeleteItems = canDelete && canUpdate && invoiceIsEditable;
 
   async function loadInvoice() {
     if (!canView || !id) {
@@ -328,26 +327,6 @@ export function InvoiceDetailPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!invoice) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteInvoice(invoice.id);
-      showToast("Invoice deleted.", "success");
-      navigate("/invoices");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Invoice delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   async function confirmStatusAction() {
     if (!invoice || !statusTarget) {
       return;
@@ -459,7 +438,7 @@ export function InvoiceDetailPage() {
               recordType="Tax Invoice"
               name={invoice.invoice_code ?? "Invoice"}
               action={
-                canUpdate ? (
+                canUpdate && invoiceIsEditable ? (
                   <button
                     aria-label="Edit invoice"
                     className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
@@ -597,15 +576,32 @@ export function InvoiceDetailPage() {
             </aside>
           </div>
 
-          {(canUpdate && invoice.status !== "cancelled") || canDelete ? (
+          {canUpdate && !invoice.archived_at && !["paid", "partially_paid", "cancelled"].includes(invoice.status ?? "") ? (
             <InvoiceDangerZone
-              canCancel={canUpdate && invoice.status !== "cancelled"}
-              canDelete={canDelete}
+              canCancel
               updatingStatus={updatingStatus}
               onCancel={() => setStatusTarget("cancelled")}
-              onDelete={() => setConfirmingDelete(true)}
             />
           ) : null}
+
+          <RecordLifecyclePanel
+            archiveReason={invoice.archive_reason}
+            archivedAt={invoice.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="invoices"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Invoice permanently deleted.", "success");
+                navigate("/invoices");
+                return;
+              }
+              showToast(action === "archive" ? "Invoice archived." : "Invoice restored.", "success");
+              await loadInvoice();
+            }}
+            recordId={invoice.id}
+            recordLabel={invoice.invoice_code || "Invoice"}
+          />
         </>
       ) : null}
 
@@ -658,16 +654,6 @@ export function InvoiceDetailPage() {
           confirming={deletingItem}
           onCancel={() => setDeleteItemTarget(null)}
           onConfirm={confirmItemDelete}
-        />
-      ) : null}
-
-      {confirmingDelete && invoice ? (
-        <ConfirmDialog
-          title="Delete invoice?"
-          description={`This will remove ${invoice.invoice_code ?? "this invoice"} and its itemized bill.`}
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
         />
       ) : null}
 
@@ -770,16 +756,12 @@ function DownloadInvoiceAction({
 
 function InvoiceDangerZone({
   canCancel,
-  canDelete,
   updatingStatus,
   onCancel,
-  onDelete,
 }: {
   canCancel: boolean;
-  canDelete: boolean;
   updatingStatus: boolean;
   onCancel: () => void;
-  onDelete: () => void;
 }) {
   return (
     <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
@@ -787,7 +769,7 @@ function InvoiceDangerZone({
         <div>
           <h2 className="text-base font-semibold text-rose-900">Danger Zone</h2>
           <p className="mt-1 text-sm leading-6 text-rose-700">
-            Cancel or delete this tax invoice from billing records.
+            Cancel this tax invoice while retaining its billing history.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -798,11 +780,6 @@ function InvoiceDangerZone({
               variant="danger"
             >
               Cancel Invoice
-            </Button>
-          ) : null}
-          {canDelete ? (
-            <Button onClick={onDelete} variant="danger">
-              Delete Invoice
             </Button>
           ) : null}
         </div>

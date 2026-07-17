@@ -10,6 +10,8 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Button,
@@ -65,6 +67,7 @@ export function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
   const [projects, setProjects] = useState<PaymentProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<PaymentFilters>({
     search: "",
@@ -92,7 +95,7 @@ export function PaymentsPage() {
       setLoading(true);
       setError(null);
       const [nextPayments, nextProjects] = await Promise.all([
-        fetchPayments(profile),
+        fetchPayments(profile, archiveScope),
         fetchPaymentProjects(profile),
       ]);
       setPayments(nextPayments);
@@ -110,7 +113,7 @@ export function PaymentsPage() {
     void loadData();
     // loadData closes over payment permissions and the active user profile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const filteredPayments = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -220,6 +223,8 @@ export function PaymentsPage() {
         />
         {canCreate ? <Button onClick={openCreateForm}>Add Payment</Button> : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-4">
         <SearchInput

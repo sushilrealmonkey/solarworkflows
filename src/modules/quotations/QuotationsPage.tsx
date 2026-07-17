@@ -3,12 +3,12 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
-import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Badge,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   SearchInput,
@@ -29,7 +29,7 @@ import {
   quotationWorkflowState,
   type QuotationWorkflowState,
 } from "../shared/quotationWorkflow";
-import { deleteQuotation, fetchQuotations } from "./quotationApi";
+import { fetchQuotations } from "./quotationApi";
 import {
   formatKw,
   formatMoney,
@@ -48,12 +48,12 @@ type QuotationFilters = {
 
 export function QuotationsPage() {
   const { profile, permissions } = useAuth();
-  const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [quotations, setQuotations] = useState<QuotationWithRelations[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<QuotationFilters>({
     search: "",
@@ -61,15 +61,11 @@ export function QuotationsPage() {
     quotationDate: "",
     createdBy: "",
   });
-  const [deleteTarget, setDeleteTarget] =
-    useState<QuotationWithRelations | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [prefillHandled, setPrefillHandled] = useState(false);
 
   const canView = hasPermission(profile, permissions, "quotations", "view");
   const canCreate = hasPermission(profile, permissions, "quotations", "create");
   const canUpdate = hasPermission(profile, permissions, "quotations", "update");
-  const canDelete = hasPermission(profile, permissions, "quotations", "delete");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateSurvey = hasPermission(
     profile,
@@ -88,7 +84,7 @@ export function QuotationsPage() {
       setLoading(true);
       setError(null);
       const [nextQuotations, nextStaff] = await Promise.all([
-        fetchQuotations(profile),
+        fetchQuotations(profile, archiveScope),
         fetchStaffOptions(profile),
       ]);
       setQuotations(nextQuotations);
@@ -108,7 +104,7 @@ export function QuotationsPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   useEffect(() => {
     const shouldCreate = searchParams.get("new") === "1";
@@ -200,31 +196,6 @@ export function QuotationsPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteQuotation(deleteTarget.id);
-      setQuotations((current) =>
-        current.filter((quotation) => quotation.id !== deleteTarget.id),
-      );
-      showToast("Quotation deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Quotation delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -233,6 +204,8 @@ export function QuotationsPage() {
           description="Review itemized solar proposals created from enquiries and completed site survey data."
         />
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-3">
         <SearchInput
@@ -438,14 +411,6 @@ export function QuotationsPage() {
                         Edit
                       </Button>
                     ) : null}
-                    {canDelete ? (
-                      <Button
-                        onClick={() => setDeleteTarget(quotation)}
-                        variant="danger"
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
                   </div>
                 </article>
               );
@@ -455,15 +420,6 @@ export function QuotationsPage() {
         </>
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete quotation?"
-          description={`This will remove ${deleteTarget.quotation_code ?? "this quotation"} and its line items.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
     </div>
   );
 }

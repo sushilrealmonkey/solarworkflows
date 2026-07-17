@@ -113,13 +113,19 @@ export async function fetchStaffOptions(profile: UserProfile | null) {
 
 export async function fetchCustomers(
   profile: UserProfile | null,
-  options: { segment?: CustomerSegment } = {},
+  options: { segment?: CustomerSegment; archiveScope?: "active" | "archived" | "all" } = {},
 ) {
   const client = requireSupabase();
   let query = client
     .from("customers")
     .select("*")
     .order("created_at", { ascending: false });
+
+  if (options.archiveScope !== "all") {
+    query = options.archiveScope === "archived"
+      ? query.not("archived_at", "is", null)
+      : query.is("archived_at", null);
+  }
 
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
@@ -319,12 +325,16 @@ async function fetchProjectIdForLeadState(
   return data?.[0]?.id ?? null;
 }
 
-export async function fetchLeads(profile: UserProfile | null) {
+export async function fetchLeads(profile: UserProfile | null, archiveScope: "active" | "archived" | "all" = "active") {
   const client = requireSupabase();
   let query = client
     .from("leads")
     .select("*")
     .order("created_at", { ascending: false });
+
+  if (archiveScope !== "all") {
+    query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
+  }
 
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));
@@ -338,9 +348,7 @@ export async function fetchLeads(profile: UserProfile | null) {
     throw new Error(error.message);
   }
 
-  const leads = ((data ?? []) as Lead[]).filter(
-    (lead) => lead.status !== "converted",
-  );
+  const leads = (data ?? []) as Lead[];
   const leadIds = leads.map((lead) => lead.id);
 
   if (leadIds.length === 0) {

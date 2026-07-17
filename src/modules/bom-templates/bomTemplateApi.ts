@@ -63,13 +63,15 @@ function bomTemplateRulePayload(values: BomTemplateRuleFormValues) {
 const bomTemplateSelect = "*";
 const bomTemplateRuleSelect = "*";
 
-export async function fetchBomTemplates(profile: UserProfile | null) {
+export async function fetchBomTemplates(profile: UserProfile | null, archiveScope: "active" | "archived" | "all" = "active") {
   const client = requireSupabase();
   let query = client
     .from("bom_templates")
     .select(bomTemplateSelect)
     .order("display_order", { ascending: true })
     .order("name", { ascending: true });
+
+  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
 
   if (!profile?.is_super_admin) {
     query = query.eq("tenant_id", requireTenant(profile));

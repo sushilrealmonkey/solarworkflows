@@ -10,10 +10,11 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   convertLeadToCustomer,
   createCustomer,
-  deleteCustomer,
   fetchCustomers,
   fetchLeads,
   fetchProjectIdsForCustomers,
@@ -44,7 +45,6 @@ import type {
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   Modal,
@@ -81,6 +81,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
     Map<string, string>
   >(new Map());
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<CustomerFilters>({
     search: "",
@@ -96,13 +97,10 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "customers", "view");
   const canCreate = hasPermission(profile, permissions, "customers", "create");
   const canUpdate = hasPermission(profile, permissions, "customers", "update");
-  const canDelete = hasPermission(profile, permissions, "customers", "delete");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateB2BSale = hasPermission(profile, permissions, "b2b_sales", "create");
   const canCreateDirectly = segment === "b2b_direct" && canCreate;
@@ -117,7 +115,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
       setLoading(true);
       setError(null);
       const [nextCustomers, nextLeads, nextStaff] = await Promise.all([
-        fetchCustomers(profile, { segment }),
+        fetchCustomers(profile, { segment, archiveScope }),
         fetchLeads(profile).catch(() => []),
         fetchStaffOptions(profile),
       ]);
@@ -146,7 +144,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
     void loadData();
     // loadData closes over the current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, canViewProjects, profile?.id, segment]);
+  }, [archiveScope, canView, canViewProjects, profile?.id, segment]);
 
   const filteredCustomers = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -298,29 +296,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteCustomer(deleteTarget.id);
-      setCustomers((current) =>
-        current.filter((customer) => customer.id !== deleteTarget.id),
-      );
-      showToast("Customer deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Customer delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -338,6 +313,8 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
         />
         {canCreateDirectly ? <Button onClick={openCreateForm}>Add Business Customer</Button> : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar>
         <SearchInput
@@ -526,11 +503,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
                       Edit
                     </Button>
                   ) : null}
-                  {canDelete ? (
-                    <Button onClick={() => setDeleteTarget(customer)} variant="danger">
-                      Delete
-                    </Button>
-                  ) : null}
                 </div>
               </article>
             ))}
@@ -572,15 +544,6 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
         />
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete customer?"
-          description={`This will remove ${deleteTarget.full_name}. Related future workflows should be checked before deleting customer records.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
     </div>
   );
 }

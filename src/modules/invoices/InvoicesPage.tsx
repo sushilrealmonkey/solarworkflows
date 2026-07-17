@@ -10,10 +10,11 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   PlaceholderAction,
@@ -27,7 +28,6 @@ import { formatMoney, numberToInput } from "../quotations/quotationUtils";
 import {
   createInvoice,
   createInvoicePayment,
-  deleteInvoice,
   fetchActiveProjectInvoice,
   fetchInvoice,
   fetchInvoiceItems,
@@ -96,6 +96,7 @@ export function InvoicesPage() {
     inventoryItems: [],
   });
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<InvoiceFilters>({
     search: "",
@@ -110,10 +111,6 @@ export function InvoicesPage() {
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<InvoiceWithRelations | null>(
-    null,
-  );
-  const [deleting, setDeleting] = useState(false);
   const [paymentForm, setPaymentForm] = useState<{
     invoice: InvoiceWithRelations;
     values: InvoicePaymentFormValues;
@@ -149,7 +146,7 @@ export function InvoicesPage() {
       setLoading(true);
       setError(null);
       const [nextInvoices, nextOptions] = await Promise.all([
-        fetchInvoices(profile),
+        fetchInvoices(profile, archiveScope),
         fetchInvoiceLinkOptions(profile),
       ]);
       setInvoices(nextInvoices);
@@ -187,7 +184,7 @@ export function InvoicesPage() {
     void loadData();
     // loadData closes over invoice permissions and the active user profile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   useEffect(() => {
     const projectId = searchParams.get("projectId");
@@ -567,29 +564,6 @@ export function InvoicesPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteInvoice(deleteTarget.id);
-      setInvoices((current) =>
-        current.filter((invoice) => invoice.id !== deleteTarget.id),
-      );
-      showToast("Invoice deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Invoice delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   async function prefillItemsFromQuotation(
     quotation: InvoiceQuotationSummary | null | undefined,
   ) {
@@ -631,6 +605,8 @@ export function InvoicesPage() {
           </Button>
         ) : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-3">
         <SearchInput
@@ -870,15 +846,6 @@ export function InvoicesPage() {
         />
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete invoice?"
-          description={`This will remove ${deleteTarget.invoice_code ?? "this invoice"} and its itemized bill.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
     </div>
   );
 }

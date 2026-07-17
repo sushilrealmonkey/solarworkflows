@@ -4,7 +4,6 @@ import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
-  deleteCustomer,
   fetchCustomer,
   fetchProjectIdsForCustomers,
   fetchStaffOptions,
@@ -26,7 +25,6 @@ import type { Customer, CustomerFormValues, StaffOption } from "./types";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   DetailItem,
   DetailSection,
   EmptyState,
@@ -41,17 +39,12 @@ import {
   TextArea,
   TextInput,
 } from "./CrmComponents";
-import {
-  deleteDocument,
-  fetchDocuments,
-  uploadDocument,
-} from "../documents/documentApi";
+import { fetchDocuments, uploadDocument } from "../documents/documentApi";
 import {
   DocumentsCollection,
   DocumentUploadModal,
 } from "../documents/DocumentComponents";
 import {
-  documentRelatedLabel,
   emptyDocumentUploadForm,
   uploadPayload,
   validateDocumentUpload,
@@ -60,6 +53,7 @@ import type {
   DocumentUploadValues,
   OrganizationDocumentWithRelations,
 } from "../documents/types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function CustomerDetailPage() {
   const { id } = useParams();
@@ -74,8 +68,6 @@ export function CustomerDetailPage() {
   const [editing, setEditing] = useState<CustomerFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [documents, setDocuments] = useState<OrganizationDocumentWithRelations[]>(
     [],
   );
@@ -85,9 +77,6 @@ export function CustomerDetailPage() {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentErrors, setDocumentErrors] = useState<Record<string, string>>({});
   const [savingDocument, setSavingDocument] = useState(false);
-  const [documentDeleteTarget, setDocumentDeleteTarget] =
-    useState<OrganizationDocumentWithRelations | null>(null);
-  const [deletingDocument, setDeletingDocument] = useState(false);
 
   const canView = hasPermission(profile, permissions, "customers", "view");
   const canUpdate = hasPermission(profile, permissions, "customers", "update");
@@ -109,6 +98,12 @@ export function CustomerDetailPage() {
     permissions,
     "documents",
     "delete",
+  );
+  const canUpdateDocument = hasPermission(
+    profile,
+    permissions,
+    "documents",
+    "update",
   );
   const primaryActionClass =
     "inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700";
@@ -212,26 +207,6 @@ export function CustomerDetailPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!customer) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteCustomer(customer.id);
-      showToast("Customer deleted.", "success");
-      navigate("/customers");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Customer delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   function openDocumentForm() {
     if (!customer) {
       return;
@@ -277,29 +252,6 @@ export function CustomerDetailPage() {
     }
   }
 
-  async function confirmDocumentDelete() {
-    if (!documentDeleteTarget) {
-      return;
-    }
-
-    try {
-      setDeletingDocument(true);
-      await deleteDocument(documentDeleteTarget);
-      setDocuments((current) =>
-        current.filter((document) => document.id !== documentDeleteTarget.id),
-      );
-      setDocumentDeleteTarget(null);
-      showToast("Document deleted.", "success");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Document delete failed.",
-        "error",
-      );
-    } finally {
-      setDeletingDocument(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to={customerListPath(customer)}>
@@ -329,7 +281,7 @@ export function CustomerDetailPage() {
                 customer.phone,
               ]}
               action={
-                canUpdate ? (
+                canUpdate && !customer.archived_at ? (
                   <button
                     aria-label="Edit customer"
                     className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
@@ -424,8 +376,17 @@ export function CustomerDetailPage() {
                   <DocumentsCollection
                     compact
                     documents={documents}
+                    canUpdate={canUpdateDocument}
                     canDelete={canDeleteDocument}
-                    onDelete={setDocumentDeleteTarget}
+                    onLifecycleChanged={(document, action) => {
+                      setDocuments((current) =>
+                        current.filter((entry) => entry.id !== document.id),
+                      );
+                      showToast(
+                        action === "delete" ? "Document permanently deleted." : "Document archived.",
+                        "success",
+                      );
+                    }}
                   />
                 </div>
               ) : (
@@ -477,23 +438,24 @@ export function CustomerDetailPage() {
             </DetailSection>
           ) : null}
 
-          {canDelete ? (
-            <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-rose-900">
-                    Danger Zone
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Delete this customer record from the organization.
-                  </p>
-                </div>
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Customer
-                </Button>
-              </div>
-            </section>
-          ) : null}
+          <RecordLifecyclePanel
+            archiveReason={customer.archive_reason}
+            archivedAt={customer.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="customers"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Customer permanently deleted.", "success");
+                navigate("/customers");
+                return;
+              }
+              showToast(action === "archive" ? "Customer archived." : "Customer restored.", "success");
+              await loadCustomer();
+            }}
+            recordId={customer.id}
+            recordLabel={customer.customer_code || customer.full_name}
+          />
         </>
       ) : null}
 
@@ -523,25 +485,6 @@ export function CustomerDetailPage() {
         />
       ) : null}
 
-      {documentDeleteTarget ? (
-        <ConfirmDialog
-          title="Delete document?"
-          description={`This will remove ${documentDeleteTarget.document_name} from ${documentRelatedLabel(documentDeleteTarget)}.`}
-          confirming={deletingDocument}
-          onCancel={() => setDocumentDeleteTarget(null)}
-          onConfirm={confirmDocumentDelete}
-        />
-      ) : null}
-
-      {confirmingDelete ? (
-        <ConfirmDialog
-          title="Delete customer?"
-          description="This customer record will be removed from the organization."
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
-        />
-      ) : null}
     </div>
   );
 }

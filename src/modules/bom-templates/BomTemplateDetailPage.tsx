@@ -43,6 +43,7 @@ import type {
   BomTemplateRule,
   BomTemplateRuleFormValues,
 } from "./types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 type RuleFormState = {
   mode: "create" | "edit";
@@ -340,7 +341,7 @@ export function BomTemplateDetailPage() {
                   Rules define required material categories. Products are selected later during quotation BOM generation.
                 </p>
               </div>
-              {canCreate ? (
+              {canCreate && !template.archived_at ? (
                 <Button onClick={openCreateRuleForm}>Add Rule</Button>
               ) : null}
             </div>
@@ -350,7 +351,7 @@ export function BomTemplateDetailPage() {
                 title="No BOM rules found"
                 description="Add category-based rules to this template without generating BOMs or connecting quotations yet."
                 action={
-                  canCreate ? (
+                  canCreate && !template.archived_at ? (
                     <Button onClick={openCreateRuleForm}>Add Rule</Button>
                   ) : null
                 }
@@ -395,8 +396,8 @@ export function BomTemplateDetailPage() {
                           </td>
                           <td className="px-4 py-3">
                             <RuleActions
-                              canDelete={canDelete}
-                              canUpdate={canUpdate}
+                              canDelete={canDelete && !template.archived_at}
+                              canUpdate={canUpdate && !template.archived_at}
                               disableMoveDown={
                                 reordering ||
                                 sortedRules.findIndex((item) => item.id === rule.id) ===
@@ -449,8 +450,8 @@ export function BomTemplateDetailPage() {
                       </dl>
                       <div className="mt-4">
                         <RuleActions
-                          canDelete={canDelete}
-                          canUpdate={canUpdate}
+                          canDelete={canDelete && !template.archived_at}
+                          canUpdate={canUpdate && !template.archived_at}
                           disableMoveDown={
                             reordering ||
                             sortedRules.findIndex((item) => item.id === rule.id) ===
@@ -473,6 +474,25 @@ export function BomTemplateDetailPage() {
               </>
             )}
           </section>
+
+          <RecordLifecyclePanel
+            archiveReason={template.archive_reason}
+            archivedAt={template.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="bom_templates"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("BOM template permanently deleted.", "success");
+                navigate("/setup/bom-templates");
+                return;
+              }
+              showToast(action === "archive" ? "BOM template archived." : "BOM template restored.", "success");
+              await loadData();
+            }}
+            recordId={template.id}
+            recordLabel={template.name}
+          />
         </>
       ) : null}
 

@@ -4,6 +4,8 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Badge,
@@ -41,7 +43,6 @@ import {
 } from "../shared/quotationWorkflow";
 import {
   createSiteSurvey,
-  deleteSiteSurvey,
   fetchSiteSurveys,
   fetchSurveyLead,
   fetchSurveyLeadOptions,
@@ -107,6 +108,7 @@ export function SiteSurveysPage() {
   const [leads, setLeads] = useState<SurveyLeadSummary[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<SurveyFilters>({
     search: "",
@@ -121,9 +123,6 @@ export function SiteSurveysPage() {
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] =
-    useState<SiteSurveyWithRelations | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [statusTarget, setStatusTarget] = useState<{
     survey: SiteSurveyWithRelations;
     status: SiteSurveyStatus;
@@ -134,7 +133,6 @@ export function SiteSurveysPage() {
   const canView = hasPermission(profile, permissions, "site_surveys", "view");
   const canCreate = hasPermission(profile, permissions, "site_surveys", "create");
   const canUpdate = hasPermission(profile, permissions, "site_surveys", "update");
-  const canDelete = hasPermission(profile, permissions, "site_surveys", "delete");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateQuotation = hasPermission(
     profile,
@@ -154,7 +152,7 @@ export function SiteSurveysPage() {
       setError(null);
       const [nextSurveys, nextLeads, nextStaff] =
         await Promise.all([
-          fetchSiteSurveys(profile),
+          fetchSiteSurveys(profile, archiveScope),
           fetchSurveyLeadOptions(profile),
           fetchStaffOptions(profile),
         ]);
@@ -176,7 +174,7 @@ export function SiteSurveysPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   useEffect(() => {
     async function openLeadPrefill() {
@@ -323,31 +321,6 @@ export function SiteSurveysPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteSiteSurvey(deleteTarget.id);
-      setSurveys((current) =>
-        current.filter((survey) => survey.id !== deleteTarget.id),
-      );
-      showToast("Site survey deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Site survey delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   async function confirmStatusUpdate() {
     if (!statusTarget) {
       return;
@@ -379,6 +352,8 @@ export function SiteSurveysPage() {
           description="Review inspections created from enquiries and keep the survey handoff ready for future quotations."
         />
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-3">
         <SearchInput
@@ -582,14 +557,6 @@ export function SiteSurveysPage() {
                         />
                       </>
                     ) : null}
-                    {canDelete ? (
-                      <Button
-                        onClick={() => setDeleteTarget(survey)}
-                        variant="danger"
-                      >
-                        Delete
-                      </Button>
-                    ) : null}
                   </div>
                 </article>
               );
@@ -613,16 +580,6 @@ export function SiteSurveysPage() {
           onClose={() => setFormState(null)}
           onSubmit={handleSubmit}
           saving={saving}
-        />
-      ) : null}
-
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete site survey?"
-          description={`This will remove ${deleteTarget.survey_code ?? "this survey"} from the survey workflow.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
         />
       ) : null}
 

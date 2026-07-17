@@ -4,9 +4,10 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   createLead,
-  deleteLead,
   fetchOrganizationFollowups,
   fetchLeads,
   fetchStaffOptions,
@@ -39,7 +40,6 @@ import {
   AccessDenied,
   Badge,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   Modal,
@@ -78,6 +78,7 @@ export function LeadsPage() {
   const [followups, setFollowups] = useState<LeadFollowupWithLead[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<LeadFilters>({
     search: "",
@@ -93,13 +94,10 @@ export function LeadsPage() {
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "leads", "view");
   const canCreate = hasPermission(profile, permissions, "leads", "create");
   const canUpdate = hasPermission(profile, permissions, "leads", "update");
-  const canDelete = hasPermission(profile, permissions, "leads", "delete");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateSurvey = hasPermission(
     profile,
@@ -124,7 +122,7 @@ export function LeadsPage() {
       setLoading(true);
       setError(null);
       const [nextLeads, nextStaff, nextFollowups] = await Promise.all([
-        fetchLeads(profile),
+        fetchLeads(profile, archiveScope),
         fetchStaffOptions(profile),
         fetchOrganizationFollowups(profile),
       ]);
@@ -144,7 +142,7 @@ export function LeadsPage() {
     void loadData();
     // loadData closes over the current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const filteredLeads = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -251,27 +249,6 @@ export function LeadsPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteLead(deleteTarget.id);
-      setLeads((current) => current.filter((lead) => lead.id !== deleteTarget.id));
-      showToast("Enquiry deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Enquiry delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -281,6 +258,8 @@ export function LeadsPage() {
         />
         {canCreate ? <Button onClick={openCreateForm}>Add Enquiry</Button> : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-4">
         <SearchInput
@@ -461,11 +440,6 @@ export function LeadsPage() {
                       Edit
                     </Button>
                   ) : null}
-                  {canDelete ? (
-                    <Button onClick={() => setDeleteTarget(lead)} variant="danger">
-                      Delete
-                    </Button>
-                  ) : null}
                 </div>
               </article>
             ))}
@@ -489,15 +463,6 @@ export function LeadsPage() {
         />
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete enquiry?"
-          description={`This will remove ${deleteTarget.full_name} from the enquiry pipeline.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
     </div>
   );
 }

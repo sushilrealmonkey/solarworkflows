@@ -26,6 +26,9 @@ export type B2BSale = {
   created_by: string | null;
   created_at: string | null;
   updated_at: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
 };
 
 export type B2BSaleItem = {

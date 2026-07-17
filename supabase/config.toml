@@ -281,13 +281,13 @@ content_path = "./supabase/templates/recovery.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
-enable_signup = false
+enable_signup = true
 # If enabled, users need to confirm their phone number before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # Template for sending OTP to users
 template = "Your code is {{ .Code }}"
 # Controls the minimum amount of time that must pass before sending another sms otp.
-max_frequency = "5s"
+max_frequency = "60s"
 
 # Use pre-defined map of phone number to OTP for testing.
 # [auth.sms.test_otp]
@@ -310,6 +310,13 @@ timebox = "720h"
 # [auth.hook.custom_access_token]
 # enabled = true
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
+
+# Black SMS is connected through a signed HTTP Send SMS Hook. The hosted hook
+# URL and signing secret are deployment values and must never be committed.
+[auth.hook.send_sms]
+enabled = true
+uri = "env(SEND_SMS_HOOK_URI)"
+secrets = "env(SEND_SMS_HOOK_SECRET)"
 
 # Configure one of the supported SMS providers: `twilio`, `twilio_verify`, `messagebird`, `textlocal`, `vonage`.
 [auth.sms.twilio]
@@ -424,6 +431,10 @@ deno_version = 2
 verify_jwt = false
 
 [functions.invite-settings-staff]
+verify_jwt = false
+
+[functions.send-sms]
+# Supabase Auth authenticates this hook with a Standard Webhooks signature.
 verify_jwt = false
 
 [analytics]

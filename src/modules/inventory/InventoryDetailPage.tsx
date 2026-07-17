@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
@@ -62,9 +62,11 @@ import type {
   InventoryTransactionFormValues,
   InventoryTransactionWithRelations,
 } from "./types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function InventoryDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -103,6 +105,7 @@ export function InventoryDetailPage() {
   const canView = hasPermission(profile, permissions, "inventory", "view");
   const canCreate = hasPermission(profile, permissions, "inventory", "create");
   const canUpdate = hasPermission(profile, permissions, "inventory", "update");
+  const canDelete = hasPermission(profile, permissions, "inventory", "delete");
 
   async function loadItem() {
     if (!canView || !id) {
@@ -177,13 +180,40 @@ export function InventoryDetailPage() {
     setTransactionForm(emptyInventoryTransactionForm(item.id));
   }
 
-  function openEditForm() {
+  async function openEditForm() {
     if (!item) {
       return;
     }
 
-    setFormErrors({});
-    setEditing(inventoryItemToForm(item));
+    try {
+      const nextMasters = await fetchInventoryMasters(profile);
+      const currentSupplier = item.vendor_master
+        ? {
+            id: item.vendor_master.id,
+            organization_id: item.organization_id,
+            name: item.vendor_master.name,
+            created_at: null,
+          }
+        : null;
+
+      setMasters({
+        ...nextMasters,
+        vendors:
+          currentSupplier &&
+          !nextMasters.vendors.some((vendor) => vendor.id === currentSupplier.id)
+            ? [...nextMasters.vendors, currentSupplier]
+            : nextMasters.vendors,
+      });
+      setFormErrors({});
+      setEditing(inventoryItemToForm(item));
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load the latest suppliers.",
+        "error",
+      );
+    }
   }
 
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
@@ -318,7 +348,7 @@ export function InventoryDetailPage() {
                 inventoryModelName(item),
               ]}
               action={
-                canUpdate ? (
+                canUpdate && !item.archived_at ? (
                   <button
                     aria-label="Edit inventory item"
                     className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
@@ -331,7 +361,7 @@ export function InventoryDetailPage() {
                 ) : null
               }
             />
-            {canCreate ? (
+            {canCreate && !item.archived_at ? (
               <div className="space-y-3">
                 <NextStepLabel />
                 <Button onClick={openTransactionForm}>Add Transaction</Button>
@@ -413,13 +443,12 @@ export function InventoryDetailPage() {
 
           <PurchaseOrdersSection
             orders={purchaseOrders}
-            canManageStatus={false}
             canReceive={false}
             showPricing={false}
             emptyTitle="No purchase history for this item"
           />
 
-          {canUpdate && item.status !== "discontinued" ? (
+          {canUpdate && !item.archived_at && item.status !== "discontinued" ? (
             <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -441,6 +470,25 @@ export function InventoryDetailPage() {
               </div>
             </section>
           ) : null}
+
+          <RecordLifecyclePanel
+            archiveReason={item.archive_reason}
+            archivedAt={item.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="inventory_items"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Inventory item permanently deleted.", "success");
+                navigate("/inventory");
+                return;
+              }
+              showToast(action === "archive" ? "Inventory item archived." : "Inventory item restored.", "success");
+              await loadItem();
+            }}
+            recordId={item.id}
+            recordLabel={item.item_code || item.item_name}
+          />
         </>
       ) : null}
 

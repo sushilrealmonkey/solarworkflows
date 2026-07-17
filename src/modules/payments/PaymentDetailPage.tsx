@@ -5,11 +5,14 @@ import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
+  Button,
   DetailItem,
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  Modal,
   PencilIcon,
+  TextArea,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -30,6 +33,8 @@ import type {
   PaymentProjectOption,
   PaymentWithRelations,
 } from "./types";
+import { cancelPaymentRecord } from "../lifecycle/lifecycleApi";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function PaymentDetailPage() {
   const { id } = useParams();
@@ -42,6 +47,8 @@ export function PaymentDetailPage() {
   const [editing, setEditing] = useState<PaymentFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelReason, setCancelReason] = useState<string | null>(null);
 
   const canView = hasPermission(profile, permissions, "payments", "view");
   const canUpdate = hasPermission(profile, permissions, "payments", "update");
@@ -124,6 +131,22 @@ export function PaymentDetailPage() {
     setEditing(paymentToForm(payment));
   }
 
+  async function handleCancelPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!payment || !cancelReason?.trim()) return;
+    try {
+      setCancelling(true);
+      await cancelPaymentRecord(payment.id, cancelReason);
+      setCancelReason(null);
+      showToast("Payment cancelled; linked totals were recalculated.", "success");
+      await loadPayment();
+    } catch (nextError) {
+      showToast(nextError instanceof Error ? nextError.message : "Payment cancellation failed.", "error");
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/payments">
@@ -146,7 +169,7 @@ export function PaymentDetailPage() {
               recordType="Payment"
               name={formatMoney(payment.amount)}
               action={
-                canUpdate ? (
+                canUpdate && payment.status === "failed" && !payment.archived_at ? (
                   <button
                     aria-label="Edit payment"
                     className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
@@ -310,6 +333,32 @@ export function PaymentDetailPage() {
             <DetailItem label="Updated" value={formatDateTime(payment.updated_at)} />
             <DetailItem label="Notes" value={payment.notes ?? "-"} />
           </DetailSection>
+
+          {canUpdate && payment.status === "received" && !payment.archived_at ? (
+            <section className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="font-semibold text-amber-950">Incorrect received payment?</h2>
+                  <p className="mt-1 text-sm text-amber-800">Cancel it with a reason. The original record remains immutable and linked totals are recalculated.</p>
+                </div>
+                <Button onClick={() => setCancelReason("")} variant="danger">Cancel Payment</Button>
+              </div>
+            </section>
+          ) : null}
+
+          <RecordLifecyclePanel
+            archiveReason={payment.archive_reason}
+            archivedAt={payment.archived_at}
+            canDelete={false}
+            canUpdate={canUpdate}
+            moduleKey="payments"
+            onChanged={async (action) => {
+              showToast(action === "archive" ? "Payment archived." : "Payment restored.", "success");
+              await loadPayment();
+            }}
+            recordId={payment.id}
+            recordLabel={payment.reference_number || `Payment ${payment.id.slice(0, 8)}`}
+          />
         </>
       ) : null}
 
@@ -324,6 +373,24 @@ export function PaymentDetailPage() {
           onSubmit={handleEditSubmit}
           saving={saving}
         />
+      ) : null}
+
+      {cancelReason !== null ? (
+        <Modal
+          maxWidthClass="sm:max-w-lg"
+          noValidate
+          onClose={() => setCancelReason(null)}
+          onSubmit={handleCancelPayment}
+          submitDisabled={!cancelReason.trim()}
+          submitLabel="Cancel Payment"
+          submitting={cancelling}
+          title="Cancel received payment"
+        >
+          <div className="md:col-span-2">
+            <TextArea className="block" label="Cancellation reason *" onChange={setCancelReason} value={cancelReason} />
+            <p className="mt-2 text-xs text-slate-600">This does not delete the payment. Create a new payment if a correction is required.</p>
+          </div>
+        </Modal>
       ) : null}
 
     </div>

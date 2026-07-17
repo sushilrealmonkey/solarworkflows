@@ -11,11 +11,12 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Badge,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   Modal,
@@ -43,7 +44,7 @@ import {
   fetchPurchaseVendorOptions,
   fetchPurchaseOrders,
   receivePurchaseOrderItems,
-  updatePurchaseOrderStatus,
+  updatePurchaseOrder,
 } from "./purchaseApi";
 import {
   calculatePurchaseItemTotal,
@@ -54,6 +55,7 @@ import {
   formatPurchaseCode,
   hasPurchaseOrderFormErrors,
   hasPurchaseReceiveFormErrors,
+  purchaseOrderToForm,
   purchaseStatusOptions,
   validatePurchaseOrderForm,
   validatePurchaseReceiveForm,
@@ -96,6 +98,7 @@ export function PurchasesPage() {
     new Map<string, { current_purchase_price: number | null; gst_percent: number | null }>(),
   );
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<PurchaseFilters>({
     search: "",
@@ -104,12 +107,10 @@ export function PurchasesPage() {
     pendingReceive: false,
   });
   const [form, setForm] = useState<PurchaseOrderFormValues | null>(null);
+  const [editTarget, setEditTarget] =
+    useState<PurchaseOrderWithRelations | null>(null);
   const [formErrors, setFormErrors] = useState<PurchaseFormErrors | null>(null);
   const [saving, setSaving] = useState(false);
-  const [statusTarget, setStatusTarget] = useState<{
-    order: PurchaseOrderWithRelations;
-    status: PurchaseStatus;
-  } | null>(null);
   const [receiveTarget, setReceiveTarget] =
     useState<PurchaseOrderWithRelations | null>(null);
   const [receiveForm, setReceiveForm] = useState<PurchaseReceiveFormValues | null>(
@@ -135,18 +136,29 @@ export function PurchasesPage() {
     roleNames,
     "create",
   );
+  const canCreateItems = hasPermission(
+    profile,
+    permissions,
+    "inventory",
+    "create",
+  );
+  const canCreate = canCreateItems && canCreatePricing;
   const canUpdatePricing = hasAdminPricingAccess(
     profile,
     permissions,
     roleNames,
     "update",
   );
-  const canCreate =
-    hasPermission(profile, permissions, "inventory", "create") &&
-    canCreatePricing;
-  const canManageStatus =
+  const canUpdate =
+    canViewPricing &&
     hasPermission(profile, permissions, "inventory", "update") &&
     canUpdatePricing;
+  const canDelete = hasPermission(
+    profile,
+    permissions,
+    "inventory",
+    "delete",
+  );
   const canReceive =
     hasPermission(profile, permissions, "inventory", "create") &&
     hasPermission(profile, permissions, "inventory", "update");
@@ -168,7 +180,7 @@ export function PurchasesPage() {
       setLoading(true);
       setError(null);
       const [nextOrders, nextVendors, nextItems] = await Promise.all([
-        fetchPurchaseOrders(profile, undefined, { includePricing: canViewPricing }),
+        fetchPurchaseOrders(profile, undefined, { includePricing: canViewPricing, archiveScope }),
         fetchPurchaseVendorOptions(),
         fetchInventoryItems(profile),
       ]);
@@ -213,7 +225,7 @@ export function PurchasesPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, canViewPricing, profile?.id]);
+  }, [archiveScope, canView, canViewPricing, profile?.id]);
 
   const filteredOrders = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -256,9 +268,42 @@ export function PurchasesPage() {
     );
   }
 
-  function openCreateForm() {
-    setFormErrors(null);
-    setForm(emptyPurchaseOrderForm());
+  async function openCreateForm() {
+    try {
+      setVendors(await fetchPurchaseVendorOptions());
+      setEditTarget(null);
+      setFormErrors(null);
+      setForm(emptyPurchaseOrderForm());
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load the latest suppliers.",
+        "error",
+      );
+    }
+  }
+
+  async function openEditForm(order: PurchaseOrderWithRelations) {
+    try {
+      const nextVendors = await fetchPurchaseVendorOptions();
+      setVendors(
+        order.vendor &&
+          !nextVendors.some((vendor) => vendor.id === order.vendor?.id)
+          ? [...nextVendors, order.vendor]
+          : nextVendors,
+      );
+      setEditTarget(order);
+      setFormErrors(null);
+      setForm(purchaseOrderToForm(order));
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load the latest suppliers.",
+        "error",
+      );
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -277,6 +322,34 @@ export function PurchasesPage() {
 
     try {
       setSaving(true);
+      if (editTarget) {
+        await updatePurchaseOrder(profile, editTarget.id, form);
+
+        if (canDownloadPurchasePdf) {
+          try {
+            const orderForPdf = await fetchPurchaseOrder(profile, editTarget.id);
+            await generateAndStorePurchaseOrderPdf(
+              profile,
+              organization,
+              orderForPdf,
+            );
+          } catch (pdfError) {
+            showToast(
+              pdfError instanceof Error
+                ? `Purchase order updated, but PDF refresh failed: ${pdfError.message}`
+                : "Purchase order updated, but PDF refresh failed.",
+              "error",
+            );
+          }
+        }
+
+        setForm(null);
+        setEditTarget(null);
+        showToast("Purchase order updated.", "success");
+        await loadData();
+        return;
+      }
+
       const createdOrder = await createPurchaseOrder(profile, form);
       let pdfGenerated = false;
       let pdfGenerationFailed = false;
@@ -319,29 +392,6 @@ export function PurchasesPage() {
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function confirmStatusUpdate() {
-    if (!statusTarget) {
-      return;
-    }
-
-    try {
-      setUpdatingStatus(true);
-      await updatePurchaseOrderStatus(statusTarget.order.id, statusTarget.status);
-      showToast("Purchase order status updated.", "success");
-      setStatusTarget(null);
-      await loadData();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Purchase order status update failed.",
-        "error",
-      );
-    } finally {
-      setUpdatingStatus(false);
     }
   }
 
@@ -444,6 +494,8 @@ export function PurchasesPage() {
         {canCreate ? <Button onClick={openCreateForm}>Create Purchase Order</Button> : null}
       </div>
 
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+
       <Toolbar>
         <SearchInput
           placeholder="Search PO, supplier, or phone"
@@ -517,52 +569,37 @@ export function PurchasesPage() {
       {!loading && !error && filteredOrders.length > 0 ? (
         <PurchaseOrdersSection
           orders={filteredOrders}
-          canManageStatus={canManageStatus}
+          canEdit={canUpdate}
+          canDelete={canDelete}
           canReceive={canReceive}
           canDownloadPdf={canDownloadPurchasePdf}
           pdfUrls={purchasePdfUrls}
           preparingPdfId={preparingPurchasePdfId}
           showPricing={canViewPricing}
           onDownload={(order) => void handleDownloadPurchaseOrder(order)}
-          onStatusChange={(order, status) => setStatusTarget({ order, status })}
+          onEdit={(order) => void openEditForm(order)}
           onReceive={openReceiveForm}
         />
       ) : null}
 
       {form ? (
         <PurchaseOrderFormModal
+          title={editTarget ? "Edit Purchase Order" : "Create Purchase Order"}
+          submitLabel={editTarget ? "Update Purchase Order" : "Save Purchase Order"}
           values={form}
           setValues={setForm}
           errors={formErrors}
           vendors={vendors}
           items={items}
           priceDefaults={priceDefaults}
-          onClose={() => setForm(null)}
+          canAddItems={!editTarget || canCreateItems}
+          canRemoveItems={!editTarget || canDelete}
+          onClose={() => {
+            setForm(null);
+            setEditTarget(null);
+          }}
           onSubmit={handleSubmit}
           saving={saving}
-        />
-      ) : null}
-
-      {statusTarget ? (
-        <ConfirmDialog
-          title={
-            statusTarget.status === "received"
-              ? "Receive purchase order?"
-              : "Update purchase status?"
-          }
-          description={
-            statusTarget.status === "received"
-              ? "This opens the receiving workflow for this purchase order."
-              : `Set ${formatPurchaseCode(statusTarget.order.purchase_code)} to ${labelize(statusTarget.status)}.`
-          }
-          confirming={updatingStatus}
-          confirmLabel={
-            statusTarget.status === "received" ? "Material Receive" : "Update Status"
-          }
-          confirmingLabel="Updating..."
-          confirmVariant={statusTarget.status === "cancelled" ? "danger" : "primary"}
-          onCancel={() => setStatusTarget(null)}
-          onConfirm={confirmStatusUpdate}
         />
       ) : null}
 
@@ -581,35 +618,37 @@ export function PurchasesPage() {
           saving={updatingStatus}
         />
       ) : null}
+
     </div>
   );
 }
 
 export function PurchaseOrdersSection({
   orders,
-  canManageStatus = false,
+  canEdit = false,
+  canDelete = false,
   canReceive = false,
   canDownloadPdf = false,
   pdfUrls = {},
   preparingPdfId = null,
   showPricing = true,
   onDownload,
-  onStatusChange,
+  onEdit,
+  onDelete,
   onReceive,
   emptyTitle = "No purchase orders",
 }: {
   orders: PurchaseOrderWithRelations[];
-  canManageStatus?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
   canReceive?: boolean;
   canDownloadPdf?: boolean;
   pdfUrls?: Record<string, string>;
   preparingPdfId?: string | null;
   showPricing?: boolean;
   onDownload?: (order: PurchaseOrderWithRelations) => void;
-  onStatusChange?: (
-    order: PurchaseOrderWithRelations,
-    status: PurchaseStatus,
-  ) => void;
+  onEdit?: (order: PurchaseOrderWithRelations) => void;
+  onDelete?: (order: PurchaseOrderWithRelations) => void;
   onReceive?: (order: PurchaseOrderWithRelations) => void;
   emptyTitle?: string;
 }) {
@@ -682,7 +721,7 @@ export function PurchaseOrdersSection({
               <th className="px-4 py-3">Items</th>
               <th className="px-4 py-3">Receipt</th>
               {showPricing ? <th className="px-4 py-3">Total</th> : null}
-              <th className="px-4 py-3">Next Step</th>
+              <th className="px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
@@ -742,13 +781,15 @@ export function PurchaseOrdersSection({
                   >
                     <PurchaseStatusActions
                       order={order}
-                      canManageStatus={canManageStatus}
+                      canEdit={canEdit}
+                      canDelete={canDelete}
                       canReceive={canReceive}
                       canDownloadPdf={canDownloadPdf}
                       pdfUrl={pdfUrls[order.id]}
                       preparingPdf={preparingPdfId === order.id}
                       onDownload={onDownload}
-                      onStatusChange={onStatusChange}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
                       onReceive={onReceive}
                     />
                   </td>
@@ -817,13 +858,15 @@ export function PurchaseOrdersSection({
               >
                 <PurchaseStatusActions
                   order={order}
-                  canManageStatus={canManageStatus}
+                  canEdit={canEdit}
+                  canDelete={canDelete}
                   canReceive={canReceive}
                   canDownloadPdf={canDownloadPdf}
                   pdfUrl={pdfUrls[order.id]}
                   preparingPdf={preparingPdfId === order.id}
                   onDownload={onDownload}
-                  onStatusChange={onStatusChange}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
                   onReceive={onReceive}
                 />
               </div>
@@ -903,38 +946,44 @@ function PurchaseReceiveProgress({
 
 function PurchaseStatusActions({
   order,
-  canManageStatus,
+  canEdit,
+  canDelete,
   canReceive,
   canDownloadPdf,
   pdfUrl,
   preparingPdf,
   onDownload,
-  onStatusChange,
+  onEdit,
+  onDelete,
   onReceive,
 }: {
   order: PurchaseOrderWithRelations;
-  canManageStatus: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   canReceive: boolean;
   canDownloadPdf: boolean;
   pdfUrl?: string;
   preparingPdf: boolean;
   onDownload?: (order: PurchaseOrderWithRelations) => void;
-  onStatusChange?: (
-    order: PurchaseOrderWithRelations,
-    status: PurchaseStatus,
-  ) => void;
+  onEdit?: (order: PurchaseOrderWithRelations) => void;
+  onDelete?: (order: PurchaseOrderWithRelations) => void;
   onReceive?: (order: PurchaseOrderWithRelations) => void;
 }) {
-  const canMarkOrdered = Boolean(
-    canManageStatus && onStatusChange && order.status === "draft",
-  );
   const canShowReceiveAction = Boolean(
     canReceive &&
       onReceive &&
       (order.status === "ordered" || order.status === "partially_received"),
   );
 
-  if (!canDownloadPdf && !canMarkOrdered && !canShowReceiveAction) {
+  const canShowEditAction = Boolean(canEdit && onEdit);
+  const canShowDeleteAction = Boolean(canDelete && onDelete);
+
+  if (
+    !canDownloadPdf &&
+    !canShowReceiveAction &&
+    !canShowEditAction &&
+    !canShowDeleteAction
+  ) {
     return <span className="text-sm text-slate-500">-</span>;
   }
 
@@ -946,14 +995,19 @@ function PurchaseStatusActions({
         url={pdfUrl}
         onDownload={onDownload ? () => onDownload(order) : undefined}
       />
-      {canMarkOrdered && onStatusChange ? (
-        <Button onClick={() => onStatusChange(order, "ordered")} variant="secondary">
-          Mark Ordered
-        </Button>
-      ) : null}
       {canShowReceiveAction && onReceive ? (
         <Button onClick={() => onReceive(order)}>
           Material Received
+        </Button>
+      ) : null}
+      {canShowEditAction && onEdit ? (
+        <Button onClick={() => onEdit(order)} variant="secondary">
+          Edit
+        </Button>
+      ) : null}
+      {canShowDeleteAction && onDelete ? (
+        <Button onClick={() => onDelete(order)} variant="danger">
+          Delete
         </Button>
       ) : null}
     </div>
@@ -1005,6 +1059,8 @@ export function PurchaseOrderFormModal({
   vendors,
   items,
   priceDefaults,
+  canAddItems = true,
+  canRemoveItems = true,
   onClose,
   onSubmit,
   saving,
@@ -1017,6 +1073,8 @@ export function PurchaseOrderFormModal({
   vendors: PurchaseVendorOption[];
   items: InventoryItem[];
   priceDefaults: Map<string, { current_purchase_price: number | null; gst_percent: number | null }>;
+  canAddItems?: boolean;
+  canRemoveItems?: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
@@ -1090,17 +1148,19 @@ export function PurchaseOrderFormModal({
       <div className="space-y-3 md:col-span-2">
         <div className="flex items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-slate-950">Items</h3>
-          <Button
-            onClick={() =>
-              setValues({
-                ...values,
-                items: [...values.items, emptyPurchaseItemForm()],
-              })
-            }
-            variant="secondary"
-          >
-            Add Item
-          </Button>
+          {canAddItems ? (
+            <Button
+              onClick={() =>
+                setValues({
+                  ...values,
+                  items: [...values.items, emptyPurchaseItemForm()],
+                })
+              }
+              variant="secondary"
+            >
+              Add Item
+            </Button>
+          ) : null}
         </div>
         {errors?.items ? (
           <p className="text-xs text-rose-700">{errors.items}</p>
@@ -1170,7 +1230,7 @@ export function PurchaseOrderFormModal({
                   <span className="text-sm font-semibold text-slate-950">
                     Line total {formatCurrency(itemTotal.total)}
                   </span>
-                  {values.items.length > 1 ? (
+                  {values.items.length > 1 && (canRemoveItems || !item.id) ? (
                     <Button
                       onClick={() =>
                         setValues({

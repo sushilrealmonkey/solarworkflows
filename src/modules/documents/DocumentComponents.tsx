@@ -8,6 +8,8 @@ import {
   TextInput,
 } from "../crm/CrmComponents";
 import { formatDate, labelize } from "../crm/crmUtils";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
+import type { LifecycleAction } from "../lifecycle/types";
 import {
   documentRelatedLabel,
   documentTypeOptions,
@@ -128,14 +130,19 @@ export function DocumentUploadModal({
 
 export function DocumentsCollection({
   documents,
+  canUpdate,
   canDelete,
   compact = false,
-  onDelete,
+  onLifecycleChanged,
 }: {
   documents: OrganizationDocumentWithRelations[];
+  canUpdate: boolean;
   canDelete: boolean;
   compact?: boolean;
-  onDelete: (document: OrganizationDocumentWithRelations) => void;
+  onLifecycleChanged: (
+    document: OrganizationDocumentWithRelations,
+    action: LifecycleAction,
+  ) => void | Promise<void>;
 }) {
   const documentPagination = useTablePagination(documents);
   const paginatedDocuments = documentPagination.pageItems;
@@ -178,8 +185,9 @@ export function DocumentsCollection({
                 <td className="px-4 py-3">
                   <DocumentActions
                     document={document}
+                    canUpdate={canUpdate}
                     canDelete={canDelete}
-                    onDelete={onDelete}
+                    onLifecycleChanged={onLifecycleChanged}
                   />
                 </td>
               </tr>
@@ -220,8 +228,9 @@ export function DocumentsCollection({
             <div className="mt-4">
               <DocumentActions
                 document={document}
+                canUpdate={canUpdate}
                 canDelete={canDelete}
-                onDelete={onDelete}
+                onLifecycleChanged={onLifecycleChanged}
               />
             </div>
           </article>
@@ -234,12 +243,17 @@ export function DocumentsCollection({
 
 function DocumentActions({
   document,
+  canUpdate,
   canDelete,
-  onDelete,
+  onLifecycleChanged,
 }: {
   document: OrganizationDocumentWithRelations;
+  canUpdate: boolean;
   canDelete: boolean;
-  onDelete: (document: OrganizationDocumentWithRelations) => void;
+  onLifecycleChanged: (
+    document: OrganizationDocumentWithRelations,
+    action: LifecycleAction,
+  ) => void | Promise<void>;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -253,11 +267,17 @@ function DocumentActions({
           Preview File
         </a>
       ) : null}
-      {canDelete ? (
-        <Button onClick={() => onDelete(document)} variant="danger">
-          Delete
-        </Button>
-      ) : null}
+      <RecordLifecyclePanel
+        archiveReason={document.archive_reason}
+        archivedAt={document.archived_at}
+        canDelete={canDelete}
+        canUpdate={canUpdate}
+        compact
+        moduleKey="documents"
+        onChanged={(action) => onLifecycleChanged(document, action)}
+        recordId={document.id}
+        recordLabel={document.document_name}
+      />
     </div>
   );
 }

@@ -63,6 +63,7 @@ export async function fetchDocuments(
   let query = client
     .from("documents")
     .select(documentSelect)
+    .is("archived_at", null)
     .neq("document_type", "invoice_pdf")
     .order("created_at", { ascending: false });
 

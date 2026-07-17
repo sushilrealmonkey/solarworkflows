@@ -32,7 +32,6 @@ import type { StaffOption } from "../crm/types";
 import { fetchVendors } from "../vendors/vendorApi";
 import type { Vendor } from "../vendors/types";
 import {
-  deleteProject,
   fetchProject,
   fetchProjectCustomers,
   fetchProjectQuotations,
@@ -83,17 +82,12 @@ import type {
   PaymentProjectOption,
   PaymentProjectSummary,
 } from "../payments/types";
-import {
-  deleteDocument,
-  fetchDocuments,
-  uploadDocument,
-} from "../documents/documentApi";
+import { fetchDocuments, uploadDocument } from "../documents/documentApi";
 import {
   DocumentsCollection,
   DocumentUploadModal,
 } from "../documents/DocumentComponents";
 import {
-  documentRelatedLabel,
   emptyDocumentUploadForm,
   uploadPayload,
   validateDocumentUpload,
@@ -102,6 +96,7 @@ import type {
   DocumentUploadValues,
   OrganizationDocumentWithRelations,
 } from "../documents/types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import {
   fetchInventoryItems,
   fetchProjectInventoryReservations,
@@ -149,8 +144,6 @@ export function ProjectDetailPage() {
   const [editing, setEditing] = useState<ProjectFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [statusTarget, setStatusTarget] = useState<ProjectStatus | null>(null);
   const [stockOutAlert, setStockOutAlert] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -172,9 +165,6 @@ export function ProjectDetailPage() {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [documentErrors, setDocumentErrors] = useState<Record<string, string>>({});
   const [savingDocument, setSavingDocument] = useState(false);
-  const [documentDeleteTarget, setDocumentDeleteTarget] =
-    useState<OrganizationDocumentWithRelations | null>(null);
-  const [deletingDocument, setDeletingDocument] = useState(false);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [projectMaterials, setProjectMaterials] = useState<
     InventoryTransactionWithRelations[]
@@ -218,6 +208,12 @@ export function ProjectDetailPage() {
     permissions,
     "documents",
     "delete",
+  );
+  const canUpdateDocument = hasPermission(
+    profile,
+    permissions,
+    "documents",
+    "update",
   );
   const canViewInventory = hasPermission(
     profile,
@@ -402,26 +398,6 @@ export function ProjectDetailPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!project) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteProject(project.id);
-      showToast("Project deleted.", "success");
-      navigate("/projects");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Project delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   function openEditForm() {
     if (!project) {
       return;
@@ -560,29 +536,6 @@ export function ProjectDetailPage() {
     }
   }
 
-  async function confirmDocumentDelete() {
-    if (!documentDeleteTarget) {
-      return;
-    }
-
-    try {
-      setDeletingDocument(true);
-      await deleteDocument(documentDeleteTarget);
-      setDocuments((current) =>
-        current.filter((document) => document.id !== documentDeleteTarget.id),
-      );
-      setDocumentDeleteTarget(null);
-      showToast("Document deleted.", "success");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Document delete failed.",
-        "error",
-      );
-    } finally {
-      setDeletingDocument(false);
-    }
-  }
-
   function openMaterialIssueForm() {
     setMaterialIssueErrors({});
     setMaterialIssueForm({
@@ -659,7 +612,7 @@ export function ProjectDetailPage() {
                 recordType="Project"
                 name={project.project_name ?? contact.customerName ?? "Project"}
                 action={
-                  canUpdate ? (
+                  canUpdate && !project.archived_at ? (
                     <button
                       aria-label="Edit project"
                       className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
@@ -681,7 +634,7 @@ export function ProjectDetailPage() {
                 ]}
               />
               <div className="flex flex-wrap items-center gap-2">
-                {canUpdate ? (
+                {canUpdate && !project.archived_at ? (
                   <ProjectStatusSelect
                     disabled={updatingStatus}
                     value={project.project_status ?? "created"}
@@ -823,8 +776,17 @@ export function ProjectDetailPage() {
                   <DocumentsCollection
                     compact
                     documents={documents}
+                    canUpdate={canUpdateDocument}
                     canDelete={canDeleteDocument}
-                    onDelete={setDocumentDeleteTarget}
+                    onLifecycleChanged={(document, action) => {
+                      setDocuments((current) =>
+                        current.filter((entry) => entry.id !== document.id),
+                      );
+                      showToast(
+                        action === "delete" ? "Document permanently deleted." : "Document archived.",
+                        "success",
+                      );
+                    }}
                   />
                 </div>
               ) : (
@@ -849,9 +811,24 @@ export function ProjectDetailPage() {
             />
           ) : null}
 
-          {canDelete ? (
-            <DangerZoneSection onDelete={() => setConfirmingDelete(true)} />
-          ) : null}
+          <RecordLifecyclePanel
+            archiveReason={project.archive_reason}
+            archivedAt={project.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="projects"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Project permanently deleted.", "success");
+                navigate("/projects");
+                return;
+              }
+              showToast(action === "archive" ? "Project archived." : "Project restored.", "success");
+              await loadProject();
+            }}
+            recordId={project.id}
+            recordLabel={project.project_code || project.project_name || "Project"}
+          />
         </>
       ) : null}
 
@@ -908,26 +885,6 @@ export function ProjectDetailPage() {
           onClose={() => setMaterialIssueForm(null)}
           onSubmit={handleMaterialIssueSubmit}
           saving={issuingMaterial}
-        />
-      ) : null}
-
-      {documentDeleteTarget ? (
-        <ConfirmDialog
-          title="Delete document?"
-          description={`This will remove ${documentDeleteTarget.document_name} from ${documentRelatedLabel(documentDeleteTarget)}.`}
-          confirming={deletingDocument}
-          onCancel={() => setDocumentDeleteTarget(null)}
-          onConfirm={confirmDocumentDelete}
-        />
-      ) : null}
-
-      {confirmingDelete ? (
-        <ConfirmDialog
-          title="Delete project?"
-          description="This project record will be removed from the installation workflow."
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
         />
       ) : null}
 
@@ -1030,24 +987,6 @@ function NextStepSection({
             Additional Material Issue
           </button>
         ) : null}
-      </div>
-    </section>
-  );
-}
-
-function DangerZoneSection({ onDelete }: { onDelete: () => void }) {
-  return (
-    <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-rose-900">Danger Zone</h2>
-          <p className="mt-1 text-sm leading-6 text-rose-700">
-            Delete this project record from the installation workflow.
-          </p>
-        </div>
-        <Button onClick={onDelete} variant="danger">
-          Delete Project
-        </Button>
       </div>
     </section>
   );

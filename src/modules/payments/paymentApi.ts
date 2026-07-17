@@ -92,13 +92,15 @@ const paymentSelect = `
   )
 `;
 
-export async function fetchPayments(profile: UserProfile | null) {
+export async function fetchPayments(profile: UserProfile | null, archiveScope: "active" | "archived" | "all" = "active") {
   const client = requireSupabase();
   let query = client
     .from("payments")
     .select(paymentSelect)
     .order("payment_date", { ascending: false })
     .order("created_at", { ascending: false });
+
+  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
 
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));

@@ -41,9 +41,39 @@ Sender email: team@getbizlee.com
 Store the Resend API key only in the Supabase SMTP password field. Never add it
 to this repository or expose it through a `VITE_` environment variable.
 
+## Black SMS phone OTP
+
+Supabase Auth generates and verifies the six-digit OTP. The signed `send-sms`
+Edge Function only delivers that code through Black SMS and does not store it.
+
+Required server-only Function secrets are `SEND_SMS_HOOK_SECRET`,
+`BLACKSMS_API_KEY`, and `BLACKSMS_SENDER_ID`. Black SMS uses the sender ID's
+configured OTP template and substitutes the code supplied as
+`variables_values`.
+
+Deploy with `npx supabase functions deploy send-sms --no-verify-jwt`, then set
+the hosted **Authentication > Hooks > Send SMS** HTTP URL to
+`https://<project-ref>.supabase.co/functions/v1/send-sms`. Configure the hook
+with the same `SEND_SMS_HOOK_SECRET`. Enable hosted phone signup only after all
+Function secrets are present.
+
 The hosted Auth email rate limit is set to 30 messages per hour. Invite,
 recovery, signup, and email-change messages share this project-wide quota.
 
 Setup-link delivery must create exactly one Auth token. Do not generate a
 second recovery link after calling `resetPasswordForEmail`, because issuing a
 new recovery token can invalidate the token that was just emailed.
+
+## Lifecycle Storage cleanup
+
+Permanent deletion of eligible documents is asynchronous: the lifecycle RPC
+marks the document pending deletion and inserts an idempotent queue row. Deploy
+`process-storage-cleanup` with JWT verification disabled, set a strong
+server-only `STORAGE_CLEANUP_SECRET`, and invoke it from a trusted scheduled
+job using the same value in the `x-cleanup-secret` header. The worker deletes
+the Storage object first and removes document metadata only after Storage
+reports success; failed rows remain retryable.
+
+```powershell
+npx supabase functions deploy process-storage-cleanup --no-verify-jwt
+```

@@ -10,6 +10,8 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   AlertDialog,
@@ -99,6 +101,7 @@ export function InventoryPage() {
   });
   const [projects, setProjects] = useState<InventoryProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<InventoryFilters>({
     search: "",
@@ -140,7 +143,7 @@ export function InventoryPage() {
       setLoading(true);
       setError(null);
       const [nextItems, nextTransactions, nextProjects, nextMasters] = await Promise.all([
-        fetchInventoryItems(profile),
+        fetchInventoryItems(profile, archiveScope),
         fetchInventoryTransactions(profile),
         fetchInventoryProjectOptions(profile),
         fetchInventoryMasters(profile),
@@ -164,7 +167,7 @@ export function InventoryPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const lowStockItems = useMemo(
     () =>
@@ -233,22 +236,67 @@ export function InventoryPage() {
     );
   }
 
-  function openCreateItemForm() {
-    setItemFormErrors({});
-    setItemForm({
-      mode: "create",
-      item: null,
-      values: emptyInventoryItemForm(),
-    });
+  async function refreshInventoryMasters() {
+    const nextMasters = await fetchInventoryMasters(profile);
+    setMasters(nextMasters);
+    return nextMasters;
   }
 
-  function openEditItemForm(item: InventoryItem) {
-    setItemFormErrors({});
-    setItemForm({
-      mode: "edit",
-      item,
-      values: inventoryItemToForm(item),
-    });
+  async function openCreateItemForm() {
+    try {
+      await refreshInventoryMasters();
+      setItemFormErrors({});
+      setItemForm({
+        mode: "create",
+        item: null,
+        values: emptyInventoryItemForm(),
+      });
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load the latest suppliers.",
+        "error",
+      );
+    }
+  }
+
+  async function openEditItemForm(item: InventoryItem) {
+    try {
+      const nextMasters = await refreshInventoryMasters();
+      const currentSupplier = item.vendor_master
+        ? {
+            id: item.vendor_master.id,
+            organization_id: item.organization_id,
+            name: item.vendor_master.name,
+            created_at: null,
+          }
+        : null;
+
+      if (
+        currentSupplier &&
+        !nextMasters.vendors.some((vendor) => vendor.id === currentSupplier.id)
+      ) {
+        setMasters({
+          ...nextMasters,
+          vendors: [...nextMasters.vendors, currentSupplier],
+        });
+      }
+
+      setItemFormErrors({});
+      setItemForm({
+        mode: "edit",
+        item,
+        values: inventoryItemToForm(item),
+      });
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load the latest suppliers.",
+        "error",
+      );
+    }
   }
 
   function openTransactionForm(itemId = "") {
@@ -402,6 +450,8 @@ export function InventoryPage() {
           ) : null}
         </div>
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <InventoryMetricCard label="Total Items" value={items.length} />

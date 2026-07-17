@@ -6,7 +6,6 @@ import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   DetailItem,
   DetailSection,
   EmptyState,
@@ -24,7 +23,6 @@ import {
 import { fetchPurchaseOrders } from "../purchases/purchaseApi";
 import type { PurchaseOrderWithRelations } from "../purchases/types";
 import {
-  deleteVendor,
   fetchVendor,
   updateVendor,
 } from "./vendorApi";
@@ -35,6 +33,7 @@ import {
 } from "./vendorUtils";
 import { VendorFormModal, VendorStatusBadge } from "./VendorsPage";
 import type { Vendor, VendorFormValues } from "./types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function VendorDetailPage() {
   const { id } = useParams();
@@ -50,8 +49,6 @@ export function VendorDetailPage() {
   const [editing, setEditing] = useState<VendorFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "vendors", "view");
   const canUpdate = hasPermission(profile, permissions, "vendors", "update");
@@ -137,26 +134,6 @@ export function VendorDetailPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!vendor) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteVendor(vendor.id);
-      showToast("Supplier deleted.", "success");
-      navigate("/vendors");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Supplier delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <Link className="text-sm font-semibold text-[#06173f]" to="/vendors">
@@ -182,7 +159,7 @@ export function VendorDetailPage() {
               )}`}
             />
             <div className="flex flex-wrap gap-2">
-              {canUpdate ? (
+              {canUpdate && !vendor.archived_at ? (
                 <Button
                   onClick={() => {
                     setFormErrors({});
@@ -191,14 +168,6 @@ export function VendorDetailPage() {
                   variant="secondary"
                 >
                   Edit Supplier
-                </Button>
-              ) : null}
-              {canDelete ? (
-                <Button
-                  onClick={() => setConfirmingDelete(true)}
-                  variant="danger"
-                >
-                  Delete Supplier
                 </Button>
               ) : null}
             </div>
@@ -231,12 +200,30 @@ export function VendorDetailPage() {
           {canViewPurchases ? (
             <PurchaseOrdersSection
               orders={purchaseOrders}
-              canManageStatus={false}
               canReceive={false}
               showPricing={canViewPricing}
               emptyTitle="No purchase orders for this supplier"
             />
           ) : null}
+
+          <RecordLifecyclePanel
+            archiveReason={vendor.archive_reason}
+            archivedAt={vendor.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="vendors"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Supplier permanently deleted.", "success");
+                navigate("/vendors");
+                return;
+              }
+              showToast(action === "archive" ? "Supplier archived." : "Supplier restored.", "success");
+              await loadVendor();
+            }}
+            recordId={vendor.id}
+            recordLabel={vendor.vendor_code || vendor.vendor_name}
+          />
         </>
       ) : null}
 
@@ -252,15 +239,6 @@ export function VendorDetailPage() {
         />
       ) : null}
 
-      {confirmingDelete && vendor ? (
-        <ConfirmDialog
-          title="Delete supplier?"
-          description={`This will remove ${vendor.vendor_name}. Suppliers linked to purchase orders may be protected by the database.`}
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
-        />
-      ) : null}
     </div>
   );
 }

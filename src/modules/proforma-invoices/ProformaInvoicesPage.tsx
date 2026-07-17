@@ -10,10 +10,11 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   PlaceholderAction,
@@ -41,7 +42,6 @@ import type {
 import {
   createProformaInvoicePayment,
   createProformaInvoice,
-  deleteProformaInvoice,
   fetchProformaInvoiceItems,
   fetchProformaInvoiceLinkOptions,
   fetchProformaInvoices,
@@ -56,9 +56,7 @@ import {
 import {
   emptyProformaPaymentForm,
   proformaInvoiceContextLabel,
-  proformaInvoiceItemToForm,
   proformaInvoiceStatusOptions,
-  proformaInvoiceToForm,
   validateProformaInvoiceForm,
   validateProformaPaymentForm,
 } from "./proformaInvoiceUtils";
@@ -95,6 +93,7 @@ export function ProformaInvoicesPage() {
     inventoryItems: [],
   });
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<ProformaFilters>({
     search: "",
@@ -109,9 +108,6 @@ export function ProformaInvoicesPage() {
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] =
-    useState<ProformaInvoiceWithRelations | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [sendingProformaId, setSendingProformaId] = useState<string | null>(null);
   const [preparingProformaId, setPreparingProformaId] = useState<string | null>(
     null,
@@ -145,7 +141,7 @@ export function ProformaInvoicesPage() {
       setLoading(true);
       setError(null);
       const [nextProformaInvoices, nextOptions] = await Promise.all([
-        fetchProformaInvoices(profile),
+        fetchProformaInvoices(profile, archiveScope),
         fetchProformaInvoiceLinkOptions(profile),
       ]);
       setProformaInvoices(nextProformaInvoices);
@@ -188,7 +184,7 @@ export function ProformaInvoicesPage() {
     void loadData();
     // loadData closes over permissions and active user profile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const filteredProformaInvoices = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -249,34 +245,6 @@ export function ProformaInvoicesPage() {
       proformaInvoice: null,
       values: emptyInvoiceForm(null, "manual"),
     });
-  }
-
-  async function openEditForm(proformaInvoice: ProformaInvoiceWithRelations) {
-    try {
-      const proformaItems = await fetchProformaInvoiceItems(
-        profile,
-        proformaInvoice.id,
-      );
-      setFormErrors({});
-      setFormState({
-        mode: "edit",
-        proformaInvoice,
-        values: {
-          ...proformaInvoiceToForm(proformaInvoice),
-          items:
-            proformaItems.length > 0
-              ? proformaItems.map(proformaInvoiceItemToForm)
-              : [emptyInvoiceItemForm()],
-        },
-      });
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load proforma invoice items.",
-        "error",
-      );
-    }
   }
 
   function openProformaDetail(proformaInvoiceId: string) {
@@ -467,31 +435,6 @@ export function ProformaInvoicesPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteProformaInvoice(deleteTarget.id);
-      setProformaInvoices((current) =>
-        current.filter((proformaInvoice) => proformaInvoice.id !== deleteTarget.id),
-      );
-      showToast("Proforma invoice deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Proforma invoice delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   async function handlePaymentSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -568,6 +511,8 @@ export function ProformaInvoicesPage() {
           <Button onClick={() => void openCreateForm()}>Create Proforma</Button>
         ) : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <Toolbar className="md:grid-cols-3">
         <SearchInput
@@ -798,15 +743,6 @@ export function ProformaInvoicesPage() {
         />
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete proforma invoice?"
-          description={`This will remove ${deleteTarget.proforma_code ?? "this proforma invoice"} and its itemized bill.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
     </div>
   );
 }

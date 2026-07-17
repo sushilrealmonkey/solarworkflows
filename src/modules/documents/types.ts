@@ -75,6 +75,10 @@ export type OrganizationDocument = {
   verified_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
+  pending_delete_at?: string | null;
 };
 
 export type OrganizationDocumentWithRelations = OrganizationDocument & {

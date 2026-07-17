@@ -5,7 +5,6 @@ import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
-  Button,
   ConfirmDialog,
   DetailItem,
   DetailSection,
@@ -21,7 +20,6 @@ import {
   labelize,
 } from "../crm/crmUtils";
 import {
-  deleteQuotation,
   fetchQuotation,
   fetchQuotationItems,
   fetchQuotationReservations,
@@ -46,6 +44,7 @@ import {
   quotationValidUntilFromDateInput,
   quotationSnapshotFormValues,
 } from "./quotationUtils";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import {
   QuotationWorkflowPill,
   QuotationStatusBadge,
@@ -80,8 +79,6 @@ export function QuotationDetailPage() {
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [statusTarget, setStatusTarget] = useState<QuotationStatus | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [existingProject, setExistingProject] =
@@ -155,28 +152,6 @@ export function QuotationDetailPage() {
         description="Your role needs quotations:view access to open quotation details."
       />
     );
-  }
-
-  async function handleDelete() {
-    if (!quotation) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteQuotation(quotation.id);
-      showToast("Quotation deleted.", "success");
-      navigate("/quotations");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Quotation delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
   }
 
   async function confirmStatusAction() {
@@ -432,7 +407,7 @@ export function QuotationDetailPage() {
                     contact.phone,
                   ]}
                   action={
-                    canUpdate ? (
+                    canUpdate && quotation.status === "draft" && !quotation.archived_at ? (
                       <button
                         aria-label="Edit quotation"
                         className="inline-flex min-h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -489,7 +464,7 @@ export function QuotationDetailPage() {
                     <PlaceholderAction>Create Site Survey</PlaceholderAction>
                   ) : null}
                 </div>
-                {canUpdate ? (
+                {canUpdate && !quotation.archived_at ? (
                   <div className="flex flex-col gap-2 lg:items-end">
                     <p className="text-sm font-medium text-slate-600">
                       Update status of quotation with the latest updates.
@@ -910,34 +885,25 @@ export function QuotationDetailPage() {
             <TotalsCard quotation={quotation} snapshotValues={snapshotValues} />
           </div>
 
-          {canDelete ? (
-            <section className="rounded-xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-rose-950">
-                    Danger Zone
-                  </h2>
-                  <p className="mt-1 text-sm text-rose-800">
-                    Delete this quotation and its itemized cost lines.
-                  </p>
-                </div>
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Quotation
-                </Button>
-              </div>
-            </section>
-          ) : null}
+          <RecordLifecyclePanel
+            archiveReason={quotation.archive_reason}
+            archivedAt={quotation.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="quotations"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Quotation permanently deleted.", "success");
+                navigate("/quotations");
+                return;
+              }
+              showToast(action === "archive" ? "Quotation archived." : "Quotation restored.", "success");
+              await loadQuotation();
+            }}
+            recordId={quotation.id}
+            recordLabel={quotation.quotation_code || "Quotation"}
+          />
         </>
-      ) : null}
-
-      {confirmingDelete ? (
-        <ConfirmDialog
-          title="Delete quotation?"
-          description="This quotation and its itemized cost lines will be removed."
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
-        />
       ) : null}
 
       {statusTarget && quotation ? (

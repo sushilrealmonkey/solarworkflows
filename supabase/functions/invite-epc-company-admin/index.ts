@@ -557,35 +557,46 @@ async function guardedDeleteCompany(
     return jsonResponse({ error: "Organization is required" }, 400);
   }
 
-  const operationalTables = [
-    "customers",
-    "leads",
-    "site_surveys",
-    "projects",
-    "quotations",
-    "payments",
-    "inventory_items",
-    "vendors",
-    "purchase_orders",
-    "documents",
-    "proforma_invoices",
-    "invoices",
-    "b2b_sales",
+  const operationalTables: Array<{ table: string; tenantColumn?: string }> = [
+    { table: "customers" },
+    { table: "leads" },
+    { table: "lead_followups" },
+    { table: "site_surveys" },
+    { table: "projects" },
+    { table: "quotations" },
+    { table: "payments" },
+    { table: "project_payment_summary" },
+    { table: "inventory_items" },
+    { table: "inventory_transactions" },
+    { table: "inventory_reservations" },
+    { table: "inventory_batches" },
+    { table: "vendors" },
+    { table: "purchase_orders" },
+    { table: "documents" },
+    { table: "proforma_invoices" },
+    { table: "invoices" },
+    { table: "b2b_sales" },
+    { table: "products", tenantColumn: "tenant_id" },
+    { table: "product_categories", tenantColumn: "tenant_id" },
+    { table: "bom_templates", tenantColumn: "tenant_id" },
+    { table: "activity_logs" },
+    { table: "daily_briefs" },
+    { table: "storage_cleanup_queue" },
   ];
   const blockers: string[] = [];
 
-  for (const tableName of operationalTables) {
+  for (const dependency of operationalTables) {
     const { count, error } = await serviceClient
-      .from(tableName)
+      .from(dependency.table)
       .select("id", { count: "exact", head: true })
-      .eq("organization_id", organizationId);
+      .eq(dependency.tenantColumn ?? "organization_id", organizationId);
 
     if (error) {
       return jsonResponse({ error: error.message }, 400);
     }
 
     if ((count ?? 0) > 0) {
-      blockers.push(`${tableName}: ${count}`);
+      blockers.push(`${dependency.table}: ${count}`);
     }
   }
 
@@ -601,8 +612,40 @@ async function guardedDeleteCompany(
 
   const profiles = (profilesData ?? []) as AdminProfileRow[];
 
-  if (profiles.length > 1) {
+  if (
+    profiles.length > 1 ||
+    profiles.some((profile) =>
+      profile.onboarded_at ||
+      profile.status === "active"
+    )
+  ) {
     blockers.push(`users_profile: ${profiles.length}`);
+  }
+
+  const { data: organizationData, error: organizationLookupError } =
+    await serviceClient
+      .from("organizations")
+      .select("company_id")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+  if (organizationLookupError) {
+    return jsonResponse({ error: organizationLookupError.message }, 400);
+  }
+
+  const storagePrefixes = [organizationId, organizationData?.company_id]
+    .filter((value): value is string => Boolean(value));
+  for (const prefix of storagePrefixes) {
+    const { count, error: storageError } = await serviceClient
+      .schema("storage")
+      .from("objects")
+      .select("id", { count: "exact", head: true })
+      .like("name", `${prefix}/%`);
+
+    if (storageError) {
+      return jsonResponse({ error: storageError.message }, 400);
+    }
+    if ((count ?? 0) > 0) blockers.push(`storage.objects(${prefix}): ${count}`);
   }
 
   if (blockers.length > 0) {

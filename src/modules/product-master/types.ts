@@ -34,6 +34,9 @@ export type ProductCategory = {
   is_active: boolean | null;
   created_at: string | null;
   updated_at: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
 };
 
 export type ProductCategoryFormValues = {
@@ -67,6 +70,9 @@ export type Product = {
   notes: string | null;
   created_at: string | null;
   updated_at: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
   category?: Pick<
     ProductCategory,
     "id" | "name" | "category_type" | "display_order"

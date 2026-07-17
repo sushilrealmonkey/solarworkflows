@@ -136,12 +136,14 @@ type PriceRow = {
   gst_percent: number | null;
 };
 
-export async function fetchB2BSales(profile: UserProfile | null) {
+export async function fetchB2BSales(profile: UserProfile | null, archiveScope: "active" | "archived" | "all" = "active") {
   const client = requireSupabase();
   let query = client
     .from("b2b_sales")
     .select(b2bSaleSelect)
     .order("created_at", { ascending: false });
+
+  if (archiveScope !== "all") query = archiveScope === "archived" ? query.not("archived_at", "is", null) : query.is("archived_at", null);
 
   if (!profile?.is_super_admin) {
     query = query.eq("organization_id", requireOrganization(profile));

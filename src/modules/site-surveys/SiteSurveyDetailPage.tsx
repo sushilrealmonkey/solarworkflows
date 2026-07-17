@@ -5,7 +5,6 @@ import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
-  Button,
   ConfirmDialog,
   DetailItem,
   DetailSection,
@@ -25,8 +24,8 @@ import {
 } from "../crm/crmUtils";
 import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import {
-  deleteSiteSurvey,
   fetchSiteSurvey,
   fetchSurveyLeadOptions,
   updateSiteSurvey,
@@ -67,8 +66,6 @@ export function SiteSurveyDetailPage() {
   const [editing, setEditing] = useState<SiteSurveyFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [statusTarget, setStatusTarget] = useState<SiteSurveyStatus | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -160,28 +157,6 @@ export function SiteSurveyDetailPage() {
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleDelete() {
-    if (!survey) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteSiteSurvey(survey.id);
-      showToast("Site survey deleted.", "success");
-      navigate("/site-surveys");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Site survey delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -296,7 +271,7 @@ export function SiteSurveyDetailPage() {
                 contact.phone,
               ]}
               action={
-                canUpdate ? (
+                canUpdate && !survey.archived_at ? (
                   <button
                     aria-label="Edit site survey"
                     className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
@@ -315,7 +290,7 @@ export function SiteSurveyDetailPage() {
             <div className="space-y-3">
               <NextStepLabel />
               <div className="flex flex-wrap gap-2">
-                {canUpdate ? (
+                {canUpdate && !survey.archived_at ? (
                   <SurveyStatusSelect
                     disabled={updatingStatus}
                     value={survey.survey_status ?? "scheduled"}
@@ -439,7 +414,7 @@ export function SiteSurveyDetailPage() {
               <h2 className="text-base font-semibold text-slate-950">
                 Photos and Documents
               </h2>
-              {canUpdate ? (
+              {canUpdate && !survey.archived_at ? (
                 <div className="flex flex-wrap gap-2">
                   <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50">
                     {uploadingPhoto ? "Uploading..." : "Upload Photos"}
@@ -523,23 +498,24 @@ export function SiteSurveyDetailPage() {
             </div>
           </section>
 
-          {canDelete ? (
-            <section className="rounded-xl border border-rose-200 bg-rose-50 p-5 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-rose-950">
-                    Danger Zone
-                  </h2>
-                  <p className="mt-1 text-sm text-rose-800">
-                    Delete this site survey record from the workflow.
-                  </p>
-                </div>
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Survey
-                </Button>
-              </div>
-            </section>
-          ) : null}
+          <RecordLifecyclePanel
+            archiveReason={survey.archive_reason}
+            archivedAt={survey.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="site_surveys"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Site survey permanently deleted.", "success");
+                navigate("/site-surveys");
+                return;
+              }
+              showToast(action === "archive" ? "Site survey archived." : "Site survey restored.", "success");
+              await loadSurvey();
+            }}
+            recordId={survey.id}
+            recordLabel={survey.survey_code || "Site survey"}
+          />
         </>
       ) : null}
 
@@ -553,16 +529,6 @@ export function SiteSurveyDetailPage() {
           onClose={() => setEditing(null)}
           onSubmit={handleEditSubmit}
           saving={saving}
-        />
-      ) : null}
-
-      {confirmingDelete ? (
-        <ConfirmDialog
-          title="Delete site survey?"
-          description="This survey record will be removed from the organization workflow."
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
         />
       ) : null}
 

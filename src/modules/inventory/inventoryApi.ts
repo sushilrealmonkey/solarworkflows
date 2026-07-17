@@ -164,8 +164,7 @@ const inventoryItemSelect = `
   notes,
   created_at,
   updated_at,
-  catalog_product:products(${inventoryProductSelect}),
-  vendor_master:vendors_master(id, name)
+  catalog_product:products(${inventoryProductSelect})
 `;
 
 type InventoryItemPublicRow = {
@@ -337,22 +336,18 @@ export async function fetchInventoryMasters(profile: UserProfile | null) {
     .select("id, name, category_type, display_order")
     .order("display_order", { ascending: true })
     .order("name", { ascending: true });
-  let vendorsQuery = client
-    .from("vendors_master")
-    .select("*")
-    .order("name", { ascending: true });
+  const vendorsQuery =
+    profile?.is_super_admin && !organizationId
+      ? Promise.resolve({ data: [], error: null })
+      : client.rpc("purchase_vendor_options");
 
   if (!profile?.is_super_admin) {
     const requiredOrganizationId = requireOrganization(profile);
     productsQuery = productsQuery.eq("tenant_id", requiredOrganizationId);
     categoriesQuery = categoriesQuery.eq("tenant_id", requiredOrganizationId);
-    vendorsQuery = vendorsQuery.eq("organization_id", requiredOrganizationId);
   } else if (organizationId) {
     productsQuery = productsQuery.eq("tenant_id", organizationId);
     categoriesQuery = categoriesQuery.eq("tenant_id", organizationId);
-    vendorsQuery = vendorsQuery.eq("organization_id", organizationId);
-  } else {
-    vendorsQuery = vendorsQuery.limit(0);
   }
 
   const [productsResult, categoriesResult, vendorsResult] =
@@ -370,11 +365,21 @@ export async function fetchInventoryMasters(profile: UserProfile | null) {
   return {
     products: (productsResult.data ?? []) as unknown as InventoryCatalogProduct[],
     categories: (categoriesResult.data ?? []) as InventoryMasters["categories"],
-    vendors: (vendorsResult.data ?? []) as InventoryMasterOption[],
+    vendors: (
+      (vendorsResult.data ?? []) as Array<{
+        id: string;
+        vendor_name: string;
+      }>
+    ).map((vendor) => ({
+      id: vendor.id,
+      organization_id: organizationId,
+      name: vendor.vendor_name,
+      created_at: null,
+    })) as InventoryMasterOption[],
   };
 }
 
-export async function fetchInventoryItems(profile: UserProfile | null) {
+export async function fetchInventoryItems(profile: UserProfile | null, archiveScope: "active" | "archived" | "all" = "active") {
   const client = requireSupabase();
   void profile;
 
@@ -389,7 +394,7 @@ export async function fetchInventoryItems(profile: UserProfile | null) {
   return attachReservationTotals(
     ((data ?? []) as InventoryItemPublicRow[]).map((row) =>
       redactLegacyInventoryPricing(row.item_data),
-    ),
+    ).filter((item) => archiveScope === "all" || (archiveScope === "archived" ? Boolean(item.archived_at) : !item.archived_at)),
   );
 }
 

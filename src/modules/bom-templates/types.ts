@@ -16,6 +16,9 @@ export type BomTemplate = {
   display_order: number | null;
   created_at: string | null;
   updated_at: string | null;
+  archived_at?: string | null;
+  archived_by?: string | null;
+  archive_reason?: string | null;
 };
 
 export type BomCalculationType =

@@ -4,6 +4,8 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   AlertDialog,
@@ -17,7 +19,6 @@ import {
 import { formatDateTime, hasPermission, labelize } from "../crm/crmUtils";
 import {
   createBomTemplate,
-  deleteBomTemplate,
   fetchBomTemplates,
   updateBomTemplate,
   updateBomTemplateActiveState,
@@ -65,6 +66,7 @@ export function BomTemplatesPage() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<BomTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<BomTemplateFilters>({
     search: "",
@@ -82,8 +84,6 @@ export function BomTemplatesPage() {
   const [activeStateAction, setActiveStateAction] =
     useState<ActiveStateAction | null>(null);
   const [updatingActiveState, setUpdatingActiveState] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<BomTemplate | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "product_master", "view");
   const canCreate = hasPermission(
@@ -98,12 +98,6 @@ export function BomTemplatesPage() {
     "product_master",
     "update",
   );
-  const canDelete = hasPermission(
-    profile,
-    permissions,
-    "product_master",
-    "delete",
-  );
 
   async function loadData() {
     if (!canView) {
@@ -114,7 +108,7 @@ export function BomTemplatesPage() {
     try {
       setLoading(true);
       setError(null);
-      const nextTemplates = await fetchBomTemplates(profile);
+      const nextTemplates = await fetchBomTemplates(profile, archiveScope);
       setTemplates(nextTemplates);
     } catch (nextError) {
       setError(
@@ -131,7 +125,7 @@ export function BomTemplatesPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const filteredTemplates = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -275,34 +269,6 @@ export function BomTemplatesPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteBomTemplate(profile, deleteTarget);
-      setTemplates((current) =>
-        current.filter((template) => template.id !== deleteTarget.id),
-      );
-      showToast("BOM template deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      const description =
-        nextError instanceof Error
-          ? nextError.message
-          : "BOM template delete failed.";
-      setSaveAlert({
-        title: "BOM template could not be deleted",
-        description,
-      });
-      showToast(description, "error");
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -314,6 +280,8 @@ export function BomTemplatesPage() {
           <Button onClick={openCreateForm}>Add BOM Template</Button>
         ) : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <section className="grid gap-3 sm:grid-cols-3">
         <BomTemplateMetricCard label="Total Templates" value={templates.length} />
@@ -424,13 +392,11 @@ export function BomTemplatesPage() {
                       <BomTemplateActions
                         template={template}
                         canUpdate={canUpdate}
-                        canDelete={canDelete}
                         onView={() => openTemplateDetail(template.id)}
                         onEdit={() => openEditForm(template)}
                         onActiveState={(isActive) =>
                           setActiveStateAction({ template, isActive })
                         }
-                        onDelete={() => setDeleteTarget(template)}
                       />
                     </td>
                   </tr>
@@ -477,13 +443,11 @@ export function BomTemplatesPage() {
                   <BomTemplateActions
                     template={template}
                     canUpdate={canUpdate}
-                    canDelete={canDelete}
                     onView={() => openTemplateDetail(template.id)}
                     onEdit={() => openEditForm(template)}
                     onActiveState={(isActive) =>
                       setActiveStateAction({ template, isActive })
                     }
-                    onDelete={() => setDeleteTarget(template)}
                   />
                 </div>
               </article>
@@ -522,19 +486,6 @@ export function BomTemplatesPage() {
         />
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete BOM template?"
-          description={`This safely deletes ${deleteTarget.name} only if it has no BOM rules.`}
-          confirming={deleting}
-          confirmLabel="Delete"
-          confirmingLabel="Deleting..."
-          confirmVariant="danger"
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
-
       {saveAlert ? (
         <AlertDialog
           title={saveAlert.title}
@@ -566,19 +517,15 @@ function BomTemplateMetricCard({
 function BomTemplateActions({
   template,
   canUpdate,
-  canDelete,
   onView,
   onEdit,
   onActiveState,
-  onDelete,
 }: {
   template: BomTemplate;
   canUpdate: boolean;
-  canDelete: boolean;
   onView: () => void;
   onEdit: () => void;
   onActiveState: (isActive: boolean) => void;
-  onDelete: () => void;
 }) {
   return (
     <div className="flex flex-wrap gap-2">
@@ -597,11 +544,6 @@ function BomTemplateActions({
             {template.is_active === false ? "Activate" : "Deactivate"}
           </Button>
         </>
-      ) : null}
-      {canDelete ? (
-        <Button onClick={onDelete} variant="danger">
-          Delete
-        </Button>
       ) : null}
     </div>
   );

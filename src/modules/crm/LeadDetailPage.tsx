@@ -4,7 +4,6 @@ import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
-  deleteLead,
   fetchLead,
   fetchLeadActionState,
   fetchStaffOptions,
@@ -25,8 +24,6 @@ import type { Lead, LeadActionState, LeadFormValues, StaffOption } from "./types
 import {
   AccessDenied,
   Badge,
-  Button,
-  ConfirmDialog,
   DetailItem,
   DetailSection,
   EmptyState,
@@ -43,6 +40,7 @@ import {
   quotationWorkflowState,
   type QuotationWorkflowState,
 } from "../shared/quotationWorkflow";
+import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function LeadDetailPage() {
   const { id } = useParams();
@@ -61,8 +59,6 @@ export function LeadDetailPage() {
   const [editing, setEditing] = useState<LeadFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "leads", "view");
   const canCreate = hasPermission(profile, permissions, "leads", "create");
@@ -167,26 +163,6 @@ export function LeadDetailPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!lead) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteLead(lead.id);
-      showToast("Enquiry deleted.", "success");
-      navigate("/leads");
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Enquiry delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   function openEditForm() {
     if (!lead) {
       return;
@@ -221,7 +197,7 @@ export function LeadDetailPage() {
                 lead.phone,
               ]}
               action={
-                canUpdate ? (
+                canUpdate && !lead.archived_at ? (
                   <button
                     aria-label="Edit lead"
                     className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
@@ -338,23 +314,24 @@ export function LeadDetailPage() {
             <DetailItem label="Notes" value={lead.notes ?? "-"} />
           </DetailSection>
 
-          {canDelete ? (
-            <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-rose-900">
-                    Danger Zone
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Delete this enquiry from the organization pipeline.
-                  </p>
-                </div>
-                <Button onClick={() => setConfirmingDelete(true)} variant="danger">
-                  Delete Enquiry
-                </Button>
-              </div>
-            </section>
-          ) : null}
+          <RecordLifecyclePanel
+            archiveReason={lead.archive_reason}
+            archivedAt={lead.archived_at}
+            canDelete={canDelete}
+            canUpdate={canUpdate}
+            moduleKey="leads"
+            onChanged={async (action) => {
+              if (action === "delete") {
+                showToast("Enquiry permanently deleted.", "success");
+                navigate("/leads");
+                return;
+              }
+              showToast(action === "archive" ? "Enquiry archived." : "Enquiry restored.", "success");
+              await loadLead();
+            }}
+            recordId={lead.id}
+            recordLabel={formatEnquiryCode(lead.lead_code)}
+          />
         </>
       ) : null}
 
@@ -371,15 +348,6 @@ export function LeadDetailPage() {
         />
       ) : null}
 
-      {confirmingDelete ? (
-        <ConfirmDialog
-          title="Delete enquiry?"
-          description="This enquiry record will be removed from the organization pipeline."
-          confirming={deleting}
-          onCancel={() => setConfirmingDelete(false)}
-          onConfirm={handleDelete}
-        />
-      ) : null}
     </div>
   );
 }

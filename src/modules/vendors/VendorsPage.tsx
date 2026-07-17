@@ -10,11 +10,12 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Badge,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   Modal,
@@ -26,7 +27,6 @@ import {
 import { hasPermission, labelize } from "../crm/crmUtils";
 import {
   createVendor,
-  deleteVendor,
   fetchVendors,
   updateVendor,
 } from "./vendorApi";
@@ -57,6 +57,7 @@ export function VendorsPage() {
   const navigate = useNavigate();
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<VendorFilters>({
     search: "",
@@ -66,13 +67,10 @@ export function VendorsPage() {
   const [formState, setFormState] = useState<VendorFormState | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "vendors", "view");
   const canCreate = hasPermission(profile, permissions, "vendors", "create");
   const canUpdate = hasPermission(profile, permissions, "vendors", "update");
-  const canDelete = hasPermission(profile, permissions, "vendors", "delete");
 
   async function loadData() {
     if (!canView) {
@@ -83,7 +81,7 @@ export function VendorsPage() {
     try {
       setLoading(true);
       setError(null);
-      setVendors(await fetchVendors(profile));
+      setVendors(await fetchVendors(profile, archiveScope));
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load suppliers.",
@@ -97,7 +95,7 @@ export function VendorsPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const filteredVendors = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -200,29 +198,6 @@ export function VendorsPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      await deleteVendor(deleteTarget.id);
-      setVendors((current) =>
-        current.filter((vendor) => vendor.id !== deleteTarget.id),
-      );
-      showToast("Supplier deleted.", "success");
-      setDeleteTarget(null);
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error ? nextError.message : "Supplier delete failed.",
-        "error",
-      );
-    } finally {
-      setDeleting(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -232,6 +207,8 @@ export function VendorsPage() {
         />
         {canCreate ? <Button onClick={openCreateForm}>Add Supplier</Button> : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <VendorMetricCard label="Total Suppliers" value={vendors.length} />
@@ -409,11 +386,6 @@ export function VendorsPage() {
                       Edit
                     </Button>
                   ) : null}
-                  {canDelete ? (
-                    <Button onClick={() => setDeleteTarget(vendor)} variant="danger">
-                      Delete
-                    </Button>
-                  ) : null}
                 </div>
               </article>
             ))}
@@ -436,15 +408,6 @@ export function VendorsPage() {
         />
       ) : null}
 
-      {deleteTarget ? (
-        <ConfirmDialog
-          title="Delete supplier?"
-          description={`This will remove ${deleteTarget.vendor_name}. Suppliers linked to purchase orders may be protected by the database.`}
-          confirming={deleting}
-          onCancel={() => setDeleteTarget(null)}
-          onConfirm={confirmDelete}
-        />
-      ) : null}
     </div>
   );
 }

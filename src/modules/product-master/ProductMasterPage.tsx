@@ -10,6 +10,8 @@ import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
+import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
+import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   AlertDialog,
@@ -65,6 +67,7 @@ export function ProductMasterPage() {
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [brandOptions, setBrandOptions] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<ProductFilters>({
     search: "",
@@ -98,7 +101,7 @@ export function ProductMasterPage() {
       setError(null);
       const [nextProducts, nextCategories, nextBrandOptions] =
         await Promise.all([
-        fetchProducts(profile),
+        fetchProducts(profile, archiveScope),
         fetchProductCategories(profile),
         fetchProductBrandSuggestions(profile),
       ]);
@@ -120,7 +123,7 @@ export function ProductMasterPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, profile?.id]);
+  }, [archiveScope, canView, profile?.id]);
 
   const filteredProducts = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -245,6 +248,8 @@ export function ProductMasterPage() {
           <Button onClick={openCreateForm}>Add Product or Material</Button>
         ) : null}
       </div>
+
+      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <section className="grid gap-3 sm:grid-cols-3">
         <ProductMetricCard label="Total Items" value={products.length} />
