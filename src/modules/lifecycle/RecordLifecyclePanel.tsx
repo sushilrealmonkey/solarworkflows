@@ -14,10 +14,34 @@ import type {
   LifecyclePreview,
 } from "./types";
 
-const dependencyTitles: Record<LifecycleDependency["kind"], string> = {
-  owned: "Owned components",
-  open: "Open workflow blockers",
-  historical: "Historical blockers",
+const dependencyNames: Partial<Record<string, string>> = {
+  b2b_sale_items: "Sale items",
+  billing_links: "Billing records",
+  bom_template_lines: "BOM template lines",
+  category_usage: "Product and BOM usage",
+  documents: "Documents",
+  financial_history: "Financial history",
+  inventory: "Inventory history",
+  inventory_transactions: "Stock movements",
+  inventory_usage: "Inventory history",
+  invoice_items: "Invoice items",
+  invoices: "Invoices",
+  lead_followups: "Lead follow-ups",
+  leads: "Leads",
+  payments: "Payments",
+  product_usage: "Product and pricing history",
+  proforma_invoice_items: "Proforma invoice items",
+  proforma_invoices: "Proforma invoices",
+  projects: "Projects",
+  purchase_order_items: "Purchase order items",
+  purchase_orders: "Purchase orders",
+  quotation_bom_items: "Quotation BOM history",
+  quotation_components: "Quotation details",
+  quotations: "Quotations",
+  receiving_history: "Material received",
+  sale_workflow: "Sales workflow history",
+  site_surveys: "Site surveys",
+  storage_objects: "Stored files",
 };
 
 type DependencyTarget = {
@@ -26,8 +50,22 @@ type DependencyTarget = {
 };
 
 function blockedActionMessage(preview: LifecyclePreview, action: LifecycleAction) {
-  if (action !== "delete") {
-    return preview.guidance;
+  if (preview.guidance.includes("required module permission")) {
+    return `You do not have permission to ${action} this record.`;
+  }
+
+  if (preview.guidance.includes("restricted to tenant Admins")) {
+    return "Only an administrator can permanently delete this record.";
+  }
+
+  if (action === "archive") {
+    return "This record still has active work or is not in a final status. Complete or cancel it before archiving.";
+  }
+
+  if (action === "restore") {
+    return preview.archived_at
+      ? "This record cannot be restored right now."
+      : "This record is already active and does not need to be restored.";
   }
 
   const hasReceivingHistory = preview.dependencies.some(
@@ -39,30 +77,72 @@ function blockedActionMessage(preview: LifecyclePreview, action: LifecycleAction
   }
 
   if (preview.dependencies.some((dependency) => dependency.kind === "historical")) {
-    return "This record has linked history that must be kept, so it cannot be permanently deleted. Archive it instead.";
+    return "This record has history that must be kept, so it cannot be permanently deleted. Archive it instead.";
   }
 
   if (preview.dependencies.some((dependency) => dependency.kind === "open")) {
     return "Finish or cancel the linked open records before deleting this record.";
   }
 
-  return preview.guidance;
+  return "This record cannot be deleted in its current status. Archive it instead.";
 }
 
-function dependencyDescription(dependency: LifecycleDependency) {
+function allowedActionMessage(action: LifecycleAction) {
+  if (action === "archive") {
+    return "Archiving removes this record from active lists but keeps its history and links. You can restore it later.";
+  }
+
+  if (action === "restore") {
+    return "Restoring returns this record to active lists. Its current status and history will stay the same.";
+  }
+
+  return "This record has no history that must be kept and can be permanently deleted.";
+}
+
+function actionMessage(preview: LifecyclePreview, action: LifecycleAction) {
+  return preview.allowed
+    ? allowedActionMessage(action)
+    : blockedActionMessage(preview, action);
+}
+
+function actionMessageTitle(preview: LifecyclePreview, action: LifecycleAction) {
+  if (!preview.allowed) {
+    if (action === "delete") return "Why this cannot be deleted";
+    if (action === "archive") return "Why this cannot be archived";
+    return "Why this cannot be restored";
+  }
+
+  if (action === "archive") return "Archive and keep history";
+  if (action === "restore") return "Restore to active records";
+  return "Permanent deletion";
+}
+
+function dependencyDescription(dependency: LifecycleDependency, previewAllowed: boolean) {
   if (dependency.module_key === "receiving_history") {
     return "Received stock must keep its link to this purchase order.";
   }
 
-  return dependency.guidance;
+  if (previewAllowed) {
+    return "This belongs to the record and will be removed with it.";
+  }
+
+  if (dependency.kind === "open") {
+    return "Complete or cancel this linked work before deleting.";
+  }
+
+  return "This history must be kept and prevents permanent deletion.";
 }
 
 function dependencyLabel(dependency: LifecycleDependency) {
-  if (dependency.module_key === "receiving_history") {
-    return "Material received";
-  }
+  return dependency.label
+    || dependencyNames[dependency.module_key]
+    || dependency.module_key.split("_").join(" ");
+}
 
-  return dependency.label || dependency.module_key.split("_").join(" ");
+function reasonLabel(action: LifecycleAction) {
+  if (action === "archive") return "Why are you archiving this record? *";
+  if (action === "restore") return "Why are you restoring this record? *";
+  return "Reason for permanent deletion *";
 }
 
 export function ArchivedRecordBanner({
@@ -168,21 +248,13 @@ export function RecordLifecyclePanel({
     }
   }
 
-  const groupedDependencies = preview
-    ? (["owned", "open", "historical"] as const).map((kind) => ({
-        kind,
-        rows: preview.dependencies.filter((dependency) => dependency.kind === kind),
-      })).filter((group) => group.rows.length > 0)
-    : [];
   const typedConfirmationMatches = action !== "delete" || confirmation.trim() === preview?.confirmation;
   const canSubmit = Boolean(preview?.allowed && reason.trim() && typedConfirmationMatches && !loading);
-  const deletionIsBlocked = action === "delete" && preview && !preview.allowed;
-  const displayedDependencyGroups = deletionIsBlocked
-    ? [{
-        kind: "historical" as const,
-        rows: preview.dependencies.filter((dependency) => dependency.kind !== "owned"),
-      }].filter((group) => group.rows.length > 0)
-    : groupedDependencies;
+  const displayedDependencies = action === "delete" && preview
+    ? preview.dependencies.filter((dependency) => (
+        preview.allowed ? dependency.kind === "owned" : dependency.kind !== "owned"
+      ))
+    : [];
 
   return (
     <div className="space-y-3">
@@ -193,7 +265,7 @@ export function RecordLifecyclePanel({
             {!compact ? (
               <div>
                 <h2 className="font-semibold text-slate-950">Record lifecycle</h2>
-                <p className="mt-1 text-sm text-slate-600">Archive keeps history. Permanent deletion is only offered for unused records after a server dependency check.</p>
+                <p className="mt-1 text-sm text-slate-600">Archive keeps the record and its history. Permanent deletion removes unused records.</p>
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
@@ -212,7 +284,7 @@ export function RecordLifecyclePanel({
 
       {action ? (
         <Modal
-          maxWidthClass="sm:max-w-2xl"
+          maxWidthClass={action === "delete" ? "sm:max-w-2xl" : "sm:max-w-xl"}
           noValidate
           onClose={close}
           onSubmit={submit}
@@ -223,21 +295,19 @@ export function RecordLifecyclePanel({
           title={`${action === "delete" ? "Delete" : action === "archive" ? "Archive" : "Restore"} ${recordLabel}`}
         >
           <div className="space-y-4 md:col-span-2">
-            {loading ? <p className="text-sm text-slate-600">Checking current status and dependencies…</p> : null}
+            {loading ? <p className="text-sm text-slate-600">Checking whether this action is available…</p> : null}
             {error ? <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p> : null}
             {preview ? (
               <>
-                <div className={`rounded-lg border p-3 text-sm ${preview.allowed ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
-                  <p className="font-semibold">{preview.allowed ? "Ready to continue" : action === "delete" ? "Why this cannot be deleted" : "This action is blocked"}</p>
-                  <p className="mt-1">{preview.allowed ? preview.guidance : blockedActionMessage(preview, action)}</p>
+                <div className={`rounded-lg border p-3 text-sm ${preview.allowed ? action === "delete" ? "border-rose-200 bg-rose-50 text-rose-900" : "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-200 bg-amber-50 text-amber-950"}`}>
+                  <p className="font-semibold">{actionMessageTitle(preview, action)}</p>
+                  <p className="mt-1">{actionMessage(preview, action)}</p>
                 </div>
-                {displayedDependencyGroups.map((group) => (
-                  <section key={group.kind}>
-                    <h3 className="text-sm font-semibold text-slate-900">
-                      {deletionIsBlocked ? "What is blocking deletion" : dependencyTitles[group.kind]}
-                    </h3>
+                {displayedDependencies.length > 0 ? (
+                  <section>
+                    <h3 className="text-sm font-semibold text-slate-900">{preview.allowed ? "Also removed" : "What is blocking deletion"}</h3>
                     <div className="mt-2 space-y-2">
-                      {group.rows.map((dependency, index) => {
+                      {displayedDependencies.map((dependency, index) => {
                         const target = dependencyTargets?.[dependency.module_key];
                         return (
                           <div className="rounded-lg border border-stone-200 p-3 text-sm" key={`${dependency.module_key}-${index}`}>
@@ -247,7 +317,7 @@ export function RecordLifecyclePanel({
                                 <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-semibold text-slate-700">{dependency.count}</span>
                               ) : null}
                             </div>
-                            <p className="mt-1 text-slate-600">{dependencyDescription(dependency)}</p>
+                            <p className="mt-1 text-slate-600">{dependencyDescription(dependency, preview.allowed)}</p>
                             {target ? (
                               <button
                                 className="mt-2 inline-flex text-sm font-semibold text-orange-700 hover:text-orange-800"
@@ -262,7 +332,7 @@ export function RecordLifecyclePanel({
                                 onClick={close}
                                 to={dependency.route}
                               >
-                                View records
+                                View linked records
                               </Link>
                             ) : null}
                           </div>
@@ -270,11 +340,11 @@ export function RecordLifecyclePanel({
                       })}
                     </div>
                   </section>
-                ))}
+                ) : null}
               </>
             ) : null}
             {!preview || preview.allowed ? (
-              <TextArea className="block" label={`${action === "restore" ? "Restore" : action === "archive" ? "Archive" : "Deletion"} reason *`} onChange={setReason} value={reason} />
+              <TextArea className="block" label={reasonLabel(action)} onChange={setReason} value={reason} />
             ) : null}
             {action === "delete" && preview?.allowed ? (
               <TextInput
@@ -285,7 +355,7 @@ export function RecordLifecyclePanel({
                 value={confirmation}
               />
             ) : null}
-            {action === "delete" && preview?.allowed ? <p className="text-xs leading-5 text-rose-700">Permanent deletion has no undo. The server rechecks dependencies in the deletion transaction.</p> : null}
+            {action === "delete" && preview?.allowed ? <p className="text-xs leading-5 text-rose-700">Permanent deletion cannot be undone.</p> : null}
           </div>
         </Modal>
       ) : null}
