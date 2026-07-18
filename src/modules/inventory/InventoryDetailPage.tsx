@@ -13,7 +13,6 @@ import {
   DetailSection,
   EmptyState,
   LoadingSkeleton,
-  NextStepLabel,
   PencilIcon,
 } from "../crm/CrmComponents";
 import {
@@ -21,17 +20,13 @@ import {
   hasPermission,
 } from "../crm/crmUtils";
 import {
-  createInventoryTransaction,
   fetchInventoryBatches,
   fetchInventoryItem,
-  fetchInventoryItems,
   fetchInventoryMasters,
-  fetchInventoryProjectOptions,
   fetchInventoryTransactions,
   updateInventoryItem,
 } from "./inventoryApi";
 import {
-  emptyInventoryTransactionForm,
   formatStock,
   inventoryBrandName,
   inventoryModelName,
@@ -41,13 +36,11 @@ import {
   inventoryItemValidationSummary,
   isLowStock,
   validateInventoryItemForm,
-  validateTransactionForm,
 } from "./inventoryUtils";
 import {
   InventoryItemFormModal,
   InventoryStatusBadge,
   InventoryStockBadge,
-  InventoryTransactionFormModal,
   InventoryTransactionsSection,
 } from "./InventoryPage";
 import { fetchPurchaseOrders } from "../purchases/purchaseApi";
@@ -58,8 +51,6 @@ import type {
   InventoryBatch,
   InventoryItemFormValues,
   InventoryMasters,
-  InventoryProjectOption,
-  InventoryTransactionFormValues,
   InventoryTransactionWithRelations,
 } from "./types";
 import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
@@ -70,7 +61,6 @@ export function InventoryDetailPage() {
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
   const [item, setItem] = useState<InventoryItem | null>(null);
-  const [items, setItems] = useState<InventoryItem[]>([]);
   const [masters, setMasters] = useState<InventoryMasters>({
     products: [],
     categories: [],
@@ -83,7 +73,6 @@ export function InventoryDetailPage() {
     PurchaseOrderWithRelations[]
   >([]);
   const [batches, setBatches] = useState<InventoryBatch[]>([]);
-  const [projects, setProjects] = useState<InventoryProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<InventoryItemFormValues | null>(null);
@@ -93,17 +82,10 @@ export function InventoryDetailPage() {
     title: string;
     description: string;
   } | null>(null);
-  const [transactionForm, setTransactionForm] =
-    useState<InventoryTransactionFormValues | null>(null);
-  const [transactionFormErrors, setTransactionFormErrors] = useState<
-    Record<string, string>
-  >({});
-  const [savingTransaction, setSavingTransaction] = useState(false);
   const [confirmingDiscontinue, setConfirmingDiscontinue] = useState(false);
   const [discontinuing, setDiscontinuing] = useState(false);
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
-  const canCreate = hasPermission(profile, permissions, "inventory", "create");
   const canUpdate = hasPermission(profile, permissions, "inventory", "update");
   const canDelete = hasPermission(profile, permissions, "inventory", "delete");
 
@@ -118,18 +100,14 @@ export function InventoryDetailPage() {
       setError(null);
       const [
         nextItem,
-        nextItems,
         nextTransactions,
-        nextProjects,
         nextPurchaseOrders,
         nextBatches,
         nextMasters,
       ] =
         await Promise.all([
           fetchInventoryItem(profile, id),
-          fetchInventoryItems(profile),
           fetchInventoryTransactions(profile, id),
-          fetchInventoryProjectOptions(profile),
           fetchPurchaseOrders(
             profile,
             { itemId: id },
@@ -139,9 +117,7 @@ export function InventoryDetailPage() {
           fetchInventoryMasters(profile),
         ]);
       setItem(nextItem);
-      setItems(nextItems);
       setTransactions(nextTransactions);
-      setProjects(nextProjects);
       setPurchaseOrders(nextPurchaseOrders);
       setBatches(nextBatches);
       setMasters(nextMasters);
@@ -169,15 +145,6 @@ export function InventoryDetailPage() {
         description="Your role needs inventory:view access to open inventory item details."
       />
     );
-  }
-
-  function openTransactionForm() {
-    if (!item) {
-      return;
-    }
-
-    setTransactionFormErrors({});
-    setTransactionForm(emptyInventoryTransactionForm(item.id));
   }
 
   async function openEditForm() {
@@ -261,38 +228,6 @@ export function InventoryDetailPage() {
     }
   }
 
-  async function handleTransactionSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!transactionForm) {
-      return;
-    }
-
-    const nextErrors = validateTransactionForm(transactionForm, items);
-    setTransactionFormErrors(nextErrors);
-
-    if (Object.values(nextErrors).some(Boolean)) {
-      return;
-    }
-
-    try {
-      setSavingTransaction(true);
-      await createInventoryTransaction(profile, transactionForm);
-      setTransactionForm(null);
-      showToast("Stock transaction added.", "success");
-      await loadItem();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Stock transaction failed.",
-        "error",
-      );
-    } finally {
-      setSavingTransaction(false);
-    }
-  }
-
   async function handleDiscontinue() {
     if (!item) {
       return;
@@ -361,12 +296,6 @@ export function InventoryDetailPage() {
                 ) : null
               }
             />
-            {canCreate && !item.archived_at ? (
-              <div className="space-y-3">
-                <NextStepLabel />
-                <Button onClick={openTransactionForm}>Add Transaction</Button>
-              </div>
-            ) : null}
           </div>
 
           {isLowStock(item) ? (
@@ -510,20 +439,6 @@ export function InventoryDetailPage() {
           title={itemSaveAlert.title}
           description={itemSaveAlert.description}
           onClose={() => setItemSaveAlert(null)}
-        />
-      ) : null}
-
-      {transactionForm ? (
-        <InventoryTransactionFormModal
-          title="Add Stock Transaction"
-          values={transactionForm}
-          setValues={setTransactionForm}
-          errors={transactionFormErrors}
-          items={items}
-          projects={projects}
-          onClose={() => setTransactionForm(null)}
-          onSubmit={handleTransactionSubmit}
-          saving={savingTransaction}
         />
       ) : null}
 

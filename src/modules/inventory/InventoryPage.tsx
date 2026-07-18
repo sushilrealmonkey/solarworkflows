@@ -32,17 +32,12 @@ import {
   labelize,
 } from "../crm/crmUtils";
 import {
-  createInventoryItem,
-  createInventoryTransaction,
   fetchInventoryItems,
   fetchInventoryMasters,
-  fetchInventoryProjectOptions,
   fetchInventoryTransactions,
   updateInventoryItem,
 } from "./inventoryApi";
 import {
-  emptyInventoryItemForm,
-  emptyInventoryTransactionForm,
   formatStock,
   inventoryBrandName,
   inventoryItemTitle,
@@ -58,7 +53,6 @@ import {
   transactionDecreasesStock,
   transactionTypeLabel,
   validateInventoryItemForm,
-  validateTransactionForm,
   availableStockNumber,
 } from "./inventoryUtils";
 import type {
@@ -81,8 +75,7 @@ type InventoryFilters = {
 };
 
 type ItemFormState = {
-  mode: "create" | "edit";
-  item: InventoryItem | null;
+  item: InventoryItem;
   values: InventoryItemFormValues;
 };
 
@@ -99,7 +92,6 @@ export function InventoryPage() {
     categories: [],
     vendors: [],
   });
-  const [projects, setProjects] = useState<InventoryProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
@@ -119,18 +111,11 @@ export function InventoryPage() {
     title: string;
     description: string;
   } | null>(null);
-  const [transactionForm, setTransactionForm] =
-    useState<InventoryTransactionFormValues | null>(null);
-  const [transactionFormErrors, setTransactionFormErrors] = useState<
-    Record<string, string>
-  >({});
-  const [savingTransaction, setSavingTransaction] = useState(false);
   const [discontinueTarget, setDiscontinueTarget] =
     useState<InventoryItem | null>(null);
   const [discontinuing, setDiscontinuing] = useState(false);
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
-  const canCreate = hasPermission(profile, permissions, "inventory", "create");
   const canUpdate = hasPermission(profile, permissions, "inventory", "update");
 
   async function loadData() {
@@ -142,15 +127,13 @@ export function InventoryPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextItems, nextTransactions, nextProjects, nextMasters] = await Promise.all([
+      const [nextItems, nextTransactions, nextMasters] = await Promise.all([
         fetchInventoryItems(profile, archiveScope),
         fetchInventoryTransactions(profile),
-        fetchInventoryProjectOptions(profile),
         fetchInventoryMasters(profile),
       ]);
       setItems(nextItems);
       setTransactions(nextTransactions);
-      setProjects(nextProjects);
       setMasters(nextMasters);
     } catch (nextError) {
       setError(
@@ -242,25 +225,6 @@ export function InventoryPage() {
     return nextMasters;
   }
 
-  async function openCreateItemForm() {
-    try {
-      await refreshInventoryMasters();
-      setItemFormErrors({});
-      setItemForm({
-        mode: "create",
-        item: null,
-        values: emptyInventoryItemForm(),
-      });
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load the latest suppliers.",
-        "error",
-      );
-    }
-  }
-
   async function openEditItemForm(item: InventoryItem) {
     try {
       const nextMasters = await refreshInventoryMasters();
@@ -285,7 +249,6 @@ export function InventoryPage() {
 
       setItemFormErrors({});
       setItemForm({
-        mode: "edit",
         item,
         values: inventoryItemToForm(item),
       });
@@ -297,11 +260,6 @@ export function InventoryPage() {
         "error",
       );
     }
-  }
-
-  function openTransactionForm(itemId = "") {
-    setTransactionFormErrors({});
-    setTransactionForm(emptyInventoryTransactionForm(itemId));
   }
 
   function openInventoryDetail(itemId: string) {
@@ -340,13 +298,8 @@ export function InventoryPage() {
 
     try {
       setSavingItem(true);
-      if (itemForm.mode === "create") {
-        await createInventoryItem(profile, itemForm.values);
-        showToast("Inventory item added.", "success");
-      } else if (itemForm.item) {
-        await updateInventoryItem(itemForm.item.id, profile, itemForm.values);
-        showToast("Inventory item updated.", "success");
-      }
+      await updateInventoryItem(itemForm.item.id, profile, itemForm.values);
+      showToast("Inventory item updated.", "success");
 
       setItemForm(null);
       await loadData();
@@ -364,38 +317,6 @@ export function InventoryPage() {
       );
     } finally {
       setSavingItem(false);
-    }
-  }
-
-  async function handleTransactionSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!transactionForm) {
-      return;
-    }
-
-    const nextErrors = validateTransactionForm(transactionForm, items);
-    setTransactionFormErrors(nextErrors);
-
-    if (Object.values(nextErrors).some(Boolean)) {
-      return;
-    }
-
-    try {
-      setSavingTransaction(true);
-      await createInventoryTransaction(profile, transactionForm);
-      showToast("Stock transaction added.", "success");
-      setTransactionForm(null);
-      await loadData();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Stock transaction failed.",
-        "error",
-      );
-    } finally {
-      setSavingTransaction(false);
     }
   }
 
@@ -439,16 +360,6 @@ export function InventoryPage() {
           title="Inventory"
           description="Track stock items, material movement, and project usage."
         />
-        <div className="flex flex-wrap gap-2">
-          {canCreate ? (
-            <>
-              <Button onClick={() => openTransactionForm()} variant="secondary">
-                Add Transaction
-              </Button>
-              <Button onClick={openCreateItemForm}>Add Item</Button>
-            </>
-          ) : null}
-        </div>
       </div>
 
       <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
@@ -594,8 +505,7 @@ export function InventoryPage() {
       {!loading && !error && filteredItems.length === 0 ? (
         <EmptyState
           title="No inventory items found"
-          description="Add stock items or adjust the filters to see existing inventory."
-          action={canCreate ? <Button onClick={openCreateItemForm}>Add Item</Button> : null}
+          description="Inventory items appear through purchase orders and sales. Adjust the filters to see existing inventory."
         />
       ) : null}
 
@@ -771,14 +681,6 @@ export function InventoryPage() {
                   >
                     View
                   </Button>
-                  {canCreate ? (
-                    <Button
-                      onClick={() => openTransactionForm(item.id)}
-                      variant="secondary"
-                    >
-                      Add Stock
-                    </Button>
-                  ) : null}
                   {canUpdate ? (
                     <Button onClick={() => openEditItemForm(item)} variant="secondary">
                       Edit
@@ -817,7 +719,7 @@ export function InventoryPage() {
 
       {itemForm ? (
         <InventoryItemFormModal
-          title={itemForm.mode === "create" ? "Add Inventory Item" : "Edit Inventory Item"}
+          title="Edit Inventory Item"
           values={itemForm.values}
           setValues={(values) =>
             setItemForm((current) => (current ? { ...current, values } : current))
@@ -835,20 +737,6 @@ export function InventoryPage() {
           title={itemSaveAlert.title}
           description={itemSaveAlert.description}
           onClose={() => setItemSaveAlert(null)}
-        />
-      ) : null}
-
-      {transactionForm ? (
-        <InventoryTransactionFormModal
-          title="Add Stock Transaction"
-          values={transactionForm}
-          setValues={setTransactionForm}
-          errors={transactionFormErrors}
-          items={items}
-          projects={projects}
-          onClose={() => setTransactionForm(null)}
-          onSubmit={handleTransactionSubmit}
-          saving={savingTransaction}
         />
       ) : null}
 
