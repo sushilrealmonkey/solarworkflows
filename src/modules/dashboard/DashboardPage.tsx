@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import { OrganizationLogo } from "../../components/OrganizationLogo";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { formatDisplayDate } from "../../utils/dateFormat";
@@ -1334,20 +1335,21 @@ function SolarOperationsBrandGraphic({
   logoUrl: string | null;
   organizationName: string;
 }) {
-  if (logoUrl) {
-    return (
-      <div className={`h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-orange-100 bg-white shadow-sm sm:h-20 sm:w-36 ${className}`}>
-        <img
-          alt={`${organizationName} logo`}
-          className="h-full w-full object-cover"
-          src={logoUrl}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className={`h-16 w-28 shrink-0 items-center justify-center rounded-lg border border-orange-100 bg-gradient-to-br from-orange-50 to-blue-50 p-2 sm:h-20 sm:w-36 ${className}`}>
+    <div className={`h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-orange-100 bg-white shadow-sm sm:h-20 sm:w-36 ${className}`}>
+      <OrganizationLogo
+        className="h-full w-full object-contain p-2"
+        fallback={<SolarOperationsPlaceholder />}
+        organizationName={organizationName}
+        src={logoUrl}
+      />
+    </div>
+  );
+}
+
+function SolarOperationsPlaceholder() {
+  return (
+    <div className="h-full w-full bg-gradient-to-br from-orange-50 to-blue-50 p-2">
       <svg aria-hidden="true" className="h-full w-full" viewBox="0 0 160 92">
         <path d="M12 70h132" stroke="#cbd5e1" strokeLinecap="round" strokeWidth="4" />
         <path d="M25 63V38l27-18 29 18v25" fill="#e0f2fe" stroke="#0f172a" strokeLinejoin="round" strokeWidth="2" />

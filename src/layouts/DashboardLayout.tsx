@@ -8,7 +8,6 @@ import {
 } from "../app/navigation";
 import { isPlatformPath } from "../app/redirects";
 import { useAuth } from "../app/AuthProvider";
-import { OrganizationLogo } from "../components/OrganizationLogo";
 import { PortalLogo, PortalLogoIcon } from "../components/PortalBrand";
 
 const linkBase =
@@ -110,11 +109,7 @@ export function DashboardLayout() {
         }`}
       >
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-          <ShellBrand
-            collapsed={sidebarCollapsed}
-            logoUrl={organization.logoUrl}
-            organizationName={organization.name}
-          />
+          <ShellBrand collapsed={sidebarCollapsed} />
           <SidebarNavigation
             collapsed={sidebarCollapsed}
             items={visibleNavigationItems}
@@ -149,10 +144,7 @@ export function DashboardLayout() {
               <CloseIcon />
             </button>
             <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-              <ShellBrand
-                logoUrl={organization.logoUrl}
-                organizationName={organization.name}
-              />
+              <ShellBrand />
               <SidebarNavigation
                 items={visibleNavigationItems}
                 onNavigate={() => setMobileMenuOpen(false)}
@@ -173,11 +165,6 @@ export function DashboardLayout() {
           <HeaderWaves />
           <div className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-4">
             <div className="flex min-w-0 items-center gap-3">
-              <OrganizationLogo
-                className="h-9 max-w-24 shrink-0 rounded-md border border-orange-100 bg-white p-1 object-contain lg:hidden"
-                organizationName={organization.name}
-                src={organization.logoUrl}
-              />
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-slate-950 sm:text-lg">
                   {organization.name}
@@ -290,37 +277,18 @@ function MobileSidebarAccount({
   );
 }
 
-function ShellBrand({
-  collapsed = false,
-  logoUrl,
-  organizationName,
-}: {
-  collapsed?: boolean;
-  logoUrl: string | null;
-  organizationName: string;
-}) {
-  const fallbackLogo = collapsed ? (
-    <PortalLogoIcon className="h-14 w-14 rounded-xl" tone="dark" />
-  ) : (
-    <PortalLogo className="h-12 w-full max-w-44 object-contain object-left" tone="dark" />
-  );
-
+function ShellBrand({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <div
       className={`flex shrink-0 items-center ${
         collapsed ? "justify-center px-0" : "px-2"
       }`}
     >
-      <OrganizationLogo
-        className={
-          collapsed
-            ? "h-12 w-12 rounded-xl bg-white p-1.5 object-contain"
-            : "h-12 w-full max-w-44 rounded-lg bg-white p-1.5 object-contain object-left"
-        }
-        fallback={fallbackLogo}
-        organizationName={organizationName}
-        src={logoUrl}
-      />
+      {collapsed ? (
+        <PortalLogoIcon className="h-14 w-14 rounded-xl" tone="dark" />
+      ) : (
+        <PortalLogo className="h-12 w-full max-w-44 object-contain object-left" tone="dark" />
+      )}
     </div>
   );
 }
