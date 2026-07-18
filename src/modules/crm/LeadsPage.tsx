@@ -21,9 +21,7 @@ import {
   hasPermission,
   labelize,
   leadPriorityOptions,
-  leadPropertyTypeOptions,
   leadRequirementTypeOptions,
-  leadRoofTypeOptions,
   leadSourceOptions,
   leadStatusOptions,
   leadToForm,
@@ -499,13 +497,9 @@ export function LeadFormModal({
     >
       <TextInput label="Full Name" value={values.full_name} onChange={(value) => update("full_name", value)} error={errors.full_name} required />
       <TextInput label="Phone" value={values.phone} onChange={(value) => update("phone", value)} error={errors.phone} required />
-      <TextInput label="Alternate Phone" value={values.alternate_phone} onChange={(value) => update("alternate_phone", value)} />
       <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} type="email" />
-      <TextInput label="Address" value={values.address} onChange={(value) => update("address", value)} />
+      <TextArea label="Address" value={values.address} onChange={(value) => update("address", value)} />
       <TextInput label="City" value={values.city} onChange={(value) => update("city", value)} />
-      <TextInput label="District" value={values.district} onChange={(value) => update("district", value)} />
-      <TextInput label="State" value={values.state} onChange={(value) => update("state", value)} />
-      <TextInput label="Pincode" value={values.pincode} onChange={(value) => update("pincode", value)} />
       <SelectInput
         label="Enquiry Source"
         value={values.lead_source}
@@ -524,27 +518,7 @@ export function LeadFormModal({
           ...leadRequirementTypeOptions.map((value) => ({ value, label: value })),
         ]}
       />
-      <TextInput label="Estimated Load (kW)" value={values.estimated_load_kw} onChange={(value) => update("estimated_load_kw", value)} type="number" />
-      <TextInput label="Electricity Bill Amount" value={values.electricity_bill_amount} onChange={(value) => update("electricity_bill_amount", value)} type="number" />
       <TextInput label="Offered Price" value={values.offered_price} onChange={(value) => update("offered_price", value)} type="number" />
-      <SelectInput
-        label="Property Type"
-        value={values.property_type}
-        onChange={(value) => update("property_type", value)}
-        options={[
-          { value: "", label: "Select property type" },
-          ...leadPropertyTypeOptions.map((value) => ({ value, label: value })),
-        ]}
-      />
-      <SelectInput
-        label="Roof Type"
-        value={values.roof_type}
-        onChange={(value) => update("roof_type", value)}
-        options={[
-          { value: "", label: "Select roof type" },
-          ...leadRoofTypeOptions.map((value) => ({ value, label: value })),
-        ]}
-      />
       <SelectInput label="Status" value={values.status} onChange={(value) => update("status", value)} options={leadStatusOptions.map((value) => ({ value, label: labelize(value) }))} />
       <SelectInput label="Priority" value={values.priority} onChange={(value) => update("priority", value)} options={leadPriorityOptions.map((value) => ({ value, label: labelize(value) }))} />
       <StaffSelect staff={staff} value={values.assigned_to} onChange={(value) => update("assigned_to", value)} />

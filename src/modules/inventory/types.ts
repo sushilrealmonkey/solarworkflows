@@ -106,24 +106,25 @@ export type InventoryItem = {
 
 export type InventoryItemFormValues = {
   catalog_product_id: string;
-  vendor_id: string;
   current_stock: string;
   opening_stock: string;
   minimum_alert: string;
   status: InventoryItemStatus;
-  bill_no: string;
   inventory_date: string;
   notes: string;
 };
 
 export type InventoryTransaction = {
   id: string;
+  company_id: string | null;
   organization_id: string;
   item_id: string;
   project_id: string | null;
+  vendor_id: string | null;
   transaction_type: InventoryTransactionType;
   quantity: number;
   transaction_date: string | null;
+  bill_no: string | null;
   reference_type: string | null;
   reference_id: string | null;
   notes: string | null;
@@ -139,6 +140,10 @@ export type InventoryTransactionWithRelations = InventoryTransaction & {
   > | null;
   project?: Pick<Project, "id" | "project_code" | "project_name"> | null;
   b2b_sale?: Pick<B2BSale, "id" | "sale_code" | "status"> | null;
+  supplier?: {
+    id: string;
+    vendor_name: string;
+  } | null;
   creator?: {
     id: string;
     full_name: string | null;

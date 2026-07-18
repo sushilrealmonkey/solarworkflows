@@ -35,12 +35,10 @@ export const inventoryTransactionTypeOptions: InventoryTransactionType[] = [
 export function emptyInventoryItemForm(): InventoryItemFormValues {
   return {
     catalog_product_id: "",
-    vendor_id: "",
     current_stock: "0",
     opening_stock: "0",
     minimum_alert: "0",
     status: "active",
-    bill_no: "",
     inventory_date: new Date().toISOString().slice(0, 10),
     notes: "",
   };
@@ -51,12 +49,10 @@ export function inventoryItemToForm(
 ): InventoryItemFormValues {
   return {
     catalog_product_id: item.catalog_product_id ?? "",
-    vendor_id: item.vendor_id ?? "",
     current_stock: numberToInput(item.current_stock),
     opening_stock: numberToInput(item.opening_stock),
     minimum_alert: numberToInput(item.minimum_stock),
     status: item.status ?? "active",
-    bill_no: item.bill_no ?? "",
     inventory_date: item.inventory_date ?? new Date().toISOString().slice(0, 10),
     notes: item.notes ?? "",
   };

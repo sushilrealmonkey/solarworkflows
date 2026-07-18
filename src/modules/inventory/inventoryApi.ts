@@ -90,12 +90,10 @@ function itemPayload(values: InventoryItemFormValues) {
     product_id: null,
     brand_id: null,
     model_id: null,
-    vendor_id: nullableUuid(values.vendor_id),
     current_stock: numberValue(values.current_stock),
     opening_stock: numberValue(values.opening_stock),
     minimum_stock: numberValue(values.minimum_alert),
     status: values.status,
-    bill_no: nullable(values.bill_no),
     inventory_date: dateValue(values.inventory_date),
     notes: nullable(values.notes),
   };
@@ -118,6 +116,7 @@ const inventoryTransactionSelect = `
   *,
   item:inventory_items(id, item_code, item_name, unit, current_stock, minimum_stock),
   project:projects(id, project_code, project_name),
+  supplier:vendors!inventory_transactions_vendor_id_fkey(id, vendor_name),
   creator:users_profile!inventory_transactions_created_by_fkey(id, full_name, email, phone)
 `;
 

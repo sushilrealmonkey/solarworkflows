@@ -43,7 +43,6 @@ import {
   inventoryItemTitle,
   inventoryModelName,
   inventoryProductName,
-  inventoryVendorName,
   inventoryItemToForm,
   inventoryItemValidationSummary,
   inventoryStatusOptions,
@@ -51,6 +50,7 @@ import {
   isOutOfStock,
   isLowStock,
   transactionDecreasesStock,
+  transactionIncreasesStock,
   transactionTypeLabel,
   validateInventoryItemForm,
   availableStockNumber,
@@ -180,7 +180,6 @@ export function InventoryPage() {
           item.catalog_product?.hsn_code,
           inventoryBrandName(item),
           inventoryModelName(item),
-          inventoryVendorName(item),
         ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(search));
@@ -227,25 +226,7 @@ export function InventoryPage() {
 
   async function openEditItemForm(item: InventoryItem) {
     try {
-      const nextMasters = await refreshInventoryMasters();
-      const currentSupplier = item.vendor_master
-        ? {
-            id: item.vendor_master.id,
-            organization_id: item.organization_id,
-            name: item.vendor_master.name,
-            created_at: null,
-          }
-        : null;
-
-      if (
-        currentSupplier &&
-        !nextMasters.vendors.some((vendor) => vendor.id === currentSupplier.id)
-      ) {
-        setMasters({
-          ...nextMasters,
-          vendors: [...nextMasters.vendors, currentSupplier],
-        });
-      }
+      await refreshInventoryMasters();
 
       setItemFormErrors({});
       setItemForm({
@@ -663,12 +644,6 @@ export function InventoryPage() {
                       <InventoryStatusBadge value={item.status} />
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-xs text-slate-500">Supplier</dt>
-                    <dd className="font-medium text-slate-900">
-                      {inventoryVendorName(item) || "-"}
-                    </dd>
-                  </div>
                 </dl>
                 <div
                   className="mt-4 flex flex-wrap gap-2"
@@ -844,18 +819,6 @@ export function InventoryItemFormModal({
         </section>
       ) : null}
       <ProductSnapshot product={selectedProduct} />
-      <SelectInput
-        label="Supplier"
-        value={values.vendor_id}
-        onChange={(value) => update("vendor_id", value)}
-        options={[
-          { value: "", label: "No supplier linked" },
-          ...masters.vendors.map((vendor) => ({
-            value: vendor.id,
-            label: vendor.name,
-          })),
-        ]}
-      />
       <TextInput
         label="Current Stock"
         type="number"
@@ -887,11 +850,6 @@ export function InventoryItemFormModal({
           value,
           label: labelize(value),
         }))}
-      />
-      <TextInput
-        label="Bill No."
-        value={values.bill_no}
-        onChange={(value) => update("bill_no", value)}
       />
       <TextInput
         label="Inventory Date"
@@ -1117,26 +1075,74 @@ function ProductSnapshot({
 
 export function InventoryTransactionsSection({
   transactions,
-  emptyTitle = "No stock transactions yet",
 }: {
   transactions: InventoryTransactionWithRelations[];
-  emptyTitle?: string;
+}) {
+  const inwardTransactions = transactions.filter(
+    (transaction) => transactionDirection(transaction) === "inward",
+  );
+  const outwardTransactions = transactions.filter(
+    (transaction) => transactionDirection(transaction) === "outward",
+  );
+
+  return (
+    <div className="space-y-6">
+      <InventoryTransactionTable
+        direction="inward"
+        transactions={inwardTransactions}
+      />
+      <InventoryTransactionTable
+        direction="outward"
+        transactions={outwardTransactions}
+      />
+    </div>
+  );
+}
+
+type InventoryTransactionDirection = "inward" | "outward";
+
+function transactionDirection(
+  transaction: InventoryTransactionWithRelations,
+): InventoryTransactionDirection {
+  if (transaction.transaction_type === "adjustment") {
+    return Number(transaction.quantity) < 0 ? "outward" : "inward";
+  }
+
+  if (transactionIncreasesStock(transaction.transaction_type)) {
+    return "inward";
+  }
+
+  return "outward";
+}
+
+function InventoryTransactionTable({
+  direction,
+  transactions,
+}: {
+  direction: InventoryTransactionDirection;
+  transactions: InventoryTransactionWithRelations[];
 }) {
   const transactionPagination = useTablePagination(transactions);
   const paginatedTransactions = transactionPagination.pageItems;
+  const isInward = direction === "inward";
+  const title = isInward ? "Inward Transactions" : "Outward Transactions";
 
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-base font-semibold text-slate-950">
-          Inventory Transactions
-        </h2>
+        <h2 className="text-base font-semibold text-slate-950">{title}</h2>
         <p className="text-sm text-slate-500">{transactions.length} records</p>
       </div>
       {transactions.length === 0 ? (
         <EmptyState
-          title={emptyTitle}
-          description="Stock movements will appear here after materials are received, adjusted, returned, or issued."
+          title={
+            isInward ? "No inward transactions yet" : "No outward transactions yet"
+          }
+          description={
+            isInward
+              ? "Received, returned, and positive adjustment movements will appear here."
+              : "Issued, dispatched, and negative adjustment movements will appear here."
+          }
         />
       ) : (
         <div className="mt-4 overflow-hidden rounded-lg border border-stone-200">
@@ -1148,7 +1154,15 @@ export function InventoryTransactionsSection({
                   <th className="px-4 py-3">Item</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Quantity</th>
-                  <th className="px-4 py-3">Usage</th>
+                  {isInward ? (
+                    <>
+                      <th className="px-4 py-3">Supplier</th>
+                      <th className="px-4 py-3">Bill No.</th>
+                    </>
+                  ) : null}
+                  <th className="px-4 py-3">
+                    {isInward ? "Reference" : "Usage"}
+                  </th>
                   <th className="px-4 py-3">Notes</th>
                   <th className="px-4 py-3">Created By</th>
                 </tr>
@@ -1171,8 +1185,21 @@ export function InventoryTransactionsSection({
                       <TransactionTypeBadge value={transaction.transaction_type} />
                     </td>
                     <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatStock(transaction.quantity, transaction.item?.unit)}
+                      {formatStock(
+                        Math.abs(Number(transaction.quantity)),
+                        transaction.item?.unit,
+                      )}
                     </td>
+                    {isInward ? (
+                      <>
+                        <td className="px-4 py-3">
+                          {transaction.supplier?.vendor_name ?? "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {transaction.bill_no ?? "-"}
+                        </td>
+                      </>
+                    ) : null}
                     <td className="px-4 py-3">
                       <TransactionUsage transaction={transaction} />
                     </td>
@@ -1212,11 +1239,32 @@ export function InventoryTransactionsSection({
                   <div>
                     <dt className="text-xs text-slate-500">Quantity</dt>
                     <dd className="font-semibold text-slate-950">
-                      {formatStock(transaction.quantity, transaction.item?.unit)}
+                      {formatStock(
+                        Math.abs(Number(transaction.quantity)),
+                        transaction.item?.unit,
+                      )}
                     </dd>
                   </div>
+                  {isInward ? (
+                    <>
+                      <div>
+                        <dt className="text-xs text-slate-500">Supplier</dt>
+                        <dd className="font-medium text-slate-900">
+                          {transaction.supplier?.vendor_name ?? "-"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-slate-500">Bill No.</dt>
+                        <dd className="font-medium text-slate-900">
+                          {transaction.bill_no ?? "-"}
+                        </dd>
+                      </div>
+                    </>
+                  ) : null}
                   <div>
-                    <dt className="text-xs text-slate-500">Usage</dt>
+                    <dt className="text-xs text-slate-500">
+                      {isInward ? "Reference" : "Usage"}
+                    </dt>
                     <dd className="text-slate-900">
                       <TransactionUsage transaction={transaction} />
                     </dd>
@@ -1231,7 +1279,7 @@ export function InventoryTransactionsSection({
             ))}
           </div>
           <TablePagination
-            label="transactions"
+            label={`${direction} transactions`}
             pagination={transactionPagination}
           />
         </div>

@@ -45,19 +45,13 @@ import {
 } from "./dashboardApi";
 
 export function DashboardPage() {
-  const { profile, roleNames } = useAuth();
+  const { profile } = useAuth();
 
   if (profile?.is_super_admin) {
     return <PlatformDashboard />;
   }
 
-  return isTenantAdmin(roleNames) ? <EpcAdminDashboard /> : <TenantDashboard />;
-}
-
-function isTenantAdmin(roleNames: string[]) {
-  return roleNames.some((roleName) =>
-    ["admin", "administrator"].includes(roleName.trim().toLowerCase()),
-  );
+  return <EpcAdminDashboard />;
 }
 
 function EpcAdminDashboard() {
@@ -2029,6 +2023,9 @@ function scheduleDateLabel(value: string | null | undefined, today: Date) {
   return formatDisplayDate(date.toISOString());
 }
 
+// Kept as a self-contained legacy implementation while tenant roles transition
+// to the shared EPC command dashboard above.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function TenantDashboard() {
   const { profile, permissions, organization } = useAuth();
   const [summaryRows, setSummaryRows] = useState<DashboardSummaryRow[]>([]);

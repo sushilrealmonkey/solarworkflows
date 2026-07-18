@@ -75,8 +75,8 @@ type SurveyFilters = {
 
 const scheduledTimeOptions = [
   { value: "", label: "Select scheduled time" },
-  ...Array.from({ length: 48 }, (_, index) => {
-    const hour = Math.floor(index / 2);
+  ...Array.from({ length: 29 }, (_, index) => {
+    const hour = 7 + Math.floor(index / 2);
     const minute = index % 2 === 0 ? "00" : "30";
     const value = `${String(hour).padStart(2, "0")}:${minute}`;
 

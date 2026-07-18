@@ -36,7 +36,7 @@ export type B2BSaleItem = {
   company_id: string;
   organization_id: string;
   b2b_sale_id: string;
-  inventory_item_id: string;
+  inventory_item_id: string | null;
   item_name: string;
   description: string | null;
   quantity: number | null;

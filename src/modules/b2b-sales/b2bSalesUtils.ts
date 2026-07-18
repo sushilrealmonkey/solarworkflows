@@ -124,7 +124,7 @@ export function availableStockQuantity(item: B2BInventoryItemOption | undefined)
 export function saleItemToForm(item: B2BSaleItem): B2BSaleFormItem {
   return {
     id: item.id,
-    inventory_item_id: item.inventory_item_id,
+    inventory_item_id: item.inventory_item_id ?? "",
     item_name: item.item_name,
     description: item.description ?? "",
     quantity: numberToInput(item.quantity) || "1",
