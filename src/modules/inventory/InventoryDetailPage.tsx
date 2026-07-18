@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
@@ -7,24 +7,27 @@ import {
   AccessDenied,
   AlertDialog,
   Button,
-  ConfirmDialog,
   DetailItem,
   DetailSection,
   EmptyState,
   LoadingSkeleton,
+  Modal,
   PencilIcon,
+  TextArea,
+  TextInput,
 } from "../crm/CrmComponents";
 import {
   formatDate,
   hasPermission,
 } from "../crm/crmUtils";
 import {
+  correctInventoryStock,
   fetchInventoryItem,
-  fetchInventoryMasters,
   fetchInventoryTransactions,
   updateInventoryItem,
 } from "./inventoryApi";
 import {
+  emptyInventoryStockCorrection,
   formatStock,
   inventoryBrandName,
   inventoryModelName,
@@ -33,6 +36,7 @@ import {
   inventoryItemValidationSummary,
   isLowStock,
   validateInventoryItemForm,
+  validateInventoryStockCorrection,
 } from "./inventoryUtils";
 import {
   InventoryItemFormModal,
@@ -43,22 +47,15 @@ import {
 import type {
   InventoryItem,
   InventoryItemFormValues,
-  InventoryMasters,
+  InventoryStockCorrectionValues,
   InventoryTransactionWithRelations,
 } from "./types";
-import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function InventoryDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
   const [item, setItem] = useState<InventoryItem | null>(null);
-  const [masters, setMasters] = useState<InventoryMasters>({
-    products: [],
-    categories: [],
-    vendors: [],
-  });
   const [transactions, setTransactions] = useState<
     InventoryTransactionWithRelations[]
   >([]);
@@ -71,12 +68,17 @@ export function InventoryDetailPage() {
     title: string;
     description: string;
   } | null>(null);
-  const [confirmingDiscontinue, setConfirmingDiscontinue] = useState(false);
-  const [discontinuing, setDiscontinuing] = useState(false);
+  const [correction, setCorrection] =
+    useState<InventoryStockCorrectionValues | null>(null);
+  const [correctionErrors, setCorrectionErrors] = useState<
+    Record<string, string>
+  >({});
+  const [correcting, setCorrecting] = useState(false);
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
+  const canCreate = hasPermission(profile, permissions, "inventory", "create");
   const canUpdate = hasPermission(profile, permissions, "inventory", "update");
-  const canDelete = hasPermission(profile, permissions, "inventory", "delete");
+  const canCorrect = canCreate && canUpdate;
 
   async function loadItem() {
     if (!canView || !id) {
@@ -87,15 +89,12 @@ export function InventoryDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextItem, nextTransactions, nextMasters] =
-        await Promise.all([
-          fetchInventoryItem(profile, id),
-          fetchInventoryTransactions(profile, id),
-          fetchInventoryMasters(profile),
-        ]);
+      const [nextItem, nextTransactions] = await Promise.all([
+        fetchInventoryItem(profile, id),
+        fetchInventoryTransactions(profile, id),
+      ]);
       setItem(nextItem);
       setTransactions(nextTransactions);
-      setMasters(nextMasters);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -122,24 +121,13 @@ export function InventoryDetailPage() {
     );
   }
 
-  async function openEditForm() {
+  function openEditForm() {
     if (!item) {
       return;
     }
 
-    try {
-      const nextMasters = await fetchInventoryMasters(profile);
-      setMasters(nextMasters);
-      setFormErrors({});
-      setEditing(inventoryItemToForm(item));
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load the latest suppliers.",
-        "error",
-      );
-    }
+    setFormErrors({});
+    setEditing(inventoryItemToForm(item));
   }
 
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
@@ -187,29 +175,35 @@ export function InventoryDetailPage() {
     }
   }
 
-  async function handleDiscontinue() {
-    if (!item) {
+  async function handleCorrectionSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!item || !correction) {
+      return;
+    }
+
+    const nextErrors = validateInventoryStockCorrection(correction);
+    setCorrectionErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
       return;
     }
 
     try {
-      setDiscontinuing(true);
-      const updatedItem = await updateInventoryItem(item.id, profile, {
-        ...inventoryItemToForm(item),
-        status: "discontinued",
-      });
-      setItem(updatedItem);
-      showToast("Inventory item marked discontinued.", "success");
-      setConfirmingDiscontinue(false);
+      setCorrecting(true);
+      await correctInventoryStock(item.id, correction);
+      setCorrection(null);
+      showToast("Physical stock corrected and recorded in the ledger.", "success");
+      await loadItem();
     } catch (nextError) {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "Inventory item status update failed.",
+          : "Stock correction failed.",
         "error",
       );
     } finally {
-      setDiscontinuing(false);
+      setCorrecting(false);
     }
   }
 
@@ -226,7 +220,7 @@ export function InventoryDetailPage() {
       {!loading && !error && !item ? (
         <EmptyState
           title="Inventory item not found"
-          description="This item may have been deleted or is outside your organization access."
+          description="This item may be inactive or outside your organization access."
         />
       ) : null}
 
@@ -242,16 +236,31 @@ export function InventoryDetailPage() {
                 inventoryModelName(item),
               ]}
               action={
-                canUpdate && !item.archived_at ? (
-                  <button
-                    aria-label="Edit inventory item"
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
-                    onClick={openEditForm}
-                    title="Edit inventory item"
-                    type="button"
-                  >
-                    <PencilIcon />
-                  </button>
+                !item.archived_at && (canUpdate || canCorrect) ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {canCorrect ? (
+                      <Button
+                        onClick={() => {
+                          setCorrectionErrors({});
+                          setCorrection(emptyInventoryStockCorrection(item));
+                        }}
+                        variant="secondary"
+                      >
+                        Correct Stock
+                      </Button>
+                    ) : null}
+                    {canUpdate ? (
+                      <button
+                        aria-label="Edit inventory settings"
+                        className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
+                        onClick={openEditForm}
+                        title="Edit inventory settings"
+                        type="button"
+                      >
+                        <PencilIcon />
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null
               }
             />
@@ -315,49 +324,6 @@ export function InventoryDetailPage() {
           </DetailSection>
 
           <InventoryTransactionsSection transactions={transactions} />
-
-
-          {canUpdate && !item.archived_at && item.status !== "discontinued" ? (
-            <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-rose-900">
-                    Discontinue Item
-                  </h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">
-                    Keep this item in past inventory, quotation, and project
-                    records, but remove it from future quotation and project
-                    material selections.
-                  </p>
-                </div>
-                <Button
-                  onClick={() => setConfirmingDiscontinue(true)}
-                  variant="danger"
-                >
-                  Mark Discontinued
-                </Button>
-              </div>
-            </section>
-          ) : null}
-
-          <RecordLifecyclePanel
-            archiveReason={item.archive_reason}
-            archivedAt={item.archived_at}
-            canDelete={canDelete}
-            canUpdate={canUpdate}
-            moduleKey="inventory_items"
-            onChanged={async (action) => {
-              if (action === "delete") {
-                showToast("Inventory item permanently deleted.", "success");
-                navigate("/inventory");
-                return;
-              }
-              showToast(action === "archive" ? "Inventory item archived." : "Inventory item restored.", "success");
-              await loadItem();
-            }}
-            recordId={item.id}
-            recordLabel={item.item_code || item.item_name}
-          />
         </>
       ) : null}
 
@@ -366,7 +332,6 @@ export function InventoryDetailPage() {
           title="Edit Inventory Item"
           values={editing}
           setValues={setEditing}
-          masters={masters}
           errors={formErrors}
           onClose={() => setEditing(null)}
           onSubmit={handleEditSubmit}
@@ -382,16 +347,50 @@ export function InventoryDetailPage() {
         />
       ) : null}
 
-      {confirmingDiscontinue && item ? (
-        <ConfirmDialog
-          title="Mark item discontinued?"
-          description={`This keeps ${item.item_name} in past records, but it will not be available for future quotations or project material issues.`}
-          confirming={discontinuing}
-          confirmLabel="Mark Discontinued"
-          confirmingLabel="Updating..."
-          onCancel={() => setConfirmingDiscontinue(false)}
-          onConfirm={handleDiscontinue}
-        />
+      {correction && item ? (
+        <Modal
+          title="Correct Physical Stock"
+          onClose={() => setCorrection(null)}
+          onSubmit={handleCorrectionSubmit}
+          submitLabel="Record Stock Correction"
+          submitting={correcting}
+        >
+          <section className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-slate-700 md:col-span-2">
+            Current physical stock: {formatStock(item.current_stock, item.unit)}.
+            Enter the quantity physically counted; the signed adjustment is
+            calculated automatically.
+          </section>
+          <TextInput
+            label={`Counted Stock${item.unit ? ` (${item.unit})` : ""}`}
+            type="number"
+            value={correction.counted_quantity}
+            onChange={(counted_quantity) =>
+              setCorrection({ ...correction, counted_quantity })
+            }
+            error={correctionErrors.counted_quantity}
+            required
+          />
+          <TextInput
+            label="Correction Date"
+            type="date"
+            value={correction.correction_date}
+            onChange={(correction_date) =>
+              setCorrection({ ...correction, correction_date })
+            }
+            error={correctionErrors.correction_date}
+            required
+          />
+          <TextArea
+            label="Correction Reason *"
+            value={correction.reason}
+            onChange={(reason) => setCorrection({ ...correction, reason })}
+          />
+          {correctionErrors.reason ? (
+            <p className="-mt-3 text-xs text-rose-700 md:col-span-2">
+              {correctionErrors.reason}
+            </p>
+          ) : null}
+        </Modal>
       ) : null}
     </div>
   );

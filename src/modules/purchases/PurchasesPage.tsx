@@ -34,7 +34,11 @@ import {
   labelize,
 } from "../crm/crmUtils";
 import { fetchInventoryItems } from "../inventory/inventoryApi";
-import { formatCurrency, formatStock } from "../inventory/inventoryUtils";
+import {
+  formatCurrency,
+  formatStock,
+  inventoryProductName,
+} from "../inventory/inventoryUtils";
 import type { InventoryItem } from "../inventory/types";
 import type { Vendor } from "../vendors/types";
 import {
@@ -1080,6 +1084,7 @@ export function PurchaseOrderFormModal({
   saving: boolean;
 }) {
   const totals = calculatePurchaseTotals(values);
+  const activeItems = items.filter(isPurchaseSelectableItem);
 
   function updateItem(index: number, item: PurchaseOrderItemFormValues) {
     setValues({
@@ -1165,10 +1170,20 @@ export function PurchaseOrderFormModal({
         {errors?.items ? (
           <p className="text-xs text-rose-700">{errors.items}</p>
         ) : null}
+        {activeItems.length === 0 ? (
+          <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900">
+            No active Product Master items are available. Add or reactivate a
+            product in Products &amp; Materials before creating a purchase order.
+          </section>
+        ) : null}
         {values.items.map((item, index) => {
           const itemTotal = calculatePurchaseItemTotal(item);
           const itemErrors = errors?.itemErrors[index];
           const selectedItem = items.find((option) => option.id === item.item_id);
+          const itemOptions =
+            selectedItem && !activeItems.some((option) => option.id === selectedItem.id)
+              ? [...activeItems, selectedItem]
+              : activeItems;
 
           return (
             <div
@@ -1177,14 +1192,21 @@ export function PurchaseOrderFormModal({
             >
               <div className="md:col-span-2">
                 <SelectInput
-                  label="Inventory Item"
+                  label="Product / Material"
                   value={item.item_id}
                   onChange={(itemId) => handleItemChange(index, itemId)}
                   options={[
-                    { value: "", label: "Select item" },
-                    ...items.map((option) => ({
+                    { value: "", label: "Select product or material" },
+                    ...itemOptions.map((option) => ({
                       value: option.id,
-                      label: `${option.item_code ?? "Item"} - ${option.item_name}`,
+                      label: [
+                        option.catalog_product?.product_code ?? option.item_code,
+                        inventoryProductName(option),
+                        option.unit,
+                        `Stock ${formatStock(option.current_stock)}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" - "),
                     })),
                   ]}
                 />
@@ -1224,7 +1246,7 @@ export function PurchaseOrderFormModal({
                         selectedItem.current_stock,
                         selectedItem.unit,
                       )}`
-                    : "Select an inventory item"}
+                    : "Select a Product Master item"}
                 </p>
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="text-sm font-semibold text-slate-950">
@@ -1257,6 +1279,13 @@ export function PurchaseOrderFormModal({
         <PurchaseTotal label="Total" value={totals.total} strong />
       </section>
     </Modal>
+  );
+}
+
+function isPurchaseSelectableItem(item: InventoryItem) {
+  return (
+    item.status === "active" &&
+    (!item.catalog_product?.status || item.catalog_product.status === "active")
   );
 }
 

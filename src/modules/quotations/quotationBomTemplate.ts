@@ -143,7 +143,9 @@ export function mergeQuotationBomTemplateRows(
       bom_category_key: definition.key,
       bom_category_name: definition.label,
       product_category_id:
-        existingItem?.product_category_id || category?.id || "",
+        existingItem?.product_id
+          ? existingItem.product_category_id || category?.id || ""
+          : category?.id || existingItem?.product_category_id || "",
     };
   });
 
@@ -161,10 +163,16 @@ export function productsForQuotationBomRow(
   const selectedCategory = categories.find(
     (category) => category.id === item.product_category_id,
   );
+  const preferredCategory = definition
+    ? matchingCategory(definition, categories)
+    : null;
   const matchingTypes = definition?.categoryTypes ??
     (selectedCategory ? [selectedCategory.category_type] : []);
-  const categoryPool = item.product_category_id
-    ? products.filter((product) => product.category_id === item.product_category_id)
+  const categoryId = item.product_id
+    ? item.product_category_id
+    : preferredCategory?.id || item.product_category_id;
+  const categoryPool = categoryId
+    ? products.filter((product) => product.category_id === categoryId)
     : products.filter((product) => matchingTypes.includes(product.category_type));
 
   if (!definition || definition.productKeywords.length === 0) {
@@ -184,11 +192,17 @@ function matchingCategory(
   definition: QuotationBomTemplateCategory,
   categories: ProductCategory[],
 ) {
-  const aliasSet = new Set(definition.categoryAliases.map(normalize));
-  const exactMatch = categories.find((category) => aliasSet.has(normalize(category.name)));
+  for (const alias of definition.categoryAliases) {
+    const exactMatch = categories.find(
+      (category) => normalize(category.name) === normalize(alias),
+    );
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+  }
 
   return (
-    exactMatch ??
     categories.find((category) =>
       definition.categoryTypes.includes(category.category_type),
     ) ??

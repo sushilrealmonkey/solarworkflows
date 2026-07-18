@@ -4,6 +4,7 @@ import type {
   InventoryItemCategory,
   InventoryItemFormValues,
   InventoryItemStatus,
+  InventoryStockCorrectionValues,
   InventoryUnit,
   InventoryTransactionFormValues,
   InventoryTransactionType,
@@ -34,12 +35,7 @@ export const inventoryTransactionTypeOptions: InventoryTransactionType[] = [
 
 export function emptyInventoryItemForm(): InventoryItemFormValues {
   return {
-    catalog_product_id: "",
-    current_stock: "0",
-    opening_stock: "0",
     minimum_alert: "0",
-    status: "active",
-    inventory_date: new Date().toISOString().slice(0, 10),
     notes: "",
   };
 }
@@ -48,13 +44,18 @@ export function inventoryItemToForm(
   item: InventoryItem,
 ): InventoryItemFormValues {
   return {
-    catalog_product_id: item.catalog_product_id ?? "",
-    current_stock: numberToInput(item.current_stock),
-    opening_stock: numberToInput(item.opening_stock),
     minimum_alert: numberToInput(item.minimum_stock),
-    status: item.status ?? "active",
-    inventory_date: item.inventory_date ?? new Date().toISOString().slice(0, 10),
     notes: item.notes ?? "",
+  };
+}
+
+export function emptyInventoryStockCorrection(
+  item: InventoryItem,
+): InventoryStockCorrectionValues {
+  return {
+    counted_quantity: numberToInput(item.current_stock),
+    correction_date: new Date().toISOString().slice(0, 10),
+    reason: "",
   };
 }
 
@@ -194,11 +195,20 @@ export function transactionTypeLabel(type: InventoryTransactionType | null) {
 
 export function validateInventoryItemForm(values: InventoryItemFormValues) {
   return {
-    catalog_product_id: requiredError(values.catalog_product_id, "Product"),
-    current_stock: nonNegativeNumberError(values.current_stock, "Current stock"),
-    opening_stock: nonNegativeNumberError(values.opening_stock, "Opening stock"),
     minimum_alert: nonNegativeNumberError(values.minimum_alert, "Minimum alert"),
-    status: requiredError(values.status, "Status"),
+  };
+}
+
+export function validateInventoryStockCorrection(
+  values: InventoryStockCorrectionValues,
+) {
+  return {
+    counted_quantity: nonNegativeNumberError(
+      values.counted_quantity,
+      "Counted stock",
+    ),
+    correction_date: requiredError(values.correction_date, "Correction date"),
+    reason: requiredError(values.reason, "Correction reason"),
   };
 }
 

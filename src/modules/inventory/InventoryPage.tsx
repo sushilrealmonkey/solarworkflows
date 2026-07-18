@@ -17,7 +17,6 @@ import {
   AlertDialog,
   Badge,
   Button,
-  ConfirmDialog,
   EmptyState,
   LoadingSkeleton,
   Modal,
@@ -34,6 +33,7 @@ import {
 import {
   fetchInventoryItems,
   fetchInventoryMasters,
+  fetchInventoryOpeningBalanceCandidates,
   fetchInventoryTransactions,
   updateInventoryItem,
 } from "./inventoryApi";
@@ -111,12 +111,13 @@ export function InventoryPage() {
     title: string;
     description: string;
   } | null>(null);
-  const [discontinueTarget, setDiscontinueTarget] =
-    useState<InventoryItem | null>(null);
-  const [discontinuing, setDiscontinuing] = useState(false);
+  const [openingBalanceCandidateCount, setOpeningBalanceCandidateCount] =
+    useState(0);
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
+  const canCreate = hasPermission(profile, permissions, "inventory", "create");
   const canUpdate = hasPermission(profile, permissions, "inventory", "update");
+  const canManageStock = canCreate && canUpdate;
 
   async function loadData() {
     if (!canView) {
@@ -127,14 +128,18 @@ export function InventoryPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextItems, nextTransactions, nextMasters] = await Promise.all([
+      const [nextItems, nextTransactions, nextMasters, openingCandidates] = await Promise.all([
         fetchInventoryItems(profile, archiveScope),
         fetchInventoryTransactions(profile),
         fetchInventoryMasters(profile),
+        canManageStock
+          ? fetchInventoryOpeningBalanceCandidates()
+          : Promise.resolve([]),
       ]);
       setItems(nextItems);
       setTransactions(nextTransactions);
       setMasters(nextMasters);
+      setOpeningBalanceCandidateCount(openingCandidates.length);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -218,29 +223,12 @@ export function InventoryPage() {
     );
   }
 
-  async function refreshInventoryMasters() {
-    const nextMasters = await fetchInventoryMasters(profile);
-    setMasters(nextMasters);
-    return nextMasters;
-  }
-
   async function openEditItemForm(item: InventoryItem) {
-    try {
-      await refreshInventoryMasters();
-
-      setItemFormErrors({});
-      setItemForm({
-        item,
-        values: inventoryItemToForm(item),
-      });
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load the latest suppliers.",
-        "error",
-      );
-    }
+    setItemFormErrors({});
+    setItemForm({
+      item,
+      values: inventoryItemToForm(item),
+    });
   }
 
   function openInventoryDetail(itemId: string) {
@@ -301,39 +289,6 @@ export function InventoryPage() {
     }
   }
 
-  async function confirmDiscontinue() {
-    if (!discontinueTarget) {
-      return;
-    }
-
-    try {
-      setDiscontinuing(true);
-      await updateInventoryItem(discontinueTarget.id, profile, {
-        ...inventoryItemToForm(discontinueTarget),
-        status: "discontinued",
-      });
-      setItems((current) =>
-        current.map((item) =>
-          item.id === discontinueTarget.id
-            ? { ...item, status: "discontinued" }
-            : item,
-        ),
-      );
-      showToast("Inventory item marked discontinued.", "success");
-      setDiscontinueTarget(null);
-      await loadData();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Inventory item status update failed.",
-        "error",
-      );
-    } finally {
-      setDiscontinuing(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -341,6 +296,21 @@ export function InventoryPage() {
           title="Inventory"
           description="Track stock items, material movement, and project usage."
         />
+        {masters.products.length === 0 ? (
+          <Link
+            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+            to="/products-materials/products"
+          >
+            Add Products &amp; Materials
+          </Link>
+        ) : canManageStock && openingBalanceCandidateCount > 0 ? (
+          <Link
+            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+            to="/inventory/opening-stock"
+          >
+            Set Opening Stock
+          </Link>
+        ) : null}
       </div>
 
       <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
@@ -486,7 +456,25 @@ export function InventoryPage() {
       {!loading && !error && filteredItems.length === 0 ? (
         <EmptyState
           title="No inventory items found"
-          description="Inventory items appear through purchase orders and sales. Adjust the filters to see existing inventory."
+          description={
+            masters.products.length === 0
+              ? "Add an active product or material first. Inventory will be created automatically with zero stock."
+              : "Active Product Master items appear here automatically. Adjust the filters to see existing inventory."
+          }
+          action={
+            masters.products.length === 0 ? (
+              <Link
+                className="font-semibold text-[#06173f]"
+                to="/products-materials/products"
+              >
+                Add Products &amp; Materials
+              </Link>
+            ) : canManageStock && openingBalanceCandidateCount > 0 ? (
+              <Link className="font-semibold text-[#06173f]" to="/inventory/opening-stock">
+                Set Opening Stock
+              </Link>
+            ) : null
+          }
         />
       ) : null}
 
@@ -661,14 +649,6 @@ export function InventoryPage() {
                       Edit
                     </Button>
                   ) : null}
-                  {canUpdate && item.status !== "discontinued" ? (
-                    <Button
-                      onClick={() => setDiscontinueTarget(item)}
-                      variant="danger"
-                    >
-                      Discontinue
-                    </Button>
-                  ) : null}
                 </div>
                 {isOutOfStock(item) || isLowStock(item) ? (
                   <p
@@ -699,7 +679,6 @@ export function InventoryPage() {
           setValues={(values) =>
             setItemForm((current) => (current ? { ...current, values } : current))
           }
-          masters={masters}
           errors={itemFormErrors}
           onClose={() => setItemForm(null)}
           onSubmit={handleItemSubmit}
@@ -715,17 +694,6 @@ export function InventoryPage() {
         />
       ) : null}
 
-      {discontinueTarget ? (
-        <ConfirmDialog
-          title="Mark item discontinued?"
-          description={`This keeps ${discontinueTarget.item_name} in past records, but it will not be available for future quotations or project material issues.`}
-          confirming={discontinuing}
-          confirmLabel="Mark Discontinued"
-          confirmingLabel="Updating..."
-          onCancel={() => setDiscontinueTarget(null)}
-          onConfirm={confirmDiscontinue}
-        />
-      ) : null}
     </div>
   );
 }
@@ -751,7 +719,6 @@ export function InventoryItemFormModal({
   title,
   values,
   setValues,
-  masters,
   errors,
   onClose,
   onSubmit,
@@ -760,7 +727,6 @@ export function InventoryItemFormModal({
   title: string;
   values: InventoryItemFormValues;
   setValues: (values: InventoryItemFormValues) => void;
-  masters: InventoryMasters;
   errors: Record<string, string>;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -768,18 +734,6 @@ export function InventoryItemFormModal({
 }) {
   const update = (key: keyof InventoryItemFormValues, value: string) =>
     setValues({ ...values, [key]: value });
-  const selectedProduct = masters.products.find(
-    (product) => product.id === values.catalog_product_id,
-  );
-  const selectableProducts = masters.products.filter(
-    (product) =>
-      isSelectableInventoryProduct(product) ||
-      product.id === values.catalog_product_id,
-  );
-  const productPlaceholder =
-    selectableProducts.length > 0
-      ? "Select product"
-      : "No active products in Product Master";
 
   return (
     <Modal
@@ -790,72 +744,17 @@ export function InventoryItemFormModal({
       submitLabel="Save Item"
       submitting={saving}
     >
-      <SelectInput
-        label="Product"
-        value={values.catalog_product_id}
-        onChange={(value) => update("catalog_product_id", value)}
-        options={[
-          { value: "", label: productPlaceholder },
-          ...selectableProducts.map((product) => ({
-            value: product.id,
-            label: productOptionLabel(product),
-          })),
-        ]}
-      />
-      {errors.catalog_product_id ? (
-        <p className="-mt-3 text-xs text-rose-700">
-          {errors.catalog_product_id}
-        </p>
-      ) : null}
-      {masters.products.length === 0 ? (
-        <section className="-mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 md:col-span-2">
-          Add products in Products & Materials first, then create inventory
-          stock against those Product Master records.
-        </section>
-      ) : selectableProducts.length === 0 ? (
-        <section className="-mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 md:col-span-2">
-          Product Master records are available, but none are active for inventory
-          selection.
-        </section>
-      ) : null}
-      <ProductSnapshot product={selectedProduct} />
-      <TextInput
-        label="Current Stock"
-        type="number"
-        value={values.current_stock}
-        onChange={(value) => update("current_stock", value)}
-        error={errors.current_stock}
-      />
-      <TextInput
-        label="Opening Stock"
-        type="number"
-        value={values.opening_stock}
-        onChange={(value) => update("opening_stock", value)}
-        error={errors.opening_stock}
-      />
+      <section className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-slate-700 md:col-span-2">
+        Product identity, unit, and status are managed in Product Master. Stock
+        quantities change only through opening balance, material receipt,
+        correction, issue, or reversal workflows.
+      </section>
       <TextInput
         label="Minimum Alert"
         type="number"
         value={values.minimum_alert}
         onChange={(value) => update("minimum_alert", value)}
         error={errors.minimum_alert}
-      />
-      <SelectInput
-        label="Status"
-        value={values.status}
-        onChange={(value) =>
-          update("status", value as InventoryItemFormValues["status"])
-        }
-        options={inventoryStatusOptions.map((value) => ({
-          value,
-          label: labelize(value),
-        }))}
-      />
-      <TextInput
-        label="Inventory Date"
-        type="date"
-        value={values.inventory_date}
-        onChange={(value) => update("inventory_date", value)}
       />
       <TextArea
         label="Notes"
@@ -1026,53 +925,6 @@ function productOptionLabel(product: InventoryCatalogProduct) {
     .join(" - ");
 }
 
-function isSelectableInventoryProduct(product: InventoryCatalogProduct) {
-  return !product.status || product.status === "active";
-}
-
-function ProductSnapshot({
-  product,
-}: {
-  product: InventoryCatalogProduct | undefined;
-}) {
-  if (!product) {
-    return (
-      <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-900 md:col-span-2">
-        Select an active Product Master item before saving inventory.
-      </section>
-    );
-  }
-
-  const details = [
-    ["Category", product.category?.name ?? "-"],
-    ["Brand", product.brand ?? "-"],
-    ["Model / Specifications", product.model_number ?? product.specifications ?? "-"],
-    ["Unit", product.unit],
-    ["HSN", product.hsn_code ?? "-"],
-  ];
-
-  return (
-    <section className="rounded-lg border border-stone-200 bg-stone-50 p-3 md:col-span-2">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <h3 className="text-sm font-semibold text-slate-950">
-          {product.product_name}
-        </h3>
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {product.product_code}
-        </span>
-      </div>
-      <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
-        {details.map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-xs text-slate-500">{label}</dt>
-            <dd className="font-medium text-slate-900">{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
-  );
-}
-
 export function InventoryTransactionsSection({
   transactions,
 }: {
@@ -1182,7 +1034,10 @@ function InventoryTransactionTable({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <TransactionTypeBadge value={transaction.transaction_type} />
+                      <TransactionTypeBadge
+                        referenceType={transaction.reference_type}
+                        value={transaction.transaction_type}
+                      />
                     </td>
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {formatStock(
@@ -1233,7 +1088,10 @@ function InventoryTransactionTable({
                       {transaction.item?.item_code ?? ""}
                     </p>
                   </div>
-                  <TransactionTypeBadge value={transaction.transaction_type} />
+                  <TransactionTypeBadge
+                    referenceType={transaction.reference_type}
+                    value={transaction.transaction_type}
+                  />
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                   <div>
@@ -1379,8 +1237,10 @@ export function InventoryStatusBadge({
 
 export function TransactionTypeBadge({
   value,
+  referenceType,
 }: {
   value: InventoryTransactionType;
+  referenceType?: string | null;
 }) {
   const tone = transactionDecreasesStock(value)
     ? "red"
@@ -1388,5 +1248,12 @@ export function TransactionTypeBadge({
       ? "amber"
       : "green";
 
-  return <Badge tone={tone}>{transactionTypeLabel(value)}</Badge>;
+  const displayLabel =
+    referenceType === "opening_balance"
+      ? "Opening Balance"
+      : referenceType === "stock_correction"
+        ? "Stock Correction"
+        : transactionTypeLabel(value);
+
+  return <Badge tone={tone}>{displayLabel}</Badge>;
 }

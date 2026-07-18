@@ -37,6 +37,7 @@ import { ProductDetailPage } from "../modules/product-master/ProductDetailPage";
 import { CatalogLibraryPage } from "../modules/catalog-library/CatalogLibraryPage";
 import { InventoryPage } from "../modules/inventory/InventoryPage";
 import { InventoryDetailPage } from "../modules/inventory/InventoryDetailPage";
+import { InventoryOpeningStockPage } from "../modules/inventory/InventoryOpeningStockPage";
 import { VendorsPage } from "../modules/vendors/VendorsPage";
 import { VendorDetailPage } from "../modules/vendors/VendorDetailPage";
 import { PurchasesPage } from "../modules/purchases/PurchasesPage";
@@ -129,6 +130,10 @@ export default function App() {
           />
           <Route path="/products-materials/:id" element={<ProductDetailPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
+          <Route
+            path="/inventory/opening-stock"
+            element={<InventoryOpeningStockPage />}
+          />
           <Route path="/inventory/:id" element={<InventoryDetailPage />} />
           <Route path="/vendors" element={<VendorsPage />} />
           <Route path="/vendors/:id" element={<VendorDetailPage />} />

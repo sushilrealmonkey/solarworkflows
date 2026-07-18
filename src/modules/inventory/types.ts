@@ -105,13 +105,36 @@ export type InventoryItem = {
 };
 
 export type InventoryItemFormValues = {
-  catalog_product_id: string;
-  current_stock: string;
-  opening_stock: string;
   minimum_alert: string;
-  status: InventoryItemStatus;
-  inventory_date: string;
   notes: string;
+};
+
+export type InventoryOpeningBalanceCandidate = {
+  inventory_item_id: string;
+  product_id: string;
+  item_code: string | null;
+  product_code: string;
+  product_name: string;
+  unit: string | null;
+  current_stock: number;
+  opening_stock: number;
+  minimum_stock: number;
+};
+
+export type InventoryOpeningBalanceEntry = {
+  inventory_item_id: string;
+  quantity: number;
+};
+
+export type InventoryOpeningBalanceResult = {
+  processed_count: number;
+  transaction_ids: string[];
+};
+
+export type InventoryStockCorrectionValues = {
+  counted_quantity: string;
+  correction_date: string;
+  reason: string;
 };
 
 export type InventoryTransaction = {

@@ -8,9 +8,12 @@ import type {
   InventoryCatalogProduct,
   InventoryMasterOption,
   InventoryMasters,
+  InventoryOpeningBalanceCandidate,
+  InventoryOpeningBalanceEntry,
+  InventoryOpeningBalanceResult,
   InventoryProjectOption,
+  InventoryStockCorrectionValues,
   InventoryTransaction,
-  InventoryTransactionFormValues,
   InventoryTransactionWithRelations,
 } from "./types";
 import type { QuotationInventoryReservation } from "../quotations/types";
@@ -36,11 +39,6 @@ function nullable(value: string) {
   return trimmed ? trimmed : null;
 }
 
-function nullableUuid(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
 function numberValue(value: string, fallback = 0) {
   if (!value.trim()) {
     return fallback;
@@ -50,64 +48,9 @@ function numberValue(value: string, fallback = 0) {
   return Number.isFinite(nextValue) ? nextValue : fallback;
 }
 
-function dateValue(value: string) {
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
-async function ensureUniqueInventoryProduct(
-  organizationId: string,
-  catalogProductId: string,
-  ignoreItemId?: string,
-) {
-  const client = requireSupabase();
-  let query = client
-    .from("inventory_items")
-    .select("id")
-    .eq("organization_id", organizationId)
-    .eq("catalog_product_id", catalogProductId)
-    .eq("status", "active")
-    .limit(1);
-
-  if (ignoreItemId) {
-    query = query.neq("id", ignoreItemId);
-  }
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  if ((data ?? []).length > 0) {
-    throw new Error("This inventory item already exists. Please update stock instead.");
-  }
-}
-
 function itemPayload(values: InventoryItemFormValues) {
   return {
-    catalog_product_id: nullableUuid(values.catalog_product_id),
-    product_id: null,
-    brand_id: null,
-    model_id: null,
-    current_stock: numberValue(values.current_stock),
-    opening_stock: numberValue(values.opening_stock),
     minimum_stock: numberValue(values.minimum_alert),
-    status: values.status,
-    inventory_date: dateValue(values.inventory_date),
-    notes: nullable(values.notes),
-  };
-}
-
-function transactionPayload(values: InventoryTransactionFormValues) {
-  return {
-    item_id: values.item_id,
-    project_id: nullableUuid(values.project_id),
-    transaction_type: values.transaction_type,
-    quantity: numberValue(values.quantity),
-    transaction_date: values.transaction_date || new Date().toISOString().slice(0, 10),
-    reference_type: nullable(values.reference_type),
-    reference_id: nullableUuid(values.reference_id),
     notes: nullable(values.notes),
   };
 }
@@ -441,39 +384,6 @@ export async function fetchInventoryBatches(itemId: string) {
   return (data ?? []) as InventoryBatch[];
 }
 
-export async function createInventoryItem(
-  profile: UserProfile | null,
-  values: InventoryItemFormValues,
-) {
-  const client = requireSupabase();
-  const organizationId = requireOrganization(profile);
-
-  if (values.status === "active") {
-    await ensureUniqueInventoryProduct(organizationId, values.catalog_product_id);
-  }
-
-  const { data, error } = await client
-    .from("inventory_items")
-    .insert({
-      organization_id: organizationId,
-      ...itemPayload(values),
-    })
-    .select(inventoryItemSelect)
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const [itemWithReservations] = await attachReservationTotals([
-    redactLegacyInventoryPricing(data as unknown as InventoryItem),
-  ]);
-  return (
-    itemWithReservations ??
-    redactLegacyInventoryPricing(data as unknown as InventoryItem)
-  );
-}
-
 export async function updateInventoryItem(
   id: string,
   profile: UserProfile | null,
@@ -481,14 +391,6 @@ export async function updateInventoryItem(
 ) {
   const client = requireSupabase();
   const organizationId = requireOrganization(profile);
-
-  if (values.status === "active") {
-    await ensureUniqueInventoryProduct(
-      organizationId,
-      values.catalog_product_id,
-      id,
-    );
-  }
 
   const { data, error } = await client
     .from("inventory_items")
@@ -511,13 +413,55 @@ export async function updateInventoryItem(
   );
 }
 
-export async function deleteInventoryItem(id: string) {
+export async function fetchInventoryOpeningBalanceCandidates() {
   const client = requireSupabase();
-  const { error } = await client.from("inventory_items").delete().eq("id", id);
+  const { data, error } = await client.rpc(
+    "inventory_opening_balance_candidates",
+  );
 
   if (error) {
     throw new Error(error.message);
   }
+
+  return (data ?? []) as InventoryOpeningBalanceCandidate[];
+}
+
+export async function setInventoryOpeningBalances(
+  entries: InventoryOpeningBalanceEntry[],
+  balanceDate: string,
+  notes: string,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("set_inventory_opening_balances", {
+    entries,
+    balance_date: balanceDate,
+    notes: nullable(notes),
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as InventoryOpeningBalanceResult;
+}
+
+export async function correctInventoryStock(
+  itemId: string,
+  values: InventoryStockCorrectionValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("correct_inventory_stock", {
+    target_item_id: itemId,
+    counted_quantity: numberValue(values.counted_quantity),
+    correction_date: values.correction_date,
+    reason: values.reason.trim(),
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as InventoryTransaction;
 }
 
 export async function fetchInventoryTransactions(
@@ -607,28 +551,6 @@ export async function fetchProjectInventoryReservations(
   }
 
   return (data ?? []) as unknown as QuotationInventoryReservation[];
-}
-
-export async function createInventoryTransaction(
-  profile: UserProfile | null,
-  values: InventoryTransactionFormValues,
-) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("inventory_transactions")
-    .insert({
-      organization_id: requireOrganization(profile),
-      created_by: profile?.id ?? null,
-      ...transactionPayload(values),
-    })
-    .select("*")
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as InventoryTransaction;
 }
 
 export async function issueInventoryToProject(
