@@ -245,7 +245,7 @@ function emptyTemplateItem(): QuotationMaterialItem {
     specification: "",
     make_specification: "",
     quantity: "",
-    unit: "pcs",
+    unit: "",
   };
 }
 

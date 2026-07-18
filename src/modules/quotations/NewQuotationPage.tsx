@@ -70,7 +70,6 @@ import {
   quotationPanelTechnologyOptions,
   quotationSiteTypeOptions,
   quotationSystemTypeOptions,
-  quotationUnitOptions,
   quotationValidUntilFromDateInput,
   quotationToForm,
   surveyToQuotationForm,
@@ -200,12 +199,16 @@ export function NewQuotationPage() {
             return;
           }
 
+          const currentValues = quotationToForm(currentQuotation);
           setValues(
             newQuotationDefaults({
-              ...quotationToForm(currentQuotation),
-              material_items: mergeQuotationBomTemplateRows(
-                nextProductCategories,
-                quotationToForm(currentQuotation).material_items,
+              ...currentValues,
+              material_items: syncBomProductUnits(
+                mergeQuotationBomTemplateRows(
+                  nextProductCategories,
+                  currentValues.material_items,
+                ),
+                nextProducts,
               ),
             }),
           );
@@ -527,7 +530,7 @@ export function NewQuotationPage() {
 
   function updateBomRow(
     index: number,
-    key: "quantity" | "unit",
+    key: "quantity",
     value: string,
   ) {
     setValues((current) => ({
@@ -641,9 +644,12 @@ export function NewQuotationPage() {
         ? await updateQuotation(
             profile,
             editQuotationId,
-            prepareNewQuotationValues(values),
+            prepareNewQuotationValues(values, products),
           )
-        : await createQuotation(profile, prepareNewQuotationValues(values));
+        : await createQuotation(
+            profile,
+            prepareNewQuotationValues(values, products),
+          );
 
       let pdfGenerated = false;
       try {
@@ -953,8 +959,9 @@ export function NewQuotationPage() {
         <Section title="Standard Bill Of Material">
           <div className="space-y-4 md:col-span-2">
             <p className="text-sm text-slate-600">
-              Complete the product, quantity, and unit for each standard category.
-              Unused categories can be left blank.
+              Complete the product and quantity for each standard category. The
+              unit is inherited from Product Master. Unused categories can be left
+              blank.
             </p>
 
             <div className="space-y-3 md:hidden">
@@ -1004,15 +1011,6 @@ export function NewQuotationPage() {
                         onChange={(value) => updateBomRow(index, "quantity", value)}
                         type="number"
                       />
-                      <SelectInput
-                        label="Unit"
-                        value={item.unit}
-                        onChange={(value) => updateBomRow(index, "unit", value)}
-                        options={[
-                          { value: "", label: "Unit" },
-                          ...quotationUnitOptions.map((value) => ({ value, label: value })),
-                        ]}
-                      />
                       <ReadonlyFormValue label="HSN Code" value={item.hsn_code ?? ""} />
                       <ReadonlyFormValue label="Brand" value={item.brand ?? ""} />
                       <ReadonlyFormValue
@@ -1036,7 +1034,6 @@ export function NewQuotationPage() {
                     <th className="px-4 py-3">Brand</th>
                     <th className="px-4 py-3">Specifications</th>
                     <th className="px-4 py-3">Quantity</th>
-                    <th className="px-4 py-3">Unit</th>
                     <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
@@ -1091,23 +1088,6 @@ export function NewQuotationPage() {
                           />
                         </td>
                         <td className="px-4 py-3">
-                          <select
-                            aria-label={`Unit for ${bomCategoryLabel(item, productCategories)}`}
-                            className="w-24 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
-                            value={item.unit}
-                            onChange={(event) =>
-                              updateBomRow(index, "unit", event.target.value)
-                            }
-                          >
-                            <option value="">Unit</option>
-                            {quotationUnitOptions.map((value) => (
-                              <option key={value} value={value}>
-                                {value}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-4 py-3">
                           <Button
                             onClick={() => removeBomItem(index)}
                             variant="secondary"
@@ -1127,7 +1107,7 @@ export function NewQuotationPage() {
               <p className="mt-1 text-sm text-slate-600">
                 Use this only when the required material is outside the standard categories.
               </p>
-              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_.9fr_.9fr_1fr_1.2fr_88px_110px_auto]">
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_.9fr_.9fr_1fr_1.2fr_88px_auto]">
                 <SelectInput
                   label="Category"
                   value={bomDraft.product_category_id ?? ""}
@@ -1168,15 +1148,6 @@ export function NewQuotationPage() {
                   value={bomDraft.quantity}
                   onChange={(value) => updateBomDraft("quantity", value)}
                   type="number"
-                />
-                <SelectInput
-                  label="Unit"
-                  value={bomDraft.unit}
-                  onChange={(value) => updateBomDraft("unit", value)}
-                  options={[
-                    { value: "", label: "Unit" },
-                    ...quotationUnitOptions.map((value) => ({ value, label: value })),
-                  ]}
                 />
                 <div className="flex items-end">
                   <Button onClick={addBomDraft}>Add</Button>
@@ -1902,10 +1873,15 @@ function newQuotationDefaults(values: QuotationFormValues): QuotationFormValues 
   };
 }
 
-function prepareNewQuotationValues(values: QuotationFormValues): QuotationFormValues {
+function prepareNewQuotationValues(
+  values: QuotationFormValues,
+  products: Product[],
+): QuotationFormValues {
   const preparedValues = newQuotationDefaults(values);
-  const material_items = preparedValues.material_items
-    .filter(hasSavedBomItem)
+  const material_items = syncBomProductUnits(
+    preparedValues.material_items.filter(hasSavedBomItem),
+    products,
+  )
     .map((item) => ({
       ...item,
       brand: item.brand ?? "",
@@ -2017,6 +1993,7 @@ function materialItemWithProduct(
       brand: "",
       specification: "",
       make_specification: "",
+      unit: "",
     };
   }
 
@@ -2034,8 +2011,20 @@ function materialItemWithProduct(
     make_specification:
       [product.brand, specification].filter(Boolean).join(" / ") ||
       item.make_specification,
-    unit: product.unit || item.unit,
+    unit: product.unit,
   };
+}
+
+function syncBomProductUnits(
+  items: QuotationMaterialItem[],
+  products: Product[],
+) {
+  const productsById = new Map(products.map((product) => [product.id, product]));
+
+  return items.map((item) => {
+    const product = item.product_id ? productsById.get(item.product_id) : null;
+    return product ? { ...item, unit: product.unit } : item;
+  });
 }
 
 function emptyMaterialItem(): QuotationMaterialItem {
@@ -2049,7 +2038,7 @@ function emptyMaterialItem(): QuotationMaterialItem {
     specification: "",
     make_specification: "",
     quantity: "",
-    unit: "pcs",
+    unit: "",
   };
 }
 
