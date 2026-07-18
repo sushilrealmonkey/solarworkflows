@@ -498,7 +498,8 @@ export function LeadFormModal({
       <TextInput label="Full Name" value={values.full_name} onChange={(value) => update("full_name", value)} error={errors.full_name} required />
       <TextInput label="Phone" value={values.phone} onChange={(value) => update("phone", value)} error={errors.phone} required />
       <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} type="email" />
-      <TextArea label="Address" value={values.address} onChange={(value) => update("address", value)} />
+      <TextInput label="Offered Price" value={values.offered_price} onChange={(value) => update("offered_price", value)} type="number" />
+      <TextArea label="Full Address" value={values.address} onChange={(value) => update("address", value)} />
       <TextInput label="City" value={values.city} onChange={(value) => update("city", value)} />
       <SelectInput
         label="Enquiry Source"
@@ -518,7 +519,6 @@ export function LeadFormModal({
           ...leadRequirementTypeOptions.map((value) => ({ value, label: value })),
         ]}
       />
-      <TextInput label="Offered Price" value={values.offered_price} onChange={(value) => update("offered_price", value)} type="number" />
       <SelectInput label="Status" value={values.status} onChange={(value) => update("status", value)} options={leadStatusOptions.map((value) => ({ value, label: labelize(value) }))} />
       <SelectInput label="Priority" value={values.priority} onChange={(value) => update("priority", value)} options={leadPriorityOptions.map((value) => ({ value, label: labelize(value) }))} />
       <StaffSelect staff={staff} value={values.assigned_to} onChange={(value) => update("assigned_to", value)} />

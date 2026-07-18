@@ -121,6 +121,8 @@ export type QuotationDetailSnapshot = {
 
 export type QuotationMaterialItem = {
   inventory_item_id: string;
+  bom_category_key?: string;
+  bom_category_name?: string;
   product_category_id?: string;
   product_id?: string;
   hsn_code?: string;

@@ -82,6 +82,10 @@ import type {
   QuotationWarrantyFormValues,
 } from "./types";
 import { generateAndStoreQuotationPdf } from "./quotationPdfWorkflow";
+import {
+  mergeQuotationBomTemplateRows,
+  productsForQuotationBomRow,
+} from "./quotationBomTemplate";
 
 const tabs = [
   "Project",
@@ -196,7 +200,15 @@ export function NewQuotationPage() {
             return;
           }
 
-          setValues(newQuotationDefaults(quotationToForm(currentQuotation)));
+          setValues(
+            newQuotationDefaults({
+              ...quotationToForm(currentQuotation),
+              material_items: mergeQuotationBomTemplateRows(
+                nextProductCategories,
+                quotationToForm(currentQuotation).material_items,
+              ),
+            }),
+          );
           return;
         }
 
@@ -204,11 +216,14 @@ export function NewQuotationPage() {
           profile,
           nextSettings?.quotation_prefix,
         );
-        setValues((current) =>
-          current.quotation_code
-            ? current
-            : { ...current, quotation_code: nextQuotationCode },
-        );
+        setValues((current) => ({
+          ...current,
+          quotation_code: current.quotation_code || nextQuotationCode,
+          material_items: mergeQuotationBomTemplateRows(
+            nextProductCategories,
+            current.material_items,
+          ),
+        }));
       } catch (nextError) {
         setLoadError(
           nextError instanceof Error
@@ -242,6 +257,7 @@ export function NewQuotationPage() {
                 ...surveyValues,
                 quotation_code:
                   current.quotation_code || surveyValues.quotation_code,
+                material_items: current.material_items,
               }),
             );
           }
@@ -256,6 +272,7 @@ export function NewQuotationPage() {
               newQuotationDefaults({
                 ...leadValues,
                 quotation_code: current.quotation_code || leadValues.quotation_code,
+                material_items: current.material_items,
               }),
             );
           }
@@ -497,6 +514,30 @@ export function NewQuotationPage() {
     setBomDraft((current) => ({ ...current, [key]: value }));
   }
 
+  function updateBomRowProduct(index: number, productId: string) {
+    setValues((current) => ({
+      ...current,
+      material_items: current.material_items.map((item, itemIndex) =>
+        itemIndex === index
+          ? materialItemWithProduct(item, productId, products)
+          : item,
+      ),
+    }));
+  }
+
+  function updateBomRow(
+    index: number,
+    key: "quantity" | "unit",
+    value: string,
+  ) {
+    setValues((current) => ({
+      ...current,
+      material_items: current.material_items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item,
+      ),
+    }));
+  }
+
   function addBomDraft() {
     if (!bomDraft.product_category_id) {
       showToast("Select a BOM category.", "error");
@@ -510,18 +551,29 @@ export function NewQuotationPage() {
 
     setValues((current) => ({
       ...current,
-      material_items: [...current.material_items.filter(hasSavedBomItem), bomDraft],
+      material_items: [...current.material_items, bomDraft],
     }));
     setBomDraft(emptyMaterialItem());
   }
 
   function removeBomItem(index: number) {
-    setValues((current) => ({
-      ...current,
-      material_items: current.material_items
-        .filter(hasSavedBomItem)
-        .filter((_, itemIndex) => itemIndex !== index),
-    }));
+    setValues((current) => {
+      const item = current.material_items[index];
+      const nextItems = item?.bom_category_key
+        ? current.material_items.map((candidate, itemIndex) =>
+            itemIndex === index
+              ? {
+                  ...emptyMaterialItem(),
+                  bom_category_key: candidate.bom_category_key,
+                  bom_category_name: candidate.bom_category_name,
+                  product_category_id: candidate.product_category_id,
+                }
+              : candidate,
+          )
+        : current.material_items.filter((_, itemIndex) => itemIndex !== index);
+
+      return { ...current, material_items: nextItems };
+    });
   }
 
   function updateWarranty(
@@ -899,68 +951,81 @@ export function NewQuotationPage() {
 
       {activeTab === "BOM" ? (
         <Section title="Standard Bill Of Material">
-          <div className="space-y-3 md:col-span-2">
-            <div className="grid gap-3 rounded-lg border border-stone-200 p-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_.9fr_.9fr_1fr_1.2fr_88px_110px_auto]">
-              <SelectInput
-                label="Category"
-                value={bomDraft.product_category_id ?? ""}
-                onChange={updateBomDraftCategory}
-                options={[
-                  { value: "", label: "Category" },
-                  ...productCategories.map((category) => ({
-                    value: category.id,
-                    label: category.name,
-                  })),
-                ]}
-              />
-              <SelectInput
-                label="Product"
-                value={bomDraft.product_id ?? ""}
-                onChange={updateBomDraftProduct}
-                options={[
-                  { value: "", label: "Product" },
-                  ...products
-                    .filter(
-                      (product) =>
-                        product.category_id ===
-                        (bomDraft.product_category_id ?? ""),
-                    )
-                    .map((product) => ({
-                      value: product.id,
-                      label: productOptionLabel(product),
-                    })),
-                ]}
-              />
-              <ReadonlyFormValue
-                label="HSN Code"
-                value={bomDraft.hsn_code ?? ""}
-              />
-              <ReadonlyFormValue label="Brand" value={bomDraft.brand ?? ""} />
-              <ReadonlyFormValue
-                label="Specifications"
-                value={bomDraft.specification ?? ""}
-              />
-              <TextInput
-                label="Quantity"
-                value={bomDraft.quantity}
-                onChange={(value) => updateBomDraft("quantity", value)}
-                type="number"
-              />
-              <SelectInput
-                label="Unit"
-                value={bomDraft.unit}
-                onChange={(value) => updateBomDraft("unit", value)}
-                options={[
-                  { value: "", label: "Unit" },
-                  ...quotationUnitOptions.map((value) => ({ value, label: value })),
-                ]}
-              />
-              <div className="flex items-end">
-                <Button onClick={addBomDraft}>Add</Button>
-              </div>
+          <div className="space-y-4 md:col-span-2">
+            <p className="text-sm text-slate-600">
+              Complete the product, quantity, and unit for each standard category.
+              Unused categories can be left blank.
+            </p>
+
+            <div className="space-y-3 md:hidden">
+              {values.material_items.map((item, index) => {
+                const rowProducts = productsForQuotationBomRow(
+                  item,
+                  products,
+                  productCategories,
+                );
+                const categoryLabel = bomCategoryLabel(item, productCategories);
+
+                return (
+                  <article
+                    className="rounded-xl border border-stone-200 bg-white p-4"
+                    key={item.bom_category_key ?? `${item.product_id ?? "item"}-${index}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Category {index + 1}
+                        </p>
+                        <h3 className="mt-1 font-semibold text-slate-950">
+                          {categoryLabel}
+                        </h3>
+                      </div>
+                      <Button onClick={() => removeBomItem(index)} variant="secondary">
+                        {item.bom_category_key ? "Clear" : "Remove"}
+                      </Button>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <SelectInput
+                        label="Product"
+                        value={item.product_id ?? ""}
+                        onChange={(value) => updateBomRowProduct(index, value)}
+                        options={[
+                          { value: "", label: "Select product" },
+                          ...rowProducts.map((product) => ({
+                            value: product.id,
+                            label: productOptionLabel(product),
+                          })),
+                        ]}
+                      />
+                      <TextInput
+                        label="Quantity"
+                        value={item.quantity}
+                        onChange={(value) => updateBomRow(index, "quantity", value)}
+                        type="number"
+                      />
+                      <SelectInput
+                        label="Unit"
+                        value={item.unit}
+                        onChange={(value) => updateBomRow(index, "unit", value)}
+                        options={[
+                          { value: "", label: "Unit" },
+                          ...quotationUnitOptions.map((value) => ({ value, label: value })),
+                        ]}
+                      />
+                      <ReadonlyFormValue label="HSN Code" value={item.hsn_code ?? ""} />
+                      <ReadonlyFormValue label="Brand" value={item.brand ?? ""} />
+                      <ReadonlyFormValue
+                        label="Specifications"
+                        value={item.specification ?? item.make_specification ?? ""}
+                      />
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-stone-200">
+            <div className="hidden overflow-x-auto rounded-xl border border-stone-200 md:block">
               <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
                 <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
@@ -976,48 +1041,147 @@ export function NewQuotationPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {savedBomItems.length > 0 ? (
-                    savedBomItems.map((item, index) => (
-                      <tr key={`${item.product_id ?? item.description}-${index}`}>
+                  {values.material_items.map((item, index) => {
+                    const rowProducts = productsForQuotationBomRow(
+                      item,
+                      products,
+                      productCategories,
+                    );
+
+                    return (
+                      <tr
+                        key={item.bom_category_key ?? `${item.product_id ?? "item"}-${index}`}
+                      >
                         <td className="px-4 py-3">{index + 1}</td>
-                        <td className="px-4 py-3">
-                          {productCategoryName(
-                            productCategories,
-                            item.product_category_id,
-                          )}
+                        <td className="px-4 py-3 font-semibold text-slate-900">
+                          {bomCategoryLabel(item, productCategories)}
                         </td>
-                        <td className="px-4 py-3 font-medium text-slate-900">
-                          {item.description || "-"}
+                        <td className="min-w-64 px-4 py-3">
+                          <select
+                            aria-label={`Product for ${bomCategoryLabel(item, productCategories)}`}
+                            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+                            value={item.product_id ?? ""}
+                            onChange={(event) =>
+                              updateBomRowProduct(index, event.target.value)
+                            }
+                          >
+                            <option value="">Select product</option>
+                            {rowProducts.map((product) => (
+                              <option key={product.id} value={product.id}>
+                                {productOptionLabel(product)}
+                              </option>
+                            ))}
+                          </select>
                         </td>
                         <td className="px-4 py-3">{item.hsn_code || "-"}</td>
                         <td className="px-4 py-3">{item.brand || "-"}</td>
                         <td className="px-4 py-3">
                           {item.specification || item.make_specification || "-"}
                         </td>
-                        <td className="px-4 py-3">{item.quantity || "-"}</td>
-                        <td className="px-4 py-3">{item.unit || "-"}</td>
+                        <td className="px-4 py-3">
+                          <input
+                            aria-label={`Quantity for ${bomCategoryLabel(item, productCategories)}`}
+                            className="w-24 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+                            min="0"
+                            type="number"
+                            value={item.quantity}
+                            onChange={(event) =>
+                              updateBomRow(index, "quantity", event.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            aria-label={`Unit for ${bomCategoryLabel(item, productCategories)}`}
+                            className="w-24 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+                            value={item.unit}
+                            onChange={(event) =>
+                              updateBomRow(index, "unit", event.target.value)
+                            }
+                          >
+                            <option value="">Unit</option>
+                            {quotationUnitOptions.map((value) => (
+                              <option key={value} value={value}>
+                                {value}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
                         <td className="px-4 py-3">
                           <Button
                             onClick={() => removeBomItem(index)}
                             variant="secondary"
                           >
-                            Remove
+                            {item.bom_category_key ? "Clear" : "Remove"}
                           </Button>
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        className="px-4 py-6 text-center text-sm text-slate-500"
-                        colSpan={10}
-                      >
-                        No BOM items added.
-                      </td>
-                    </tr>
-                  )}
+                    );
+                  })}
                 </tbody>
               </table>
+            </div>
+
+            <div className="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4">
+              <h3 className="font-semibold text-slate-950">Add another BOM item</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Use this only when the required material is outside the standard categories.
+              </p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.35fr_.9fr_.9fr_1fr_1.2fr_88px_110px_auto]">
+                <SelectInput
+                  label="Category"
+                  value={bomDraft.product_category_id ?? ""}
+                  onChange={updateBomDraftCategory}
+                  options={[
+                    { value: "", label: "Category" },
+                    ...productCategories.map((category) => ({
+                      value: category.id,
+                      label: category.name,
+                    })),
+                  ]}
+                />
+                <SelectInput
+                  label="Product"
+                  value={bomDraft.product_id ?? ""}
+                  onChange={updateBomDraftProduct}
+                  options={[
+                    { value: "", label: "Product" },
+                    ...products
+                      .filter(
+                        (product) =>
+                          product.category_id === (bomDraft.product_category_id ?? ""),
+                      )
+                      .map((product) => ({
+                        value: product.id,
+                        label: productOptionLabel(product),
+                      })),
+                  ]}
+                />
+                <ReadonlyFormValue label="HSN Code" value={bomDraft.hsn_code ?? ""} />
+                <ReadonlyFormValue label="Brand" value={bomDraft.brand ?? ""} />
+                <ReadonlyFormValue
+                  label="Specifications"
+                  value={bomDraft.specification ?? ""}
+                />
+                <TextInput
+                  label="Quantity"
+                  value={bomDraft.quantity}
+                  onChange={(value) => updateBomDraft("quantity", value)}
+                  type="number"
+                />
+                <SelectInput
+                  label="Unit"
+                  value={bomDraft.unit}
+                  onChange={(value) => updateBomDraft("unit", value)}
+                  options={[
+                    { value: "", label: "Unit" },
+                    ...quotationUnitOptions.map((value) => ({ value, label: value })),
+                  ]}
+                />
+                <div className="flex items-end">
+                  <Button onClick={addBomDraft}>Add</Button>
+                </div>
+              </div>
             </div>
           </div>
         </Section>
@@ -1424,16 +1588,7 @@ function ProposalPreview({
   customerLabel: string;
   values: QuotationFormValues;
 }) {
-  const bomRows = values.material_items.filter((item) =>
-    [
-      item.description,
-      item.brand,
-      item.specification,
-      item.make_specification,
-      item.quantity,
-      item.unit,
-    ].some((value) => value?.trim()),
-  );
+  const bomRows = values.material_items.filter(hasSavedBomItem);
   const warrantyRows = values.warranty_rows.filter((item) =>
     [item.component, item.warranty_text].some((value) => value.trim()),
   );
@@ -1918,6 +2073,16 @@ function productCategoryName(
   categoryId: string | undefined,
 ) {
   return categories.find((category) => category.id === categoryId)?.name ?? "-";
+}
+
+function bomCategoryLabel(
+  item: QuotationMaterialItem,
+  categories: ProductCategory[],
+) {
+  return (
+    item.bom_category_name ||
+    productCategoryName(categories, item.product_category_id)
+  );
 }
 
 function productOptionLabel(product: Product) {

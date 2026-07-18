@@ -16,6 +16,12 @@ on public.inventory_transactions (company_id);
 create index if not exists inventory_transactions_vendor_id_idx
 on public.inventory_transactions (vendor_id);
 
+-- Ledger rows are append-only during normal application use. Temporarily
+-- disable only that mutation guard while this migration backfills the new
+-- receipt metadata, then restore it before the migration completes.
+alter table public.inventory_transactions
+disable trigger prevent_inventory_transaction_updates;
+
 update public.inventory_transactions
 set company_id = organizations.company_id
 from public.organizations
@@ -58,6 +64,9 @@ set
 where ledger.transaction_type = 'stock_in'
   and ledger.reference_type = 'purchase_order'
   and ledger.reference_id is not null;
+
+alter table public.inventory_transactions
+enable trigger prevent_inventory_transaction_updates;
 
 create or replace function public.set_inventory_transactions_receipt_details()
 returns trigger
@@ -128,3 +137,5 @@ create trigger set_inventory_transactions_receipt_details
 before insert on public.inventory_transactions
 for each row
 execute function public.set_inventory_transactions_receipt_details();
+
+notify pgrst, 'reload schema';
