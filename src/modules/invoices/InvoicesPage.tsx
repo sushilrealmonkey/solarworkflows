@@ -60,11 +60,17 @@ import {
   fetchInvoicePdfPreviewUrl,
   generateAndStoreInvoicePdf,
 } from "./invoicePdfWorkflow";
+import {
+  createInvoiceFromProformaInvoice,
+  fetchProformaInvoiceItems,
+} from "../proforma-invoices/proformaInvoiceApi";
+import type { ProformaInvoiceItem } from "../proforma-invoices/types";
 import type {
   InvoiceCreationMode,
   InvoiceFormValues,
   InvoiceLinkOptions,
   InvoicePaymentFormValues,
+  InvoiceProformaOption,
   InvoiceProjectOption,
   InvoiceQuotationSummary,
   InvoiceWithRelations,
@@ -188,22 +194,56 @@ export function InvoicesPage() {
 
   useEffect(() => {
     const projectId = searchParams.get("projectId");
-    if (!projectId || loading || !canCreate || formState) {
+    const proformaInvoiceId = searchParams.get("proformaInvoiceId");
+    if (
+      (!projectId && !proformaInvoiceId) ||
+      loading ||
+      !canCreate ||
+      formState
+    ) {
       return;
     }
 
-    const project = options.projects.find((option) => option.id === projectId);
-    if (!project) {
+    const proformaInvoice = proformaInvoiceId
+      ? options.proformaInvoices?.find(
+          (option) => option.id === proformaInvoiceId,
+        )
+      : undefined;
+    if (proformaInvoiceId && !proformaInvoice) {
       return;
     }
 
-    void openCreateForm(project, {
-      inventoryItemId: searchParams.get("inventoryItemId") ?? undefined,
-      quantity: searchParams.get("quantity") ?? undefined,
-    });
+    const project = projectId
+      ? options.projects.find((option) => option.id === projectId)
+      : proformaInvoice?.project_id
+        ? options.projects.find(
+            (option) => option.id === proformaInvoice.project_id,
+          )
+        : undefined;
+    if (projectId && !project) {
+      return;
+    }
+
+    const creationMode: InvoiceCreationMode =
+      proformaInvoice?.project_id || project ? "project" : "manual";
+    void openCreateForm(
+      creationMode,
+      project,
+      {
+        inventoryItemId: searchParams.get("inventoryItemId") ?? undefined,
+        quantity: searchParams.get("quantity") ?? undefined,
+      },
+      proformaInvoiceId ?? undefined,
+    );
     setSearchParams({}, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, loading, canCreate, options.projects.length]);
+  }, [
+    searchParams,
+    loading,
+    canCreate,
+    options.projects.length,
+    options.proformaInvoices?.length,
+  ]);
 
   const filteredInvoices = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -264,14 +304,19 @@ export function InvoicesPage() {
   }
 
   async function openCreateForm(
+    creationMode: InvoiceCreationMode,
     project?: InvoiceProjectOption,
     itemPrefill?: InvoiceItemPrefill,
+    proformaInvoiceId?: string,
   ) {
     let currentProject = project;
     let currentOptions = options;
 
     try {
-      const nextOptions = await fetchInvoiceLinkOptions(profile);
+      const nextOptions = await fetchInvoiceLinkOptions(
+        profile,
+        creationMode === "project" ? "project_based" : "b2b_direct",
+      );
       setOptions(nextOptions);
       currentOptions = nextOptions;
       currentProject = project
@@ -286,13 +331,19 @@ export function InvoicesPage() {
       );
     }
 
-    const values = emptyInvoiceForm(currentProject, "project");
+    let values = emptyInvoiceForm(currentProject, creationMode);
     const prefilledInventoryItem = prefillItemFromInventory(
       currentOptions,
       itemPrefill,
     );
+    const selectedProformaInvoice = proformaInvoiceId
+      ? currentOptions.proformaInvoices?.find((option) => option.id === proformaInvoiceId)
+      : undefined;
 
-    if (prefilledInventoryItem) {
+
+    if (selectedProformaInvoice) {
+      values = await prefillFormFromProforma(selectedProformaInvoice);
+    } else if (prefilledInventoryItem) {
       values.items = [prefilledInventoryItem];
     } else if (currentProject?.quotation_id) {
       values.items = await prefillItemsFromQuotation(currentProject.quotation);
@@ -425,6 +476,72 @@ export function InvoicesPage() {
     });
   }
 
+  async function handleProformaChange(proformaInvoiceId: string) {
+    if (!formState || formState.mode !== "create") {
+      return;
+    }
+
+    if (!proformaInvoiceId) {
+      const creationMode = formState.values.creation_mode;
+      setFormErrors({});
+      setFormState({
+        ...formState,
+        values: emptyInvoiceForm(null, creationMode),
+      });
+      return;
+    }
+
+    const proformaInvoice = options.proformaInvoices?.find(
+      (option) => option.id === proformaInvoiceId,
+    );
+    if (!proformaInvoice) {
+      showToast("The selected proforma invoice is no longer available.", "error");
+      return;
+    }
+
+    try {
+      const values = await prefillFormFromProforma(proformaInvoice);
+      setFormErrors({});
+      setFormState((current) =>
+        current?.mode === "create" ? { ...current, values } : current,
+      );
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to copy the proforma invoice details.",
+        "error",
+      );
+    }
+  }
+
+  async function prefillFormFromProforma(
+    proformaInvoice: InvoiceProformaOption,
+  ) {
+    const creationMode: InvoiceCreationMode = proformaInvoice.project_id
+      ? "project"
+      : "manual";
+    const project = proformaInvoice.project_id
+      ? options.projects.find((option) => option.id === proformaInvoice.project_id)
+      : null;
+    const proformaItems = await fetchProformaInvoiceItems(
+      profile,
+      proformaInvoice.id,
+    );
+    const values = emptyInvoiceForm(project, creationMode);
+
+    return {
+      ...values,
+      proforma_invoice_id: proformaInvoice.id,
+      customer_id: proformaInvoice.customer_id,
+      project_id: proformaInvoice.project_id ?? "",
+      quotation_id: proformaInvoice.quotation_id ?? "",
+      due_date: proformaInvoice.due_date ?? values.due_date,
+      notes: proformaInvoice.notes ?? "",
+      items: proformaItems.map(proformaItemToInvoiceForm),
+    };
+  }
+
   async function handleCreateProjectChange(projectId: string) {
     const project = options.projects.find((option) => option.id === projectId);
     const items = project?.quotation_id
@@ -442,6 +559,7 @@ export function InvoicesPage() {
         values: {
           ...current.values,
           creation_mode: "project",
+          proforma_invoice_id: "",
           project_id: projectId,
           customer_id: project?.customer_id ?? "",
           quotation_id: project?.quotation_id ?? "",
@@ -506,7 +624,11 @@ export function InvoicesPage() {
     try {
       setSaving(true);
       if (formState.mode === "create") {
-        const createdInvoice = await createInvoice(profile, formState.values);
+        const createdInvoice = formState.values.proforma_invoice_id
+          ? await createInvoiceFromProformaInvoice(
+              formState.values.proforma_invoice_id,
+            )
+          : await createInvoice(profile, formState.values);
         let pdfGenerated = false;
         let pdfGenerationFailed = false;
 
@@ -597,12 +719,20 @@ export function InvoicesPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
           title="Tax Invoices"
-          description="Create project-first tax invoices, with manual item tax invoices available for customer-only billing."
+          description="Create separate B2B and project tax invoices, or copy a paid proforma invoice."
         />
         {canCreate ? (
-          <Button onClick={() => void openCreateForm()}>
-            Create Project Invoice
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button onClick={() => void openCreateForm("manual")}>
+              Create for B2B
+            </Button>
+            <Button
+              onClick={() => void openCreateForm("project")}
+              variant="secondary"
+            >
+              Create for Project
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -648,12 +778,20 @@ export function InvoicesPage() {
       {!loading && !error && filteredInvoices.length === 0 ? (
         <EmptyState
           title="No tax invoices found"
-          description="Create a project tax invoice first, or use a manual item tax invoice for customer-only billing."
+          description="Create a B2B or project tax invoice, with optional proforma invoice prefill."
           action={
             canCreate ? (
-              <Button onClick={() => void openCreateForm()}>
-                Create Project Invoice
-              </Button>
+              <div className="flex flex-col justify-center gap-2 sm:flex-row">
+                <Button onClick={() => void openCreateForm("manual")}>
+                  Create for B2B
+                </Button>
+                <Button
+                  onClick={() => void openCreateForm("project")}
+                  variant="secondary"
+                >
+                  Create for Project
+                </Button>
+              </div>
             ) : null
           }
         />
@@ -803,9 +941,9 @@ export function InvoicesPage() {
           title={
             formState.mode === "create" &&
             formState.values.creation_mode === "manual"
-              ? "Create Manual Item Invoice"
+              ? "Create B2B Tax Invoice"
               : formState.mode === "create"
-                ? "Create Project Invoice"
+                ? "Create Project Tax Invoice"
                 : "Edit Invoice"
           }
           values={formState.values}
@@ -818,6 +956,25 @@ export function InvoicesPage() {
           canAddItems={formState.mode === "create" || (canCreate && canUpdate)}
           canRemoveItems={formState.mode === "create" || (canDelete && canUpdate)}
           creationMode={formState.values.creation_mode}
+          creationModeLocked={formState.mode === "create"}
+          showProjectCustomerSelect={
+            formState.mode === "create" &&
+            formState.values.creation_mode === "project"
+          }
+          showProformaSelect={formState.mode === "create"}
+          proformaPrefillLocked={Boolean(
+            formState.values.proforma_invoice_id,
+          )}
+          customerLabel={
+            formState.values.creation_mode === "project"
+              ? "Project Customer"
+              : "B2B Customer"
+          }
+          onProformaChange={
+            formState.mode === "create"
+              ? (proformaInvoiceId) => void handleProformaChange(proformaInvoiceId)
+              : undefined
+          }
           duplicateProjectInvoice={duplicateProjectInvoice}
           onCreationModeChange={
             formState.mode === "create" ? handleCreationModeChange : undefined
@@ -848,6 +1005,18 @@ export function InvoicesPage() {
 
     </div>
   );
+}
+
+function proformaItemToInvoiceForm(item: ProformaInvoiceItem) {
+  return {
+    inventory_item_id: item.inventory_item_id ?? "",
+    item_name: item.item_name ?? "",
+    description: item.description ?? "",
+    quantity: numberToInput(item.quantity) || "1",
+    unit: item.unit ?? "",
+    unit_price: numberToInput(item.unit_price),
+    gst_percent: numberToInput(item.gst_percent) || "0",
+  };
 }
 
 function prefillItemFromInventory(

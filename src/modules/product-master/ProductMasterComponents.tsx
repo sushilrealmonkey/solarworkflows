@@ -91,14 +91,6 @@ export function ProductCategoryFormModal({
         error={errors.name}
         required
       />
-      <TextInput
-        label="Display Order"
-        type="number"
-        value={values.display_order}
-        onChange={(value) => update("display_order", value)}
-        error={errors.display_order}
-        required
-      />
       {categoryTypeEditable ? (
         <label className="block">
           <span className="text-sm font-medium text-slate-700">

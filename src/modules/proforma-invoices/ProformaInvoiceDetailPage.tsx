@@ -323,6 +323,12 @@ export function ProformaInvoiceDetailPage() {
     canCreatePayments &&
     ["sent", "partially_paid"].includes(proformaInvoice?.status ?? "") &&
     Number(proformaInvoice?.balance_due ?? 0) > 0;
+  const canStartTaxInvoice =
+    canCreate &&
+    !proformaInvoice?.archived_at &&
+    !proformaInvoice?.final_invoice_id &&
+    !["converted", "cancelled"].includes(proformaInvoice?.status ?? "");
+  const taxInvoiceReady = proformaInvoice?.status === "paid";
 
   return (
     <div className="space-y-6">
@@ -434,8 +440,13 @@ export function ProformaInvoiceDetailPage() {
               <ProformaNextStepSection
                 canMarkSent={canMarkSent}
                 canRecordPayment={canRecordPayment}
+                canCreateTaxInvoice={canStartTaxInvoice}
+                taxInvoiceReady={taxInvoiceReady}
                 downloadUrl={pdfPreviewUrl}
                 preparingPdf={preparingPdf}
+                onCreateTaxInvoice={() =>
+                  navigate(`/invoices?proformaInvoiceId=${proformaInvoice.id}`)
+                }
                 onMarkSent={() => setStatusTarget("sent")}
                 onRecordPayment={openPaymentForm}
               />
@@ -544,16 +555,22 @@ function PencilIcon() {
 function ProformaNextStepSection({
   canMarkSent,
   canRecordPayment,
+  canCreateTaxInvoice,
+  taxInvoiceReady,
   downloadUrl,
   preparingPdf,
+  onCreateTaxInvoice,
   onMarkSent,
   onRecordPayment,
 }: {
   canMarkSent: boolean;
   canRecordPayment: boolean;
+  canCreateTaxInvoice: boolean;
+  taxInvoiceReady: boolean;
   downloadUrl: string | null;
   preparingPdf: boolean;
   onMarkSent: () => void;
+  onCreateTaxInvoice: () => void;
   onRecordPayment: () => void;
 }) {
   return (
@@ -562,6 +579,21 @@ function ProformaNextStepSection({
       <div className="mt-4 grid gap-2">
         {canMarkSent ? <Button onClick={onMarkSent}>Mark Sent</Button> : null}
         <DownloadProformaAction preparing={preparingPdf} url={downloadUrl} />
+        {canCreateTaxInvoice ? (
+          <>
+            <Button
+              disabled={!taxInvoiceReady}
+              onClick={onCreateTaxInvoice}
+            >
+              Create Tax Invoice
+            </Button>
+            {!taxInvoiceReady ? (
+              <p className="text-xs leading-5 text-slate-500">
+                Available after the proforma invoice is fully paid.
+              </p>
+            ) : null}
+          </>
+        ) : null}
         {canRecordPayment ? (
           <Button onClick={onRecordPayment} variant="secondary">
             Record Payment

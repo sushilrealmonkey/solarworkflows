@@ -25,6 +25,7 @@ export async function generateAndStoreInvoicePdf(
       document_type: "invoice_pdf",
       document_name: `${invoice.invoice_code ?? "Invoice"} PDF`,
       file_path: filePath,
+      proforma_invoice_id: invoice.proforma_invoice_id,
       customer_id: invoice.customer_id,
       project_id: invoice.project_id,
       quotation_id: invoice.quotation_id,

@@ -11,7 +11,6 @@ import { formatMoney } from "../quotations/quotationUtils";
 import {
   paymentModeOptions,
   paymentSourceOptions,
-  paymentStatusOptions,
   paymentStatusTone,
   projectPaymentLabel,
   sourceDefaultMode,
@@ -21,7 +20,6 @@ import type {
   PaymentProjectOption,
   PaymentProjectSummary,
   PaymentSource,
-  PaymentStatus,
 } from "./types";
 
 export function PaymentStatusBadge({
@@ -178,7 +176,7 @@ export function PaymentFormModal({
         }))}
       />
       <TextInput
-        label="Amount"
+        label="Total"
         value={values.amount}
         onChange={(value) => update("amount", value)}
         error={errors.amount}
@@ -207,20 +205,6 @@ export function PaymentFormModal({
         label="Loan Account Number"
         value={values.loan_account_number}
         onChange={(value) => update("loan_account_number", value)}
-      />
-      <TextInput
-        label="Receipt URL"
-        value={values.receipt_url}
-        onChange={(value) => update("receipt_url", value)}
-      />
-      <SelectInput
-        label="Status"
-        value={values.status}
-        onChange={(value) => update("status", value as PaymentStatus)}
-        options={paymentStatusOptions.map((value) => ({
-          value,
-          label: labelize(value),
-        }))}
       />
       <TextArea
         label="Notes"

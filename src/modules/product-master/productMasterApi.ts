@@ -12,7 +12,6 @@ import type {
   ProductStatus,
   ProductUsageSummary,
 } from "./types";
-import { importCatalogLibraryDefaults } from "../catalog-library/catalogLibraryApi";
 
 function requireSupabase() {
   if (!supabase) {
@@ -67,7 +66,6 @@ function categoryPayload(
   return {
     name: values.name.trim(),
     description: nullable(values.description),
-    display_order: Number(values.display_order),
     ...(includeCategoryType ? { category_type: values.category_type } : {}),
   };
 }
@@ -75,6 +73,7 @@ function categoryPayload(
 const productSelect = `
   id,
   tenant_id,
+  serial_number,
   product_code,
   product_name,
   category_id,
@@ -258,10 +257,6 @@ export async function fetchProductBrandSuggestions(
   ];
 
   return uniqueNames(names);
-}
-
-export async function importProductCatalogDefaults() {
-  return importCatalogLibraryDefaults();
 }
 
 export async function fetchProduct(profile: UserProfile | null, id: string) {

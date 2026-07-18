@@ -327,6 +327,7 @@ export function ProductMasterPage() {
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
+                  <th className="px-4 py-3">S. No.</th>
                   <th className="px-4 py-3">Product Code</th>
                   <th className="px-4 py-3">Display Name</th>
                   <th className="px-4 py-3">Category</th>
@@ -348,6 +349,9 @@ export function ProductMasterPage() {
                       role="link"
                       tabIndex={0}
                     >
+                      <td className="px-4 py-3 font-semibold text-slate-950">
+                        {product.serial_number}
+                      </td>
                       <td className="px-4 py-3 font-semibold text-slate-950">
                         {product.product_code}
                       </td>
@@ -380,7 +384,7 @@ export function ProductMasterPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {product.product_code}
+                      S. No. {product.serial_number} / {product.product_code}
                     </p>
                     <Link
                       className="mt-1 block text-base font-semibold text-[#06173f]"

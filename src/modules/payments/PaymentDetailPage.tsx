@@ -194,7 +194,7 @@ export function PaymentDetailPage() {
 
           <DetailSection title="Payment Details">
             <DetailItem label="Payment Date" value={formatDate(payment.payment_date)} />
-            <DetailItem label="Amount" value={formatMoney(payment.amount)} />
+            <DetailItem label="Total" value={formatMoney(payment.amount)} />
             <DetailItem
               label="Payment Source"
               value={labelize(payment.payment_source)}

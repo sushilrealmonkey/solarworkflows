@@ -33,7 +33,3 @@ export type CatalogLibraryBrandFormValues = {
   display_order: string;
   is_active: boolean;
 };
-
-export type CatalogLibraryImportResult = {
-  categories_imported?: number;
-};

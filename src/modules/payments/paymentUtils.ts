@@ -133,8 +133,8 @@ export function validatePaymentForm(values: PaymentFormValues) {
   return {
     project_id: requiredError(values.project_id, "Project"),
     amount:
-      requiredError(values.amount, "Amount") ||
-      (!Number.isFinite(amount) || amount < 0 ? "Amount must be 0 or more." : ""),
+      requiredError(values.amount, "Total") ||
+      (!Number.isFinite(amount) || amount < 0 ? "Total must be 0 or more." : ""),
     payment_date: requiredError(values.payment_date, "Payment date"),
   };
 }

@@ -4,7 +4,6 @@ import type {
   CatalogLibraryBrandFormValues,
   CatalogLibraryCategory,
   CatalogLibraryCategoryFormValues,
-  CatalogLibraryImportResult,
 } from "./types";
 
 function requireSupabase() {
@@ -143,15 +142,4 @@ export async function updateCatalogLibraryBrand(
   }
 
   return data as CatalogLibraryBrand;
-}
-
-export async function importCatalogLibraryDefaults() {
-  const client = requireSupabase();
-  const { data, error } = await client.rpc("import_catalog_library_defaults");
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return (data ?? {}) as CatalogLibraryImportResult;
 }

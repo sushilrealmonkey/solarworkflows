@@ -55,7 +55,6 @@ export function emptyProductCategoryForm(): ProductCategoryFormValues {
   return {
     name: "",
     category_type: "",
-    display_order: "999",
     description: "",
   };
 }
@@ -66,7 +65,6 @@ export function productCategoryToForm(
   return {
     name: category.name ?? "",
     category_type: category.category_type ?? "",
-    display_order: numberToInput(category.display_order),
     description: category.description ?? "",
   };
 }
@@ -201,7 +199,6 @@ export function validateProductCategoryForm(values: ProductCategoryFormValues) {
   return {
     name: requiredError(values.name, "Category name"),
     category_type: requiredError(values.category_type, "Category type"),
-    display_order: positiveIntegerError(values.display_order, "Display order"),
   };
 }
 
@@ -225,24 +222,6 @@ function nonNegativeNumberError(value: string, label: string) {
 
   if (nextValue < 0) {
     return `${label} cannot be negative.`;
-  }
-
-  return "";
-}
-
-function positiveIntegerError(value: string, label: string) {
-  if (!value.trim()) {
-    return `${label} is required.`;
-  }
-
-  const nextValue = Number(value);
-
-  if (!Number.isInteger(nextValue)) {
-    return `${label} must be a positive integer.`;
-  }
-
-  if (nextValue <= 0) {
-    return `${label} cannot be negative or zero.`;
   }
 
   return "";

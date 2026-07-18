@@ -91,6 +91,12 @@ export function InvoiceFormModal({
   includeItems,
   creationMode,
   onCreationModeChange,
+  creationModeLocked = false,
+  showProjectCustomerSelect = false,
+  showProformaSelect = false,
+  proformaPrefillLocked = false,
+  onProformaChange,
+  customerLabel = "Customer",
   duplicateProjectInvoice,
   canAddItems = true,
   canRemoveItems = true,
@@ -107,6 +113,12 @@ export function InvoiceFormModal({
   includeItems: boolean;
   creationMode?: InvoiceCreationMode;
   onCreationModeChange?: (mode: InvoiceCreationMode) => void;
+  creationModeLocked?: boolean;
+  showProjectCustomerSelect?: boolean;
+  showProformaSelect?: boolean;
+  proformaPrefillLocked?: boolean;
+  onProformaChange?: (proformaInvoiceId: string) => void;
+  customerLabel?: string;
   duplicateProjectInvoice?: InvoiceWithRelations | null;
   canAddItems?: boolean;
   canRemoveItems?: boolean;
@@ -115,7 +127,7 @@ export function InvoiceFormModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
 }) {
-  const isCreateFlow = Boolean(onCreationModeChange);
+  const isCreateFlow = Boolean(onCreationModeChange) || creationModeLocked;
   const activeCreationMode = creationMode ?? values.creation_mode;
   const isProjectMode = activeCreationMode === "project";
   const hideItemGstPercent = isCreateFlow && isProjectMode;
@@ -123,6 +135,11 @@ export function InvoiceFormModal({
   const selectedProject = options.projects.find(
     (project) => project.id === values.project_id,
   );
+  const availableProjects = showProjectCustomerSelect
+    ? options.projects.filter(
+        (project) => project.customer_id === values.customer_id,
+      )
+    : options.projects;
   const availableQuotations = selectedProject?.quotation
     ? [selectedProject.quotation]
     : options.quotations.filter(
@@ -184,7 +201,7 @@ export function InvoiceFormModal({
       submitDisabled={hasDuplicateProjectInvoice}
       submitting={saving}
     >
-      {isCreateFlow ? (
+      {isCreateFlow && !creationModeLocked ? (
         <div className="md:col-span-2">
           <div className="grid gap-2 rounded-lg border border-stone-200 bg-stone-50 p-1 sm:grid-cols-2">
             <button
@@ -213,8 +230,64 @@ export function InvoiceFormModal({
         </div>
       ) : null}
 
+      {showProformaSelect ? (
+        <div className="md:col-span-2">
+          <SelectInput
+            label="Proforma Invoice"
+            value={values.proforma_invoice_id ?? ""}
+            onChange={(proformaInvoiceId) => onProformaChange?.(proformaInvoiceId)}
+            options={[
+              { value: "", label: "No proforma invoice" },
+              ...(options.proformaInvoices ?? []).map((proformaInvoice) => ({
+                value: proformaInvoice.id,
+                label: [
+                  proformaInvoice.proforma_code ?? "Proforma",
+                  proformaInvoice.customer?.business_name ??
+                    proformaInvoice.customer?.full_name,
+                  formatMoney(proformaInvoice.total_amount),
+                ]
+                  .filter(Boolean)
+                  .join(" - "),
+              })),
+            ]}
+          />
+        </div>
+      ) : null}
+
+      {proformaPrefillLocked ? (
+        <div className="md:col-span-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+          These details will be copied from the selected proforma invoice when
+          you save the tax invoice.
+        </div>
+      ) : null}
+
+      <fieldset className="contents" disabled={proformaPrefillLocked}>
       {isCreateFlow && isProjectMode ? (
         <>
+          {showProjectCustomerSelect ? (
+            <div className="md:col-span-2">
+              <SelectInput
+                label={customerLabel}
+                value={values.customer_id}
+                onChange={handleCustomerChange}
+                options={[
+                  { value: "", label: `Select ${customerLabel.toLowerCase()}` },
+                  ...options.customers.map((customer) => ({
+                    value: customer.id,
+                    label: `${customer.customer_code ?? "Customer"} - ${
+                      customer.business_name ??
+                      customer.full_name ??
+                      customer.phone ??
+                      ""
+                    }`,
+                  })),
+                ]}
+              />
+              {errors.customer_id ? (
+                <p className="mt-1 text-xs text-rose-700">{errors.customer_id}</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="md:col-span-2">
             <SelectInput
               label="Project"
@@ -222,7 +295,7 @@ export function InvoiceFormModal({
               onChange={handleProjectChange}
               options={[
                 { value: "", label: "Select project" },
-                ...options.projects.map((project) => ({
+                ...availableProjects.map((project) => ({
                   value: project.id,
                   label: projectInvoiceLabel(project),
                 })),
@@ -262,15 +335,18 @@ export function InvoiceFormModal({
       {isCreateFlow && !isProjectMode ? (
         <>
           <SelectInput
-            label="Customer"
+            label={customerLabel}
             value={values.customer_id}
             onChange={handleCustomerChange}
             options={[
-              { value: "", label: "Select customer" },
+              { value: "", label: `Select ${customerLabel.toLowerCase()}` },
               ...options.customers.map((customer) => ({
                 value: customer.id,
                 label: `${customer.customer_code ?? "Customer"} - ${
-                  customer.full_name ?? customer.phone ?? ""
+                  customer.business_name ??
+                  customer.full_name ??
+                  customer.phone ??
+                  ""
                 }`,
               })),
             ]}
@@ -395,6 +471,7 @@ export function InvoiceFormModal({
           </div>
         </div>
       ) : null}
+      </fieldset>
     </Modal>
   );
 }

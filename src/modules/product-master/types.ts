@@ -42,13 +42,13 @@ export type ProductCategory = {
 export type ProductCategoryFormValues = {
   name: string;
   category_type: ProductCategoryType | "";
-  display_order: string;
   description: string;
 };
 
 export type Product = {
   id: string;
   tenant_id: string;
+  serial_number: number;
   product_code: string;
   product_name: string;
   category_id: string;

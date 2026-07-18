@@ -114,6 +114,23 @@ export type InvoiceProjectOption = {
   quotation?: InvoiceQuotationSummary | null;
 };
 
+export type InvoiceProformaOption = {
+  id: string;
+  organization_id: string;
+  proforma_code: string | null;
+  customer_id: string;
+  project_id: string | null;
+  quotation_id: string | null;
+  b2b_sale_id: string | null;
+  final_invoice_id: string | null;
+  proforma_date: string | null;
+  due_date: string | null;
+  total_amount: number | null;
+  status: string | null;
+  notes: string | null;
+  customer?: SurveyCustomerSummary | null;
+};
+
 export type InvoiceWithRelations = Invoice & {
   customer?: SurveyCustomerSummary | null;
   project?: InvoiceProjectOption | null;
@@ -144,6 +161,7 @@ export type InvoiceLinkOptions = {
   projects: InvoiceProjectOption[];
   quotations: InvoiceQuotationSummary[];
   inventoryItems: InvoiceInventoryItemOption[];
+  proformaInvoices?: InvoiceProformaOption[];
 };
 
 export type InvoiceItemFormValues = {
@@ -159,6 +177,7 @@ export type InvoiceItemFormValues = {
 
 export type InvoiceFormValues = {
   creation_mode: InvoiceCreationMode;
+  proforma_invoice_id?: string;
   customer_id: string;
   project_id: string;
   quotation_id: string;

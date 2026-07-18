@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import type { CustomerSegment } from "../crm/types";
 import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type { PaymentWithRelations } from "../payments/types";
 import type { QuotationItem } from "../quotations/types";
@@ -248,6 +249,7 @@ export async function fetchProformaInvoicePayments(
 
 export async function fetchProformaInvoiceLinkOptions(
   profile: UserProfile | null,
+  customerSegment?: CustomerSegment,
 ): Promise<ProformaInvoiceLinkOptions> {
   const client = requireSupabase();
   const organizationId = profile?.is_super_admin
@@ -278,6 +280,10 @@ export async function fetchProformaInvoiceLinkOptions(
     projectsQuery = projectsQuery.eq("organization_id", organizationId);
     quotationsQuery = quotationsQuery.eq("organization_id", organizationId);
     inventoryQuery = inventoryQuery.eq("organization_id", organizationId);
+  }
+
+  if (customerSegment) {
+    customersQuery = customersQuery.eq("customer_segment", customerSegment);
   }
 
   const [customersResult, projectsResult, quotationsResult, inventoryResult] =

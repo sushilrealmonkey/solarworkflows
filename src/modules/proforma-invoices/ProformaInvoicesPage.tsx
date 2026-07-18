@@ -226,9 +226,12 @@ export function ProformaInvoicesPage() {
     );
   }
 
-  async function openCreateForm() {
+  async function openCreateForm(creationMode: InvoiceCreationMode) {
     try {
-      const nextOptions = await fetchProformaInvoiceLinkOptions(profile);
+      const nextOptions = await fetchProformaInvoiceLinkOptions(
+        profile,
+        creationMode === "project" ? "project_based" : "b2b_direct",
+      );
       setOptions(nextOptions);
     } catch (nextError) {
       showToast(
@@ -237,13 +240,14 @@ export function ProformaInvoicesPage() {
           : "Unable to refresh proforma invoice projects and customers.",
         "error",
       );
+      return;
     }
 
     setFormErrors({});
     setFormState({
       mode: "create",
       proformaInvoice: null,
-      values: emptyInvoiceForm(null, "manual"),
+      values: emptyInvoiceForm(null, creationMode),
     });
   }
 
@@ -339,25 +343,6 @@ export function ProformaInvoicesPage() {
     setPaymentErrors({});
     setPaymentTarget(proformaInvoice);
     setPaymentForm(emptyProformaPaymentForm());
-  }
-
-  function handleCreationModeChange(creationMode: InvoiceCreationMode) {
-    setFormErrors({});
-    setFormState((current) => {
-      if (!current || current.mode !== "create") {
-        return current;
-      }
-
-      return {
-        ...current,
-        values: {
-          ...emptyInvoiceForm(null, creationMode),
-          invoice_date: current.values.invoice_date,
-          due_date: current.values.due_date,
-          notes: current.values.notes,
-        },
-      };
-    });
   }
 
   async function handleCreateProjectChange(projectId: string) {
@@ -508,7 +493,17 @@ export function ProformaInvoicesPage() {
           description="Create payment requests before issuing final invoices."
         />
         {canCreate ? (
-          <Button onClick={() => void openCreateForm()}>Create Proforma</Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button onClick={() => void openCreateForm("manual")}>
+              Create for B2B
+            </Button>
+            <Button
+              onClick={() => void openCreateForm("project")}
+              variant="secondary"
+            >
+              Create for Project
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -557,7 +552,17 @@ export function ProformaInvoicesPage() {
           description="Create a proforma invoice before collecting payment and issuing the final invoice."
           action={
             canCreate ? (
-              <Button onClick={() => void openCreateForm()}>Create Proforma</Button>
+              <div className="flex flex-col justify-center gap-2 sm:flex-row">
+                <Button onClick={() => void openCreateForm("manual")}>
+                  Create for B2B
+                </Button>
+                <Button
+                  onClick={() => void openCreateForm("project")}
+                  variant="secondary"
+                >
+                  Create for Project
+                </Button>
+              </div>
             ) : null
           }
         />
@@ -702,7 +707,9 @@ export function ProformaInvoicesPage() {
         <InvoiceFormModal
           title={
             formState.mode === "create"
-              ? "Create Proforma Invoice"
+              ? formState.values.creation_mode === "project"
+                ? "Create Project Proforma Invoice"
+                : "Create B2B Proforma Invoice"
               : "Edit Proforma Invoice"
           }
           values={formState.values}
@@ -715,8 +722,15 @@ export function ProformaInvoicesPage() {
           canAddItems={formState.mode === "create" || (canCreate && canUpdate)}
           canRemoveItems={formState.mode === "create" || (canDelete && canUpdate)}
           creationMode={formState.values.creation_mode}
-          onCreationModeChange={
-            formState.mode === "create" ? handleCreationModeChange : undefined
+          creationModeLocked={formState.mode === "create"}
+          showProjectCustomerSelect={
+            formState.mode === "create" &&
+            formState.values.creation_mode === "project"
+          }
+          customerLabel={
+            formState.values.creation_mode === "project"
+              ? "Project Customer"
+              : "B2B Customer"
           }
           onProjectChange={
             formState.mode === "create"

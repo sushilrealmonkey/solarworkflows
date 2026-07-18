@@ -53,6 +53,7 @@ export function emptyInvoiceForm(
 ): InvoiceFormValues {
   return {
     creation_mode: project ? "project" : creationMode,
+    proforma_invoice_id: "",
     customer_id: project?.customer_id ?? "",
     project_id: project?.id ?? "",
     quotation_id: project?.quotation_id ?? "",
@@ -67,6 +68,7 @@ export function emptyInvoiceForm(
 export function invoiceToForm(invoice: Invoice): InvoiceFormValues {
   return {
     creation_mode: invoice.project_id ? "project" : "manual",
+    proforma_invoice_id: invoice.proforma_invoice_id ?? "",
     customer_id: invoice.customer_id ?? "",
     project_id: invoice.project_id ?? "",
     quotation_id: invoice.quotation_id ?? "",

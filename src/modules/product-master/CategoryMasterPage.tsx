@@ -17,7 +17,6 @@ import {
   createProductCategory,
   fetchProductCategories,
   fetchProducts,
-  importProductCatalogDefaults,
   updateProductCategory,
 } from "./productMasterApi";
 import {
@@ -56,7 +55,6 @@ export function CategoryMasterPage() {
     Record<string, string>
   >({});
   const [saving, setSaving] = useState(false);
-  const [importingDefaults, setImportingDefaults] = useState(false);
   const [saveAlert, setSaveAlert] = useState<{
     title: string;
     description: string;
@@ -75,8 +73,6 @@ export function CategoryMasterPage() {
     "product_master",
     "update",
   );
-  const canImportDefaults = canCreate && Boolean(profile?.organization_id);
-
   const categoryProductCounts = useMemo(() => {
     return products.reduce<Record<string, number>>((counts, product) => {
       counts[product.category_id] = (counts[product.category_id] ?? 0) + 1;
@@ -195,47 +191,15 @@ export function CategoryMasterPage() {
     }
   }
 
-  async function handleImportDefaults() {
-    try {
-      setImportingDefaults(true);
-      const result = await importProductCatalogDefaults();
-      await loadData();
-      showToast(`Imported ${result.categories_imported ?? 0} categories.`, "success");
-    } catch (nextError) {
-      const description =
-        nextError instanceof Error
-          ? nextError.message
-          : "Catalog defaults import failed.";
-      setSaveAlert({
-        title: "Catalog defaults could not be imported",
-        description,
-      });
-      showToast(description, "error");
-    } finally {
-      setImportingDefaults(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
           title="Categories"
-          description="Manage product category type and display order for product selection, quotations, inventory, BOM planning, and reporting."
+          description="Manage product categories."
         />
         {canCreate ? (
-          <div className="flex flex-wrap gap-2">
-            {canImportDefaults ? (
-              <Button
-                disabled={importingDefaults}
-                onClick={handleImportDefaults}
-                variant="secondary"
-              >
-                {importingDefaults ? "Importing..." : "Import Defaults"}
-              </Button>
-            ) : null}
-            <Button onClick={openCreateCategoryForm}>Add Category</Button>
-          </div>
+          <Button onClick={openCreateCategoryForm}>Add Category</Button>
         ) : null}
       </div>
 
@@ -259,7 +223,7 @@ export function CategoryMasterPage() {
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Display Order</th>
+                  <th className="px-4 py-3">S. No.</th>
                   <th className="px-4 py-3">Category Name</th>
                   <th className="px-4 py-3">Type</th>
                   <th className="px-4 py-3">Products</th>
@@ -317,7 +281,7 @@ export function CategoryMasterPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Order {category.display_order}
+                      S. No. {category.display_order}
                     </p>
                     <h2 className="mt-1 text-sm font-semibold text-slate-950">
                       {category.name}

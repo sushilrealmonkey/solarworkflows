@@ -14,6 +14,7 @@ import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
 import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
+  Badge,
   Button,
   EmptyState,
   LoadingSkeleton,
@@ -38,12 +39,11 @@ import {
   fetchPaymentProjects,
   fetchPayments,
 } from "./paymentApi";
-import { PaymentFormModal, PaymentStatusBadge } from "./PaymentComponents";
+import { PaymentFormModal } from "./PaymentComponents";
 import {
   emptyPaymentForm,
   paymentModeOptions,
   paymentSourceOptions,
-  paymentStatusOptions,
   validatePaymentForm,
 } from "./paymentUtils";
 import type {
@@ -56,7 +56,6 @@ type PaymentFilters = {
   search: string;
   source: string;
   mode: string;
-  status: string;
   date: string;
 };
 
@@ -73,7 +72,6 @@ export function PaymentsPage() {
     search: "",
     source: "",
     mode: "",
-    status: "",
     date: "",
   });
   const [formState, setFormState] = useState<{
@@ -137,16 +135,9 @@ export function PaymentsPage() {
       const matchesSource =
         !filters.source || payment.payment_source === filters.source;
       const matchesMode = !filters.mode || payment.payment_mode === filters.mode;
-      const matchesStatus = !filters.status || payment.status === filters.status;
       const matchesDate = !filters.date || payment.payment_date === filters.date;
 
-      return (
-        matchesSearch &&
-        matchesSource &&
-        matchesMode &&
-        matchesStatus &&
-        matchesDate
-      );
+      return matchesSearch && matchesSource && matchesMode && matchesDate;
     });
   }, [payments, filters]);
 
@@ -226,9 +217,9 @@ export function PaymentsPage() {
 
       <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
-      <Toolbar className="md:grid-cols-4">
+      <Toolbar className="md:grid-cols-3">
         <SearchInput
-          className="md:col-span-4"
+          className="md:col-span-3"
           placeholder="Search customer, phone, project, or reference"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
@@ -252,18 +243,6 @@ export function PaymentsPage() {
           options={[
             { value: "", label: "All modes" },
             ...paymentModeOptions.map((value) => ({
-              value,
-              label: labelize(value),
-            })),
-          ]}
-        />
-        <SelectInput
-          label="Status"
-          value={filters.status}
-          onChange={(status) => setFilters((current) => ({ ...current, status }))}
-          options={[
-            { value: "", label: "All statuses" },
-            ...paymentStatusOptions.map((value) => ({
               value,
               label: labelize(value),
             })),
@@ -298,9 +277,8 @@ export function PaymentsPage() {
                   <th className="px-4 py-3">Context</th>
                   <th className="px-4 py-3">Source</th>
                   <th className="px-4 py-3">Mode</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Reference</th>
-                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Total</th>
+                  <th className="px-4 py-3">Receipt Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -338,10 +316,7 @@ export function PaymentsPage() {
                         {formatMoney(payment.amount)}
                       </td>
                       <td className="px-4 py-3">
-                        {payment.reference_number ?? "-"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <PaymentStatusBadge value={payment.status} />
+                        <PaymentReceiptStatus receiptUrl={payment.receipt_url} />
                       </td>
                     </tr>
                   );
@@ -377,7 +352,7 @@ export function PaymentsPage() {
                           "-"} / {paymentContextLabel(payment)}
                       </p>
                     </div>
-                    <PaymentStatusBadge value={payment.status} />
+                    <PaymentReceiptStatus receiptUrl={payment.receipt_url} showLabel />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <PaymentCardItem
@@ -387,10 +362,6 @@ export function PaymentsPage() {
                     <PaymentCardItem
                       label="Mode"
                       value={labelize(payment.payment_mode)}
-                    />
-                    <PaymentCardItem
-                      label="Reference"
-                      value={payment.reference_number ?? "-"}
                     />
                   </dl>
                 </article>
@@ -437,5 +408,22 @@ function PaymentCardItem({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-slate-500">{label}</dt>
       <dd className="font-medium text-slate-900">{value}</dd>
     </div>
+  );
+}
+
+function PaymentReceiptStatus({
+  receiptUrl,
+  showLabel = false,
+}: {
+  receiptUrl: string | null | undefined;
+  showLabel?: boolean;
+}) {
+  const available = Boolean(receiptUrl);
+  const status = available ? "Available" : "Pending";
+
+  return (
+    <Badge tone={available ? "green" : "amber"}>
+      {showLabel ? `Receipt ${status}` : status}
+    </Badge>
   );
 }

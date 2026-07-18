@@ -48,7 +48,6 @@ import {
   fetchPurchaseVendorOptions,
   fetchPurchaseOrders,
   receivePurchaseOrderItems,
-  updatePurchaseOrder,
 } from "./purchaseApi";
 import {
   calculatePurchaseItemTotal,
@@ -59,7 +58,6 @@ import {
   formatPurchaseCode,
   hasPurchaseOrderFormErrors,
   hasPurchaseReceiveFormErrors,
-  purchaseOrderToForm,
   purchaseStatusOptions,
   validatePurchaseOrderForm,
   validatePurchaseReceiveForm,
@@ -111,8 +109,6 @@ export function PurchasesPage() {
     pendingReceive: false,
   });
   const [form, setForm] = useState<PurchaseOrderFormValues | null>(null);
-  const [editTarget, setEditTarget] =
-    useState<PurchaseOrderWithRelations | null>(null);
   const [formErrors, setFormErrors] = useState<PurchaseFormErrors | null>(null);
   const [saving, setSaving] = useState(false);
   const [receiveTarget, setReceiveTarget] =
@@ -147,16 +143,6 @@ export function PurchasesPage() {
     "create",
   );
   const canCreate = canCreateItems && canCreatePricing;
-  const canUpdatePricing = hasAdminPricingAccess(
-    profile,
-    permissions,
-    roleNames,
-    "update",
-  );
-  const canUpdate =
-    canViewPricing &&
-    hasPermission(profile, permissions, "inventory", "update") &&
-    canUpdatePricing;
   const canDelete = hasPermission(
     profile,
     permissions,
@@ -275,31 +261,8 @@ export function PurchasesPage() {
   async function openCreateForm() {
     try {
       setVendors(await fetchPurchaseVendorOptions());
-      setEditTarget(null);
       setFormErrors(null);
       setForm(emptyPurchaseOrderForm());
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load the latest suppliers.",
-        "error",
-      );
-    }
-  }
-
-  async function openEditForm(order: PurchaseOrderWithRelations) {
-    try {
-      const nextVendors = await fetchPurchaseVendorOptions();
-      setVendors(
-        order.vendor &&
-          !nextVendors.some((vendor) => vendor.id === order.vendor?.id)
-          ? [...nextVendors, order.vendor]
-          : nextVendors,
-      );
-      setEditTarget(order);
-      setFormErrors(null);
-      setForm(purchaseOrderToForm(order));
     } catch (nextError) {
       showToast(
         nextError instanceof Error
@@ -326,34 +289,6 @@ export function PurchasesPage() {
 
     try {
       setSaving(true);
-      if (editTarget) {
-        await updatePurchaseOrder(profile, editTarget.id, form);
-
-        if (canDownloadPurchasePdf) {
-          try {
-            const orderForPdf = await fetchPurchaseOrder(profile, editTarget.id);
-            await generateAndStorePurchaseOrderPdf(
-              profile,
-              organization,
-              orderForPdf,
-            );
-          } catch (pdfError) {
-            showToast(
-              pdfError instanceof Error
-                ? `Purchase order updated, but PDF refresh failed: ${pdfError.message}`
-                : "Purchase order updated, but PDF refresh failed.",
-              "error",
-            );
-          }
-        }
-
-        setForm(null);
-        setEditTarget(null);
-        showToast("Purchase order updated.", "success");
-        await loadData();
-        return;
-      }
-
       const createdOrder = await createPurchaseOrder(profile, form);
       let pdfGenerated = false;
       let pdfGenerationFailed = false;
@@ -573,7 +508,6 @@ export function PurchasesPage() {
       {!loading && !error && filteredOrders.length > 0 ? (
         <PurchaseOrdersSection
           orders={filteredOrders}
-          canEdit={canUpdate}
           canDelete={canDelete}
           canReceive={canReceive}
           canDownloadPdf={canDownloadPurchasePdf}
@@ -581,26 +515,24 @@ export function PurchasesPage() {
           preparingPdfId={preparingPurchasePdfId}
           showPricing={canViewPricing}
           onDownload={(order) => void handleDownloadPurchaseOrder(order)}
-          onEdit={(order) => void openEditForm(order)}
           onReceive={openReceiveForm}
         />
       ) : null}
 
       {form ? (
         <PurchaseOrderFormModal
-          title={editTarget ? "Edit Purchase Order" : "Create Purchase Order"}
-          submitLabel={editTarget ? "Update Purchase Order" : "Save Purchase Order"}
+          title="Create Purchase Order"
+          submitLabel="Save Purchase Order"
           values={form}
           setValues={setForm}
           errors={formErrors}
           vendors={vendors}
           items={items}
           priceDefaults={priceDefaults}
-          canAddItems={!editTarget || canCreateItems}
-          canRemoveItems={!editTarget || canDelete}
+          canAddItems={canCreateItems}
+          canRemoveItems
           onClose={() => {
             setForm(null);
-            setEditTarget(null);
           }}
           onSubmit={handleSubmit}
           saving={saving}
@@ -629,7 +561,6 @@ export function PurchasesPage() {
 
 export function PurchaseOrdersSection({
   orders,
-  canEdit = false,
   canDelete = false,
   canReceive = false,
   canDownloadPdf = false,
@@ -637,13 +568,11 @@ export function PurchaseOrdersSection({
   preparingPdfId = null,
   showPricing = true,
   onDownload,
-  onEdit,
   onDelete,
   onReceive,
   emptyTitle = "No purchase orders",
 }: {
   orders: PurchaseOrderWithRelations[];
-  canEdit?: boolean;
   canDelete?: boolean;
   canReceive?: boolean;
   canDownloadPdf?: boolean;
@@ -651,7 +580,6 @@ export function PurchaseOrdersSection({
   preparingPdfId?: string | null;
   showPricing?: boolean;
   onDownload?: (order: PurchaseOrderWithRelations) => void;
-  onEdit?: (order: PurchaseOrderWithRelations) => void;
   onDelete?: (order: PurchaseOrderWithRelations) => void;
   onReceive?: (order: PurchaseOrderWithRelations) => void;
   emptyTitle?: string;
@@ -775,7 +703,7 @@ export function PurchaseOrdersSection({
                   </td>
                   {showPricing ? (
                     <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatCurrency(order.total_amount)}
+                      {formatPurchaseTableTotal(order.total_amount)}
                     </td>
                   ) : null}
                   <td
@@ -785,14 +713,12 @@ export function PurchaseOrdersSection({
                   >
                     <PurchaseStatusActions
                       order={order}
-                      canEdit={canEdit}
                       canDelete={canDelete}
                       canReceive={canReceive}
                       canDownloadPdf={canDownloadPdf}
                       pdfUrl={pdfUrls[order.id]}
                       preparingPdf={preparingPdfId === order.id}
                       onDownload={onDownload}
-                      onEdit={onEdit}
                       onDelete={onDelete}
                       onReceive={onReceive}
                     />
@@ -847,7 +773,7 @@ export function PurchaseOrdersSection({
                   <div>
                     <dt className="text-xs text-slate-500">Total</dt>
                     <dd className="font-semibold text-slate-950">
-                      {formatCurrency(order.total_amount)}
+                      {formatPurchaseTableTotal(order.total_amount)}
                     </dd>
                   </div>
                 ) : null}
@@ -862,14 +788,12 @@ export function PurchaseOrdersSection({
               >
                 <PurchaseStatusActions
                   order={order}
-                  canEdit={canEdit}
                   canDelete={canDelete}
                   canReceive={canReceive}
                   canDownloadPdf={canDownloadPdf}
                   pdfUrl={pdfUrls[order.id]}
                   preparingPdf={preparingPdfId === order.id}
                   onDownload={onDownload}
-                  onEdit={onEdit}
                   onDelete={onDelete}
                   onReceive={onReceive}
                 />
@@ -950,26 +874,22 @@ function PurchaseReceiveProgress({
 
 function PurchaseStatusActions({
   order,
-  canEdit,
   canDelete,
   canReceive,
   canDownloadPdf,
   pdfUrl,
   preparingPdf,
   onDownload,
-  onEdit,
   onDelete,
   onReceive,
 }: {
   order: PurchaseOrderWithRelations;
-  canEdit: boolean;
   canDelete: boolean;
   canReceive: boolean;
   canDownloadPdf: boolean;
   pdfUrl?: string;
   preparingPdf: boolean;
   onDownload?: (order: PurchaseOrderWithRelations) => void;
-  onEdit?: (order: PurchaseOrderWithRelations) => void;
   onDelete?: (order: PurchaseOrderWithRelations) => void;
   onReceive?: (order: PurchaseOrderWithRelations) => void;
 }) {
@@ -979,17 +899,7 @@ function PurchaseStatusActions({
       (order.status === "ordered" || order.status === "partially_received"),
   );
 
-  const canShowEditAction = Boolean(canEdit && onEdit);
   const canShowDeleteAction = Boolean(canDelete && onDelete);
-
-  if (
-    !canDownloadPdf &&
-    !canShowReceiveAction &&
-    !canShowEditAction &&
-    !canShowDeleteAction
-  ) {
-    return <span className="text-sm text-slate-500">-</span>;
-  }
 
   return (
     <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap">
@@ -999,16 +909,12 @@ function PurchaseStatusActions({
         url={pdfUrl}
         onDownload={onDownload ? () => onDownload(order) : undefined}
       />
-      {canShowReceiveAction && onReceive ? (
-        <Button onClick={() => onReceive(order)}>
-          Material Received
-        </Button>
-      ) : null}
-      {canShowEditAction && onEdit ? (
-        <Button onClick={() => onEdit(order)} variant="secondary">
-          Edit
-        </Button>
-      ) : null}
+      <Button
+        disabled={!canShowReceiveAction}
+        onClick={() => onReceive?.(order)}
+      >
+        Material Received
+      </Button>
       {canShowDeleteAction && onDelete ? (
         <Button onClick={() => onDelete(order)} variant="danger">
           Delete
@@ -1016,6 +922,13 @@ function PurchaseStatusActions({
       ) : null}
     </div>
   );
+}
+
+function formatPurchaseTableTotal(value: number | null | undefined) {
+  return new Intl.NumberFormat("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value ?? 0));
 }
 
 function DownloadPurchaseOrderAction({

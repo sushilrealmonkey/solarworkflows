@@ -1,5 +1,6 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
+import type { CustomerSegment } from "../crm/types";
 import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type { PaymentWithRelations } from "../payments/types";
 import type { QuotationItem } from "../quotations/types";
@@ -12,6 +13,7 @@ import type {
   InvoiceItemFormValues,
   InvoiceLinkOptions,
   InvoicePaymentFormValues,
+  InvoiceProformaOption,
   InvoiceProjectOption,
   InvoiceQuotationSummary,
   InvoiceWithRelations,
@@ -138,6 +140,23 @@ const invoiceInventoryItemSelect = `
   current_stock,
   status,
   catalog_product:products(${invoiceInventoryProductSelect})
+`;
+
+const invoiceProformaOptionSelect = `
+  id,
+  organization_id,
+  proforma_code,
+  customer_id,
+  project_id,
+  quotation_id,
+  b2b_sale_id,
+  final_invoice_id,
+  proforma_date,
+  due_date,
+  total_amount,
+  status,
+  notes,
+  customer:customers(${customerSelect})
 `;
 
 const paymentSelect = `
@@ -522,6 +541,7 @@ export async function markInvoiceCancelled(invoiceId: string) {
 
 export async function fetchInvoiceLinkOptions(
   profile: UserProfile | null,
+  customerSegment?: CustomerSegment,
 ): Promise<InvoiceLinkOptions> {
   const client = requireSupabase();
   const organizationId = profile?.is_super_admin
@@ -547,19 +567,41 @@ export async function fetchInvoiceLinkOptions(
     .not("catalog_product_id", "is", null)
     .order("item_name", { ascending: true });
 
+  let proformaInvoicesQuery = client
+    .from("proforma_invoices")
+    .select(invoiceProformaOptionSelect)
+    .eq("status", "paid")
+    .is("final_invoice_id", null)
+    .order("created_at", { ascending: false });
+
   if (organizationId) {
     customersQuery = customersQuery.eq("organization_id", organizationId);
     projectsQuery = projectsQuery.eq("organization_id", organizationId);
     quotationsQuery = quotationsQuery.eq("organization_id", organizationId);
     inventoryQuery = inventoryQuery.eq("organization_id", organizationId);
+    proformaInvoicesQuery = proformaInvoicesQuery.eq(
+      "organization_id",
+      organizationId,
+    );
   }
 
-  const [customersResult, projectsResult, quotationsResult, inventoryResult] =
+  if (customerSegment) {
+    customersQuery = customersQuery.eq("customer_segment", customerSegment);
+  }
+
+  const [
+    customersResult,
+    projectsResult,
+    quotationsResult,
+    inventoryResult,
+    proformaInvoicesResult,
+  ] =
     await Promise.all([
       customersQuery,
       projectsQuery,
       quotationsQuery,
       inventoryQuery,
+      proformaInvoicesQuery,
     ]);
 
   if (customersResult.error) {
@@ -574,6 +616,16 @@ export async function fetchInvoiceLinkOptions(
     throw new Error(`Unable to load invoice quotations: ${quotationsResult.error.message}`);
   }
 
+  if (proformaInvoicesResult.error) {
+    throw new Error(
+      `Unable to load proforma invoices: ${proformaInvoicesResult.error.message}`,
+    );
+  }
+
+  const customerIds = new Set(
+    (customersResult.data ?? []).map((customer) => customer.id),
+  );
+
   return {
     customers: (customersResult.data ?? []) as SurveyCustomerSummary[],
     projects: (projectsResult.data ?? []) as unknown as InvoiceProjectOption[],
@@ -581,6 +633,12 @@ export async function fetchInvoiceLinkOptions(
     inventoryItems: inventoryResult.error
       ? []
       : ((inventoryResult.data ?? []) as unknown as InvoiceInventoryItemOption[]),
+    proformaInvoices: (
+      (proformaInvoicesResult.data ?? []) as unknown as InvoiceProformaOption[]
+    ).filter(
+      (proformaInvoice) =>
+        !customerSegment || customerIds.has(proformaInvoice.customer_id),
+    ),
   };
 }
 

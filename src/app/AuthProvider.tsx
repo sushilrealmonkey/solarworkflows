@@ -71,6 +71,11 @@ type OrganizationRow = {
   created_at: string | null;
 };
 
+type OrganizationBrandingRow = {
+  organization_id: string;
+  company_logo_url: string | null;
+};
+
 const defaultOrganization: OrganizationBranding = {
   id: null,
   name: "SolarOS",
@@ -187,6 +192,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         {},
       );
 
+      const { data: brandingData } = await supabase.rpc(
+        "get_current_organization_branding",
+      );
+      const loadedBranding = brandingData as OrganizationBrandingRow | null;
+      const tenantLogoUrl =
+        loadedBranding?.organization_id === loadedProfile.organization_id &&
+        typeof loadedBranding.company_logo_url === "string"
+          ? loadedBranding.company_logo_url
+          : null;
+
       setOrganization({
         id: loadedProfile.organization_id,
         name:
@@ -196,9 +211,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               ? loadedOrganization.name
               : defaultOrganization.name,
         logoUrl:
-          typeof settingsData?.company_logo_url === "string"
+          tenantLogoUrl ??
+          (typeof settingsData?.company_logo_url === "string"
             ? settingsData.company_logo_url
-            : null,
+            : null),
         primaryColor:
           typeof settingsData?.primary_color === "string"
             ? settingsData.primary_color

@@ -49,6 +49,7 @@ export function proformaInvoiceToForm(
 ): ProformaInvoiceFormValues {
   return {
     creation_mode: proformaInvoice.project_id ? "project" : "manual",
+    proforma_invoice_id: "",
     customer_id: proformaInvoice.customer_id ?? "",
     project_id: proformaInvoice.project_id ?? "",
     quotation_id: proformaInvoice.quotation_id ?? "",
