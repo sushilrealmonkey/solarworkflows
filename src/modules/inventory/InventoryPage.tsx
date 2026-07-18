@@ -79,6 +79,8 @@ type ItemFormState = {
   values: InventoryItemFormValues;
 };
 
+type InventoryTab = "stock" | "inward" | "outward";
+
 export function InventoryPage() {
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
@@ -93,6 +95,7 @@ export function InventoryPage() {
     vendors: [],
   });
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<InventoryTab>("stock");
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<InventoryFilters>({
@@ -296,14 +299,16 @@ export function InventoryPage() {
           title="Inventory"
           description="Track stock items, material movement, and project usage."
         />
-        {masters.products.length === 0 ? (
+        {activeTab === "stock" && masters.products.length === 0 ? (
           <Link
             className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
             to="/products-materials/products"
           >
             Add Products &amp; Materials
           </Link>
-        ) : canManageStock && openingBalanceCandidateCount > 0 ? (
+        ) : activeTab === "stock" &&
+          canManageStock &&
+          openingBalanceCandidateCount > 0 ? (
           <Link
             className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
             to="/inventory/opening-stock"
@@ -313,9 +318,39 @@ export function InventoryPage() {
         ) : null}
       </div>
 
-      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      <div
+        aria-label="Inventory views"
+        className="flex gap-2 overflow-x-auto rounded-xl border border-stone-200 bg-white p-2 shadow-sm"
+        role="tablist"
+      >
+        <InventoryTabButton
+          active={activeTab === "stock"}
+          onClick={() => setActiveTab("stock")}
+        >
+          Stock
+        </InventoryTabButton>
+        <InventoryTabButton
+          active={activeTab === "inward"}
+          onClick={() => setActiveTab("inward")}
+        >
+          Inward Transactions
+        </InventoryTabButton>
+        <InventoryTabButton
+          active={activeTab === "outward"}
+          onClick={() => setActiveTab("outward")}
+        >
+          Outward Transactions
+        </InventoryTabButton>
+      </div>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {loading ? <LoadingSkeleton /> : null}
+      {error ? <EmptyState title="Could not load inventory" description={error} /> : null}
+
+      {activeTab === "stock" ? (
+        <>
+          <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+
+          <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <InventoryMetricCard label="Total Items" value={items.length} />
         <InventoryMetricCard label="Active Items" value={items.filter((item) => item.status === "active").length} />
         <button
@@ -368,9 +403,9 @@ export function InventoryPage() {
             Active items with no available stock
           </p>
         </button>
-      </section>
+          </section>
 
-      <section className="grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)_minmax(150px,0.7fr)_minmax(170px,0.8fr)]">
+          <section className="grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm md:grid-cols-2 xl:grid-cols-[minmax(220px,1.4fr)_minmax(160px,0.8fr)_minmax(180px,0.9fr)_minmax(150px,0.7fr)_minmax(170px,0.8fr)]">
         <SearchInput
           className="block"
           placeholder="Search product, category, brand, specs, or supplier"
@@ -449,10 +484,8 @@ export function InventoryPage() {
             { value: "out_of_stock", label: "Out of Stock" },
           ]}
         />
-      </section>
+          </section>
 
-      {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load inventory" description={error} /> : null}
       {!loading && !error && filteredItems.length === 0 ? (
         <EmptyState
           title="No inventory items found"
@@ -478,7 +511,7 @@ export function InventoryPage() {
         />
       ) : null}
 
-      {!loading && !error && filteredItems.length > 0 ? (
+          {!loading && !error && filteredItems.length > 0 ? (
         <>
           <div className="hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
@@ -666,10 +699,15 @@ export function InventoryPage() {
           </div>
           <TablePagination label="inventory items" pagination={itemPagination} />
         </>
+          ) : null}
+        </>
       ) : null}
 
-      {!loading && !error ? (
-        <InventoryTransactionsSection transactions={transactions} />
+      {!loading && !error && activeTab !== "stock" ? (
+        <InventoryTransactionsSection
+          direction={activeTab}
+          transactions={transactions}
+        />
       ) : null}
 
       {itemForm ? (
@@ -712,6 +750,32 @@ function InventoryMetricCard({
       </p>
       <p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p>
     </section>
+  );
+}
+
+function InventoryTabButton({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-selected={active}
+      className={`min-h-10 shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition ${
+        active
+          ? "bg-orange-600 text-white shadow-sm"
+          : "text-slate-600 hover:bg-stone-100"
+      }`}
+      onClick={onClick}
+      role="tab"
+      type="button"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -926,32 +990,60 @@ function productOptionLabel(product: InventoryCatalogProduct) {
 }
 
 export function InventoryTransactionsSection({
+  direction = "all",
   transactions,
 }: {
+  direction?: InventoryTransactionDirection | "all";
   transactions: InventoryTransactionWithRelations[];
 }) {
+  const correctionTransactions = transactions.filter(isStockCorrection);
   const inwardTransactions = transactions.filter(
-    (transaction) => transactionDirection(transaction) === "inward",
+    (transaction) =>
+      !isStockCorrection(transaction) &&
+      transactionDirection(transaction) === "inward",
   );
   const outwardTransactions = transactions.filter(
-    (transaction) => transactionDirection(transaction) === "outward",
+    (transaction) =>
+      !isStockCorrection(transaction) &&
+      transactionDirection(transaction) === "outward",
   );
+  const visibleCorrectionTransactions =
+    direction === "all"
+      ? correctionTransactions
+      : correctionTransactions.filter(
+          (transaction) => transactionDirection(transaction) === direction,
+        );
 
   return (
     <div className="space-y-6">
-      <InventoryTransactionTable
-        direction="inward"
-        transactions={inwardTransactions}
-      />
-      <InventoryTransactionTable
-        direction="outward"
-        transactions={outwardTransactions}
-      />
+      {direction === "all" || direction === "inward" ? (
+        <InventoryTransactionTable
+          direction="inward"
+          transactions={inwardTransactions}
+        />
+      ) : null}
+      {direction === "all" || direction === "outward" ? (
+        <InventoryTransactionTable
+          direction="outward"
+          transactions={outwardTransactions}
+        />
+      ) : null}
+      {visibleCorrectionTransactions.length > 0 ? (
+        <InventoryStockCorrectionTable
+          transactions={visibleCorrectionTransactions}
+        />
+      ) : null}
     </div>
   );
 }
 
 type InventoryTransactionDirection = "inward" | "outward";
+
+function isStockCorrection(
+  transaction: InventoryTransactionWithRelations,
+) {
+  return transaction.reference_type === "stock_correction";
+}
 
 function transactionDirection(
   transaction: InventoryTransactionWithRelations,
@@ -1142,6 +1234,158 @@ function InventoryTransactionTable({
           />
         </div>
       )}
+    </section>
+  );
+}
+
+function InventoryStockCorrectionTable({
+  transactions,
+}: {
+  transactions: InventoryTransactionWithRelations[];
+}) {
+  const transactionPagination = useTablePagination(transactions);
+  const paginatedTransactions = transactionPagination.pageItems;
+
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950">
+            Stock Corrections
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Physical stock corrections and the reason recorded for each change.
+          </p>
+        </div>
+        <p className="text-sm text-slate-500">{transactions.length} records</p>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-stone-200">
+        <div className="hidden overflow-x-auto lg:block">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Item</th>
+                <th className="px-4 py-3">Correction</th>
+                <th className="px-4 py-3">Correction Reason</th>
+                <th className="px-4 py-3">Created By</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {paginatedTransactions.map((transaction) => {
+                const quantity = Number(transaction.quantity);
+
+                return (
+                  <tr key={transaction.id}>
+                    <td className="px-4 py-3">
+                      {formatDate(transaction.transaction_date)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-slate-900">
+                        {transaction.item?.item_name ?? "-"}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {transaction.item?.item_code ?? ""}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col items-start gap-1">
+                        <TransactionTypeBadge
+                          referenceType={transaction.reference_type}
+                          value={transaction.transaction_type}
+                        />
+                        <span className="font-semibold text-slate-950">
+                          {quantity > 0 ? "+" : "-"}
+                          {formatStock(
+                            Math.abs(quantity),
+                            transaction.item?.unit,
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="max-w-md whitespace-pre-wrap px-4 py-3 text-slate-700">
+                      {transaction.notes ?? "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {transaction.creator?.full_name ??
+                        transaction.creator?.email ??
+                        transaction.creator?.phone ??
+                        "-"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="grid gap-3 p-3 lg:hidden">
+          {paginatedTransactions.map((transaction) => {
+            const quantity = Number(transaction.quantity);
+
+            return (
+              <article
+                key={transaction.id}
+                className="rounded-lg border border-stone-200 bg-white p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {formatDate(transaction.transaction_date)}
+                    </p>
+                    <h3 className="mt-1 text-sm font-semibold text-slate-950">
+                      {transaction.item?.item_name ?? "Inventory item"}
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      {transaction.item?.item_code ?? ""}
+                    </p>
+                  </div>
+                  <TransactionTypeBadge
+                    referenceType={transaction.reference_type}
+                    value={transaction.transaction_type}
+                  />
+                </div>
+
+                <dl className="mt-3 grid gap-3 text-sm">
+                  <div>
+                    <dt className="text-xs text-slate-500">Correction</dt>
+                    <dd className="font-semibold text-slate-950">
+                      {quantity > 0 ? "+" : "-"}
+                      {formatStock(
+                        Math.abs(quantity),
+                        transaction.item?.unit,
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">
+                      Correction Reason
+                    </dt>
+                    <dd className="mt-1 whitespace-pre-wrap text-slate-700">
+                      {transaction.notes ?? "-"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-slate-500">Created By</dt>
+                    <dd className="mt-1 text-slate-700">
+                      {transaction.creator?.full_name ??
+                        transaction.creator?.email ??
+                        transaction.creator?.phone ??
+                        "-"}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            );
+          })}
+        </div>
+
+        <TablePagination
+          label="stock corrections"
+          pagination={transactionPagination}
+        />
+      </div>
     </section>
   );
 }

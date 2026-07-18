@@ -1,5 +1,5 @@
 begin;
-select plan(24);
+select plan(25);
 
 create temp table inventory_flow_test_ids (
   key text primary key,
@@ -430,6 +430,16 @@ select is(
   ),
   'partially_received',
   'partial Material Received keeps the purchase order open'
+);
+
+select ok(
+  (
+    select received_quantity = 2
+      and last_received_at is not null
+    from public.purchase_order_items
+    where id = (select id from inventory_flow_test_ids where key = 'purchase_order_item')
+  ),
+  'Material Received advances purchase-line receipt quantity and timestamp'
 );
 
 do $$
