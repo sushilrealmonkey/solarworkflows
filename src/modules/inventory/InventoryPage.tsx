@@ -990,9 +990,11 @@ function productOptionLabel(product: InventoryCatalogProduct) {
 }
 
 export function InventoryTransactionsSection({
+  detailView = false,
   direction = "all",
   transactions,
 }: {
+  detailView?: boolean;
   direction?: InventoryTransactionDirection | "all";
   transactions: InventoryTransactionWithRelations[];
 }) {
@@ -1018,12 +1020,14 @@ export function InventoryTransactionsSection({
     <div className="space-y-6">
       {direction === "all" || direction === "inward" ? (
         <InventoryTransactionTable
+          detailView={detailView}
           direction="inward"
           transactions={inwardTransactions}
         />
       ) : null}
       {direction === "all" || direction === "outward" ? (
         <InventoryTransactionTable
+          detailView={detailView}
           direction="outward"
           transactions={outwardTransactions}
         />
@@ -1060,9 +1064,11 @@ function transactionDirection(
 }
 
 function InventoryTransactionTable({
+  detailView,
   direction,
   transactions,
 }: {
+  detailView: boolean;
   direction: InventoryTransactionDirection;
   transactions: InventoryTransactionWithRelations[];
 }) {
@@ -1070,6 +1076,9 @@ function InventoryTransactionTable({
   const paginatedTransactions = transactionPagination.pageItems;
   const isInward = direction === "inward";
   const title = isInward ? "Inward Transactions" : "Outward Transactions";
+  const showType = !detailView;
+  const showNotes = !(detailView && isInward);
+  const showCreatedBy = !detailView;
 
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -1096,7 +1105,7 @@ function InventoryTransactionTable({
                 <tr>
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Item</th>
-                  <th className="px-4 py-3">Type</th>
+                  {showType ? <th className="px-4 py-3">Type</th> : null}
                   <th className="px-4 py-3">Quantity</th>
                   {isInward ? (
                     <>
@@ -1107,8 +1116,10 @@ function InventoryTransactionTable({
                   <th className="px-4 py-3">
                     {isInward ? "Reference" : "Usage"}
                   </th>
-                  <th className="px-4 py-3">Notes</th>
-                  <th className="px-4 py-3">Created By</th>
+                  {showNotes ? <th className="px-4 py-3">Notes</th> : null}
+                  {showCreatedBy ? (
+                    <th className="px-4 py-3">Created By</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -1125,12 +1136,14 @@ function InventoryTransactionTable({
                         {transaction.item?.item_code ?? ""}
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <TransactionTypeBadge
-                        referenceType={transaction.reference_type}
-                        value={transaction.transaction_type}
-                      />
-                    </td>
+                    {showType ? (
+                      <td className="px-4 py-3">
+                        <TransactionTypeBadge
+                          referenceType={transaction.reference_type}
+                          value={transaction.transaction_type}
+                        />
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3 font-semibold text-slate-950">
                       {formatStock(
                         Math.abs(Number(transaction.quantity)),
@@ -1150,13 +1163,17 @@ function InventoryTransactionTable({
                     <td className="px-4 py-3">
                       <TransactionUsage transaction={transaction} />
                     </td>
-                    <td className="px-4 py-3">{transaction.notes ?? "-"}</td>
-                    <td className="px-4 py-3">
-                      {transaction.creator?.full_name ??
-                        transaction.creator?.email ??
-                        transaction.creator?.phone ??
-                        "-"}
-                    </td>
+                    {showNotes ? (
+                      <td className="px-4 py-3">{transaction.notes ?? "-"}</td>
+                    ) : null}
+                    {showCreatedBy ? (
+                      <td className="px-4 py-3">
+                        {transaction.creator?.full_name ??
+                          transaction.creator?.email ??
+                          transaction.creator?.phone ??
+                          "-"}
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -1180,10 +1197,12 @@ function InventoryTransactionTable({
                       {transaction.item?.item_code ?? ""}
                     </p>
                   </div>
-                  <TransactionTypeBadge
-                    referenceType={transaction.reference_type}
-                    value={transaction.transaction_type}
-                  />
+                  {showType ? (
+                    <TransactionTypeBadge
+                      referenceType={transaction.reference_type}
+                      value={transaction.transaction_type}
+                    />
+                  ) : null}
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
                   <div>
@@ -1220,7 +1239,7 @@ function InventoryTransactionTable({
                     </dd>
                   </div>
                 </dl>
-                {transaction.notes ? (
+                {showNotes && transaction.notes ? (
                   <p className="mt-3 text-sm text-slate-600">
                     {transaction.notes}
                   </p>
@@ -1434,6 +1453,23 @@ function TransactionUsage({
             ? ` - ${labelize(transaction.b2b_sale.status)}`
             : ""}
         </p>
+      </div>
+    );
+  }
+
+  if (
+    transaction.reference_type === "purchase_order" &&
+    transaction.reference_id
+  ) {
+    return (
+      <div className="space-y-0.5">
+        <Link
+          className="font-semibold text-[#06173f]"
+          to={`/purchases/${transaction.reference_id}`}
+        >
+          {transaction.purchase_order?.purchase_code ?? "Open purchase order"}
+        </Link>
+        <p className="text-xs text-slate-500">PO number</p>
       </div>
     );
   }

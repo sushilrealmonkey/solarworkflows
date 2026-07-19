@@ -323,7 +323,10 @@ export function InventoryDetailPage() {
             <DetailItem label="Notes" value={item.notes ?? "-"} />
           </DetailSection>
 
-          <InventoryTransactionsSection transactions={transactions} />
+          <InventoryTransactionsSection
+            detailView
+            transactions={transactions}
+          />
         </>
       ) : null}
 

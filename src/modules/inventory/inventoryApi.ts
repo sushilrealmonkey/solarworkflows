@@ -267,6 +267,76 @@ async function attachB2BSaleUsage(
   );
 }
 
+async function attachPurchaseOrderReferences(
+  profile: UserProfile | null,
+  transactions: InventoryTransactionWithRelations[],
+) {
+  const purchaseOrderIds = Array.from(
+    new Set(
+      transactions
+        .filter(
+          (transaction) =>
+            transaction.reference_type === "purchase_order" &&
+            Boolean(transaction.reference_id),
+        )
+        .map((transaction) => transaction.reference_id as string),
+    ),
+  );
+
+  if (purchaseOrderIds.length === 0) {
+    return transactions;
+  }
+
+  const client = requireSupabase();
+  let query = client
+    .from("purchase_orders")
+    .select("id, purchase_code")
+    .in("id", purchaseOrderIds);
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  } else if (profile.organization_id) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return transactions;
+  }
+
+  const purchaseOrdersById = new Map(
+    ((data ?? []) as Array<{ id: string; purchase_code: string | null }>).map(
+      (order) => [order.id, order],
+    ),
+  );
+
+  return transactions.map((transaction) =>
+    transaction.reference_type === "purchase_order" && transaction.reference_id
+      ? {
+          ...transaction,
+          purchase_order:
+            purchaseOrdersById.get(transaction.reference_id) ?? null,
+        }
+      : transaction,
+  );
+}
+
+async function attachInventoryTransactionReferences(
+  profile: UserProfile | null,
+  transactions: InventoryTransactionWithRelations[],
+) {
+  const [withB2BSales, withPurchaseOrders] = await Promise.all([
+    attachB2BSaleUsage(profile, transactions),
+    attachPurchaseOrderReferences(profile, transactions),
+  ]);
+
+  return withB2BSales.map((transaction, index) => ({
+    ...transaction,
+    purchase_order: withPurchaseOrders[index]?.purchase_order,
+  }));
+}
+
 export async function fetchInventoryMasters(profile: UserProfile | null) {
   const client = requireSupabase();
   const organizationId = profile?.organization_id ?? "";
@@ -491,7 +561,7 @@ export async function fetchInventoryTransactions(
     throw new Error(error.message);
   }
 
-  return attachB2BSaleUsage(
+  return attachInventoryTransactionReferences(
     profile,
     (data ?? []) as unknown as InventoryTransactionWithRelations[],
   );
@@ -521,7 +591,7 @@ export async function fetchProjectInventoryTransactions(
     throw new Error(error.message);
   }
 
-  return attachB2BSaleUsage(
+  return attachInventoryTransactionReferences(
     profile,
     (data ?? []) as unknown as InventoryTransactionWithRelations[],
   );

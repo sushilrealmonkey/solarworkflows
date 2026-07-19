@@ -163,6 +163,10 @@ export type InventoryTransactionWithRelations = InventoryTransaction & {
   > | null;
   project?: Pick<Project, "id" | "project_code" | "project_name"> | null;
   b2b_sale?: Pick<B2BSale, "id" | "sale_code" | "status"> | null;
+  purchase_order?: {
+    id: string;
+    purchase_code: string | null;
+  } | null;
   supplier?: {
     id: string;
     vendor_name: string;
