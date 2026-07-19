@@ -17,12 +17,9 @@ import type {
 } from "./types";
 
 export const proformaInvoiceStatusOptions: ProformaInvoiceStatus[] = [
-  "draft",
-  "sent",
+  "unpaid",
   "partially_paid",
   "paid",
-  "converted",
-  "cancelled",
 ];
 
 export const proformaPaymentModeOptions = [
@@ -79,8 +76,11 @@ export function proformaInvoiceContextLabel(
     );
   }
 
-  if (proformaInvoice.b2b_sale_id) {
-    return proformaInvoice.b2b_sale?.sale_code ?? "B2B sale proforma";
+  const b2bSale =
+    proformaInvoice.b2b_sale ?? proformaInvoice.linked_b2b_sales?.[0] ?? null;
+
+  if (proformaInvoice.b2b_sale_id || b2bSale) {
+    return b2bSale?.sale_code ?? "B2B sale proforma";
   }
 
   return "Manual proforma";
@@ -98,15 +98,11 @@ export function proformaInvoiceContextDescription(
 }
 
 export function proformaInvoiceStatusTone(value: string | null | undefined) {
-  if (value === "paid" || value === "converted") {
+  if (value === "paid") {
     return "green" as const;
   }
 
-  if (value === "cancelled") {
-    return "red" as const;
-  }
-
-  if (value === "sent" || value === "partially_paid") {
+  if (value === "partially_paid") {
     return "blue" as const;
   }
 
@@ -144,15 +140,6 @@ export function validateProformaPaymentForm(values: ProformaPaymentFormValues) {
           : "",
     payment_date: values.payment_date.trim() ? "" : "Payment date is required.",
   };
-}
-
-export function canCreateFinalInvoice(
-  proformaInvoice: ProformaInvoiceWithRelations,
-) {
-  return (
-    proformaInvoice.status === "paid" &&
-    !proformaInvoice.final_invoice_id
-  );
 }
 
 export { emptyInvoiceItemForm };

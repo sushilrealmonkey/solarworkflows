@@ -48,7 +48,7 @@ export async function fetchProformaInvoicePdfPreviewUrl(
 ) {
   const document = await fetchGeneratedDocument(proformaInvoicePdfPath(proformaInvoice));
 
-  if (!document) {
+  if (!document?.file_path?.trim()) {
     return null;
   }
 

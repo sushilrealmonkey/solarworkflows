@@ -107,6 +107,7 @@ const proformaSelect = `
   project:projects(${projectOptionSelect}),
   quotation:quotations(${quotationSummarySelect}),
   b2b_sale:b2b_sales!proforma_invoices_b2b_sale_id_fkey(id, sale_code, billing_address, delivery_address, gst_number, total_amount, status),
+  linked_b2b_sales:b2b_sales!b2b_sales_proforma_invoice_id_fkey(id, sale_code, billing_address, delivery_address, gst_number, total_amount, status),
   final_invoice:invoices!proforma_invoices_final_invoice_id_fkey(id, invoice_code, total_amount, balance_due, status),
   created_by_profile:users_profile!proforma_invoices_created_by_fkey(
     id,
@@ -357,7 +358,7 @@ export async function createProformaInvoice(
     .insert({
       organization_id: requireOrganization(profile),
       created_by: profile?.id ?? null,
-      status: "draft",
+      status: "unpaid",
       ...proformaPayload(values),
     })
     .select("*")
@@ -483,32 +484,6 @@ export async function deleteProformaInvoice(id: string) {
 export async function recalculateProformaInvoiceTotals(id: string) {
   const client = requireSupabase();
   const { data, error } = await client.rpc("recalculate_proforma_invoice_totals", {
-    target_proforma_invoice_id: id,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as ProformaInvoice;
-}
-
-export async function markProformaInvoiceSent(id: string) {
-  const client = requireSupabase();
-  const { data, error } = await client.rpc("mark_proforma_invoice_sent", {
-    target_proforma_invoice_id: id,
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data as ProformaInvoice;
-}
-
-export async function markProformaInvoiceCancelled(id: string) {
-  const client = requireSupabase();
-  const { data, error } = await client.rpc("mark_proforma_invoice_cancelled", {
     target_proforma_invoice_id: id,
   });
 

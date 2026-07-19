@@ -114,11 +114,19 @@ export async function uploadGeneratedPdf(
   };
 }
 
-export async function createGeneratedPdfPreviewUrl(filePath: string) {
+export async function createGeneratedPdfPreviewUrl(
+  filePath: string | null | undefined,
+) {
+  const normalizedFilePath = filePath?.trim();
+
+  if (!normalizedFilePath) {
+    throw new Error("The generated PDF has no storage path and must be regenerated.");
+  }
+
   const client = requireSupabase();
   const { data, error } = await client.storage
     .from(documentBucketName)
-    .createSignedUrl(filePath, 60 * 10);
+    .createSignedUrl(normalizedFilePath, 60 * 10);
 
   if (error) {
     throw new Error(error.message);
@@ -163,6 +171,6 @@ export function buildPurchaseOrderPdfPath(
   return `${organizationId}/purchase-orders/${sanitizePdfName(purchaseCode || `${prefix}-${fallbackId.slice(0, 8)}`)}.pdf`;
 }
 
-function sanitizePdfName(value: string) {
-  return value.replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
+function sanitizePdfName(value: string | null | undefined) {
+  return value?.replace(/[^a-zA-Z0-9._-]/g, "_") || "document";
 }

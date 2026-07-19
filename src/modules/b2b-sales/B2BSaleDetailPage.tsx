@@ -454,8 +454,7 @@ export function B2BSaleDetailPage() {
   const canCreateFinalInvoice =
     canCreateInvoice &&
     hasProforma &&
-    !hasInvoice &&
-    sale?.proforma_invoice?.status === "paid";
+    !hasInvoice;
   const canDispatch =
     canUpdate &&
     canDispatchInventory &&

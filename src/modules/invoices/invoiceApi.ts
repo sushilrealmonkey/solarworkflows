@@ -570,7 +570,6 @@ export async function fetchInvoiceLinkOptions(
   let proformaInvoicesQuery = client
     .from("proforma_invoices")
     .select(invoiceProformaOptionSelect)
-    .eq("status", "paid")
     .is("final_invoice_id", null)
     .order("created_at", { ascending: false });
 

@@ -17,7 +17,6 @@ import {
   Button,
   EmptyState,
   LoadingSkeleton,
-  PlaceholderAction,
   SearchInput,
   SelectInput,
   TextInput,
@@ -46,7 +45,6 @@ import {
   fetchProformaInvoiceLinkOptions,
   fetchProformaInvoices,
   fetchQuotationItemsForProformaInvoice,
-  markProformaInvoiceSent,
   updateProformaInvoice,
 } from "./proformaInvoiceApi";
 import {
@@ -108,7 +106,6 @@ export function ProformaInvoicesPage() {
   } | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [sendingProformaId, setSendingProformaId] = useState<string | null>(null);
   const [preparingProformaId, setPreparingProformaId] = useState<string | null>(
     null,
   );
@@ -262,24 +259,6 @@ export function ProformaInvoicesPage() {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       openProformaDetail(proformaInvoiceId);
-    }
-  }
-
-  async function handleMarkSent(proformaInvoice: ProformaInvoiceWithRelations) {
-    try {
-      setSendingProformaId(proformaInvoice.id);
-      await markProformaInvoiceSent(proformaInvoice.id);
-      showToast("Proforma invoice marked sent.", "success");
-      await loadData();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Proforma invoice status update failed.",
-        "error",
-      );
-    } finally {
-      setSendingProformaId(null);
     }
   }
 
@@ -621,16 +600,12 @@ export function ProformaInvoicesPage() {
                     </td>
                     <td className="w-52 px-4 py-3">
                       <ProformaNextStepActions
-                        canCreateDocuments={canCreateDocuments}
-                        canMarkSent={canUpdate && canMarkProformaSent(proformaInvoice)}
                         canRecordPayment={
                           canCreatePayments && canRecordProformaPayment(proformaInvoice)
                         }
                         downloadUrl={proformaPdfUrls[proformaInvoice.id]}
                         preparing={preparingProformaId === proformaInvoice.id}
-                        sending={sendingProformaId === proformaInvoice.id}
                         onDownload={() => void handleDownloadProforma(proformaInvoice)}
-                        onMarkSent={() => void handleMarkSent(proformaInvoice)}
                         onRecordPayment={() => openPaymentForm(proformaInvoice)}
                       />
                     </td>
@@ -680,16 +655,12 @@ export function ProformaInvoicesPage() {
                   onKeyDown={(event) => event.stopPropagation()}
                 >
                   <ProformaNextStepActions
-                    canCreateDocuments={canCreateDocuments}
-                    canMarkSent={canUpdate && canMarkProformaSent(proformaInvoice)}
                     canRecordPayment={
                       canCreatePayments && canRecordProformaPayment(proformaInvoice)
                     }
                     downloadUrl={proformaPdfUrls[proformaInvoice.id]}
                     preparing={preparingProformaId === proformaInvoice.id}
-                    sending={sendingProformaId === proformaInvoice.id}
                     onDownload={() => void handleDownloadProforma(proformaInvoice)}
-                    onMarkSent={() => void handleMarkSent(proformaInvoice)}
                     onRecordPayment={() => openPaymentForm(proformaInvoice)}
                   />
                 </div>
@@ -782,44 +753,27 @@ function CardItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function canMarkProformaSent(proformaInvoice: ProformaInvoiceWithRelations) {
-  return ![
-    "sent",
-    "partially_paid",
-    "paid",
-    "converted",
-    "cancelled",
-  ].includes(proformaInvoice.status ?? "");
-}
-
 function canRecordProformaPayment(
   proformaInvoice: ProformaInvoiceWithRelations,
 ) {
   return (
-    ["sent", "partially_paid"].includes(proformaInvoice.status ?? "") &&
+    !proformaInvoice.archived_at &&
+    !proformaInvoice.final_invoice_id &&
     Number(proformaInvoice.balance_due ?? 0) > 0
   );
 }
 
 function ProformaNextStepActions({
-  canCreateDocuments,
-  canMarkSent,
   canRecordPayment,
   downloadUrl,
   preparing,
-  sending,
   onDownload,
-  onMarkSent,
   onRecordPayment,
 }: {
-  canCreateDocuments: boolean;
-  canMarkSent: boolean;
   canRecordPayment: boolean;
   downloadUrl: string | undefined;
   preparing: boolean;
-  sending: boolean;
   onDownload: () => void;
-  onMarkSent: () => void;
   onRecordPayment: () => void;
 }) {
   return (
@@ -828,16 +782,6 @@ function ProformaNextStepActions({
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      {canMarkSent ? (
-        <button
-          className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={sending}
-          onClick={onMarkSent}
-          type="button"
-        >
-          {sending ? "Marking Sent" : "Mark Sent"}
-        </button>
-      ) : null}
       {downloadUrl ? (
         <a
           className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
@@ -848,7 +792,7 @@ function ProformaNextStepActions({
         >
           Download Proforma
         </a>
-      ) : canCreateDocuments ? (
+      ) : (
         <button
           className="inline-flex min-h-9 w-full items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
           disabled={preparing}
@@ -857,8 +801,6 @@ function ProformaNextStepActions({
         >
           {preparing ? "Preparing Proforma" : "Download Proforma"}
         </button>
-      ) : (
-        <PlaceholderAction>Download Proforma</PlaceholderAction>
       )}
       {canRecordPayment ? (
         <button

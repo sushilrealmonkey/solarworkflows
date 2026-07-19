@@ -73,6 +73,7 @@ type OrganizationRow = {
 
 type OrganizationBrandingRow = {
   organization_id: string;
+  company_name: string | null;
   company_logo_url: string | null;
 };
 
@@ -201,15 +202,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         typeof loadedBranding.company_logo_url === "string"
           ? loadedBranding.company_logo_url
           : null;
+      const tenantDisplayName =
+        loadedBranding?.organization_id === loadedProfile.organization_id &&
+        typeof loadedBranding.company_name === "string" &&
+        loadedBranding.company_name.trim()
+          ? loadedBranding.company_name
+          : null;
 
       setOrganization({
         id: loadedProfile.organization_id,
         name:
-          typeof settingsData?.company_name === "string" && settingsData.company_name
+          tenantDisplayName ??
+          (typeof settingsData?.company_name === "string" && settingsData.company_name
             ? settingsData.company_name
             : typeof loadedOrganization?.name === "string"
               ? loadedOrganization.name
-              : defaultOrganization.name,
+              : defaultOrganization.name),
         logoUrl:
           tenantLogoUrl ??
           (typeof settingsData?.company_logo_url === "string"

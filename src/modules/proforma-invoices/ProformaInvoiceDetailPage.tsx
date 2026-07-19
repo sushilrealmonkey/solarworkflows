@@ -7,12 +7,10 @@ import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
   Button,
-  ConfirmDialog,
   DetailItem,
   DetailSection,
   EmptyState,
   LoadingSkeleton,
-  PlaceholderAction,
 } from "../crm/CrmComponents";
 import {
   formatDate,
@@ -36,8 +34,6 @@ import {
   fetchProformaInvoiceItems,
   fetchProformaInvoiceLinkOptions,
   fetchProformaInvoicePayments,
-  markProformaInvoiceCancelled,
-  markProformaInvoiceSent,
   recalculateProformaInvoiceTotals,
   updateProformaInvoice,
 } from "./proformaInvoiceApi";
@@ -67,8 +63,6 @@ import {
 } from "./proformaInvoicePdfWorkflow";
 import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
-type StatusAction = "sent" | "cancelled";
-
 export function ProformaInvoiceDetailPage() {
   const { id } = useParams();
   const { profile, permissions, organization } = useAuth();
@@ -93,8 +87,6 @@ export function ProformaInvoiceDetailPage() {
     useState<ProformaPaymentFormValues | null>(null);
   const [paymentErrors, setPaymentErrors] = useState<Record<string, string>>({});
   const [savingPayment, setSavingPayment] = useState(false);
-  const [statusTarget, setStatusTarget] = useState<StatusAction | null>(null);
-  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [preparingPdf, setPreparingPdf] = useState(false);
 
@@ -229,33 +221,6 @@ export function ProformaInvoiceDetailPage() {
     }
   }
 
-  async function confirmStatusAction() {
-    if (!proformaInvoice || !statusTarget) {
-      return;
-    }
-
-    try {
-      setUpdatingStatus(true);
-      if (statusTarget === "sent") {
-        await markProformaInvoiceSent(proformaInvoice.id);
-      } else {
-        await markProformaInvoiceCancelled(proformaInvoice.id);
-      }
-      showToast("Proforma invoice status updated.", "success");
-      setStatusTarget(null);
-      await loadProformaInvoice();
-    } catch (nextError) {
-      showToast(
-        nextError instanceof Error
-          ? nextError.message
-          : "Proforma invoice status update failed.",
-        "error",
-      );
-    } finally {
-      setUpdatingStatus(false);
-    }
-  }
-
   function openPaymentForm() {
     if (!proformaInvoice) {
       return;
@@ -286,25 +251,7 @@ export function ProformaInvoiceDetailPage() {
   ) {
     try {
       setPreparingPdf(true);
-      const existingPreviewUrl =
-        await fetchProformaInvoicePdfPreviewUrl(targetProformaInvoice);
-      if (existingPreviewUrl) {
-        setPdfPreviewUrl(existingPreviewUrl);
-        return;
-      }
-
-      if (!canCreateDocuments) {
-        setPdfPreviewUrl(null);
-        return;
-      }
-
-      const result = await generateAndStoreProformaInvoicePdf(
-        profile,
-        organization,
-        targetProformaInvoice,
-        targetItems,
-      );
-      setPdfPreviewUrl(result.previewUrl);
+      await prepareProformaPdf(targetProformaInvoice, targetItems);
     } catch {
       setPdfPreviewUrl(null);
     } finally {
@@ -312,23 +259,77 @@ export function ProformaInvoiceDetailPage() {
     }
   }
 
-  const canMarkSent =
-    canUpdate &&
-    proformaInvoice?.status !== "sent" &&
-    proformaInvoice?.status !== "partially_paid" &&
-    proformaInvoice?.status !== "paid" &&
-    proformaInvoice?.status !== "converted" &&
-    proformaInvoice?.status !== "cancelled";
+  async function prepareProformaPdf(
+    targetProformaInvoice: ProformaInvoiceWithRelations,
+    targetItems: ProformaInvoiceItem[],
+  ) {
+    const existingPreviewUrl =
+      await fetchProformaInvoicePdfPreviewUrl(targetProformaInvoice);
+    if (existingPreviewUrl) {
+      setPdfPreviewUrl(existingPreviewUrl);
+      return existingPreviewUrl;
+    }
+
+    if (!canCreateDocuments) {
+      return null;
+    }
+
+    const result = await generateAndStoreProformaInvoicePdf(
+      profile,
+      organization,
+      targetProformaInvoice,
+      targetItems,
+    );
+    setPdfPreviewUrl(result.previewUrl);
+    return result.previewUrl;
+  }
+
+  async function handleDownloadProforma() {
+    if (!proformaInvoice) {
+      return;
+    }
+
+    if (pdfPreviewUrl) {
+      window.open(pdfPreviewUrl, "_blank", "noreferrer");
+      return;
+    }
+
+    if (!canCreateDocuments) {
+      showToast(
+        "Download needs documents:create access for generated proforma PDFs.",
+        "error",
+      );
+      return;
+    }
+
+    try {
+      setPreparingPdf(true);
+      const nextUrl = await prepareProformaPdf(proformaInvoice, items);
+      if (nextUrl) {
+        window.open(nextUrl, "_blank", "noreferrer");
+      }
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Proforma PDF download failed.",
+        "error",
+      );
+    } finally {
+      setPreparingPdf(false);
+    }
+  }
+
   const canRecordPayment =
     canCreatePayments &&
-    ["sent", "partially_paid"].includes(proformaInvoice?.status ?? "") &&
+    !proformaInvoice?.archived_at &&
+    !proformaInvoice?.final_invoice_id &&
     Number(proformaInvoice?.balance_due ?? 0) > 0;
   const canStartTaxInvoice =
     canCreate &&
     !proformaInvoice?.archived_at &&
-    !proformaInvoice?.final_invoice_id &&
-    !["converted", "cancelled"].includes(proformaInvoice?.status ?? "");
-  const taxInvoiceReady = proformaInvoice?.status === "paid";
+    !proformaInvoice?.final_invoice_id;
+  const b2bSale = proformaInvoice ? relatedB2BSale(proformaInvoice) : null;
 
   return (
     <div className="space-y-6">
@@ -352,7 +353,7 @@ export function ProformaInvoiceDetailPage() {
               recordType="Proforma Invoice"
               name={proformaInvoice.proforma_code ?? "Proforma Invoice"}
               action={
-                canUpdate && proformaInvoice.status === "draft" && !proformaInvoice.archived_at ? (
+                canUpdate && !proformaInvoice.final_invoice_id && !proformaInvoice.archived_at ? (
                   <button
                     aria-label="Edit proforma invoice"
                     className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
@@ -382,16 +383,16 @@ export function ProformaInvoiceDetailPage() {
                 <DetailItem
                   label="GST Number"
                   value={
-                    proformaInvoice.b2b_sale?.gst_number ||
+                    b2bSale?.gst_number ||
                     proformaInvoice.customer?.gst_number ||
                     "-"
                   }
                 />
                 <DetailItem label="Billing Address" value={customerAddress(proformaInvoice)} />
-                {proformaInvoice.b2b_sale?.delivery_address ? (
+                {b2bSale?.delivery_address ? (
                   <DetailItem
                     label="Delivery Address"
-                    value={proformaInvoice.b2b_sale.delivery_address}
+                    value={b2bSale.delivery_address}
                   />
                 ) : null}
               </DetailSection>
@@ -403,7 +404,7 @@ export function ProformaInvoiceDetailPage() {
                 <DetailItem label="Final Invoice" value={finalInvoiceLink(proformaInvoice)} />
                 <DetailItem label="PI Date" value={formatDate(proformaInvoice.proforma_date)} />
                 <DetailItem label="Due Date" value={formatDate(proformaInvoice.due_date)} />
-                <DetailItem label="Status" value={<ProformaInvoiceStatusBadge value={proformaInvoice.status} />} />
+                <DetailItem label="Payment Status" value={<ProformaInvoiceStatusBadge value={proformaInvoice.status} />} />
                 <DetailItem label="Notes" value={proformaInvoice.notes ?? "-"} />
               </DetailSection>
 
@@ -425,11 +426,10 @@ export function ProformaInvoiceDetailPage() {
 
               {canViewPayments ? <RelatedPaymentsSection payments={payments} /> : null}
 
-              <DetailSection title="Status Timeline">
-                <DetailItem label="Current Status" value={<ProformaInvoiceStatusBadge value={proformaInvoice.status} />} />
-                <DetailItem label="Sent At" value={formatDateTime(proformaInvoice.sent_at)} />
+              <DetailSection title="Record Details">
+                <DetailItem label="Payment Status" value={<ProformaInvoiceStatusBadge value={proformaInvoice.status} />} />
                 <DetailItem label="Paid At" value={formatDateTime(proformaInvoice.paid_at)} />
-                <DetailItem label="Converted At" value={formatDateTime(proformaInvoice.converted_at)} />
+                <DetailItem label="Tax Invoice Created" value={formatDateTime(proformaInvoice.converted_at)} />
                 <DetailItem label="Created" value={formatDateTime(proformaInvoice.created_at)} />
                 <DetailItem label="Updated" value={formatDateTime(proformaInvoice.updated_at)} />
                 <DetailItem label="Created By" value={createdByName(proformaInvoice)} />
@@ -438,29 +438,19 @@ export function ProformaInvoiceDetailPage() {
 
             <aside className="space-y-6">
               <ProformaNextStepSection
-                canMarkSent={canMarkSent}
                 canRecordPayment={canRecordPayment}
                 canCreateTaxInvoice={canStartTaxInvoice}
-                taxInvoiceReady={taxInvoiceReady}
                 downloadUrl={pdfPreviewUrl}
                 preparingPdf={preparingPdf}
                 onCreateTaxInvoice={() =>
                   navigate(`/invoices?proformaInvoiceId=${proformaInvoice.id}`)
                 }
-                onMarkSent={() => setStatusTarget("sent")}
+                onDownload={() => void handleDownloadProforma()}
                 onRecordPayment={openPaymentForm}
               />
               <ProformaInvoiceTotalsCard proformaInvoice={proformaInvoice} />
             </aside>
           </div>
-
-          {canUpdate && !proformaInvoice.archived_at && ["draft", "sent"].includes(proformaInvoice.status ?? "") && !payments.some((payment) => payment.status === "received") ? (
-            <ProformaDangerZone
-              canCancel
-              updatingStatus={updatingStatus}
-              onCancel={() => setStatusTarget("cancelled")}
-            />
-          ) : null}
 
           <RecordLifecyclePanel
             archiveReason={proformaInvoice.archive_reason}
@@ -491,8 +481,8 @@ export function ProformaInvoiceDetailPage() {
           errors={formErrors}
           options={options}
           includeItems
-          canAddItems={canCreate && canUpdate && proformaInvoice?.status === "draft"}
-          canRemoveItems={canDelete && canUpdate && proformaInvoice?.status === "draft"}
+          canAddItems={canCreate && canUpdate && !proformaInvoice?.final_invoice_id}
+          canRemoveItems={canDelete && canUpdate && !proformaInvoice?.final_invoice_id}
           onClose={() => setEditing(null)}
           onSubmit={handleEditSubmit}
           saving={saving}
@@ -507,25 +497,6 @@ export function ProformaInvoiceDetailPage() {
           onClose={() => setPaymentForm(null)}
           onSubmit={handlePaymentSubmit}
           saving={savingPayment}
-        />
-      ) : null}
-
-      {statusTarget && proformaInvoice ? (
-        <ConfirmDialog
-          title={
-            statusTarget === "cancelled"
-              ? "Cancel proforma invoice?"
-              : "Update proforma status?"
-          }
-          description={`Set ${proformaInvoice.proforma_code ?? "this proforma invoice"} to ${labelize(statusTarget)}.`}
-          confirming={updatingStatus}
-          confirmLabel={
-            statusTarget === "cancelled" ? "Cancel Proforma" : "Update Status"
-          }
-          confirmingLabel="Updating..."
-          confirmVariant={statusTarget === "cancelled" ? "danger" : "primary"}
-          onCancel={() => setStatusTarget(null)}
-          onConfirm={confirmStatusAction}
         />
       ) : null}
 
@@ -553,23 +524,19 @@ function PencilIcon() {
 }
 
 function ProformaNextStepSection({
-  canMarkSent,
   canRecordPayment,
   canCreateTaxInvoice,
-  taxInvoiceReady,
   downloadUrl,
   preparingPdf,
   onCreateTaxInvoice,
-  onMarkSent,
+  onDownload,
   onRecordPayment,
 }: {
-  canMarkSent: boolean;
   canRecordPayment: boolean;
   canCreateTaxInvoice: boolean;
-  taxInvoiceReady: boolean;
   downloadUrl: string | null;
   preparingPdf: boolean;
-  onMarkSent: () => void;
+  onDownload: () => void;
   onCreateTaxInvoice: () => void;
   onRecordPayment: () => void;
 }) {
@@ -577,22 +544,13 @@ function ProformaNextStepSection({
     <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <h2 className="text-base font-semibold text-slate-950">Next Step</h2>
       <div className="mt-4 grid gap-2">
-        {canMarkSent ? <Button onClick={onMarkSent}>Mark Sent</Button> : null}
-        <DownloadProformaAction preparing={preparingPdf} url={downloadUrl} />
+        <DownloadProformaAction
+          onDownload={onDownload}
+          preparing={preparingPdf}
+          url={downloadUrl}
+        />
         {canCreateTaxInvoice ? (
-          <>
-            <Button
-              disabled={!taxInvoiceReady}
-              onClick={onCreateTaxInvoice}
-            >
-              Create Tax Invoice
-            </Button>
-            {!taxInvoiceReady ? (
-              <p className="text-xs leading-5 text-slate-500">
-                Available after the proforma invoice is fully paid.
-              </p>
-            ) : null}
-          </>
+          <Button onClick={onCreateTaxInvoice}>Create Tax Invoice</Button>
         ) : null}
         {canRecordPayment ? (
           <Button onClick={onRecordPayment} variant="secondary">
@@ -607,15 +565,17 @@ function ProformaNextStepSection({
 function DownloadProformaAction({
   url,
   preparing = false,
+  onDownload,
 }: {
   url: string | null | undefined;
   preparing?: boolean;
+  onDownload: () => void;
 }) {
   if (!url) {
     return (
-      <PlaceholderAction>
+      <Button disabled={preparing} onClick={onDownload}>
         {preparing ? "Preparing Proforma" : "Download Proforma"}
-      </PlaceholderAction>
+      </Button>
     );
   }
 
@@ -629,40 +589,6 @@ function DownloadProformaAction({
     >
       Download Proforma
     </a>
-  );
-}
-
-function ProformaDangerZone({
-  canCancel,
-  updatingStatus,
-  onCancel,
-}: {
-  canCancel: boolean;
-  updatingStatus: boolean;
-  onCancel: () => void;
-}) {
-  return (
-    <section className="rounded-xl border border-rose-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-rose-900">Danger Zone</h2>
-          <p className="mt-1 text-sm leading-6 text-rose-700">
-            Cancel this proforma invoice while retaining its billing history.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canCancel ? (
-            <Button
-              disabled={updatingStatus}
-              onClick={onCancel}
-              variant="danger"
-            >
-              Cancel Proforma
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -842,16 +768,18 @@ function quotationLink(proformaInvoice: ProformaInvoiceWithRelations) {
 }
 
 function b2bSaleLink(proformaInvoice: ProformaInvoiceWithRelations) {
-  if (!proformaInvoice.b2b_sale_id) {
+  const b2bSale = relatedB2BSale(proformaInvoice);
+
+  if (!b2bSale) {
     return "-";
   }
 
   return (
     <Link
       className="font-semibold text-[#06173f]"
-      to={`/b2b-sales/${proformaInvoice.b2b_sale_id}`}
+      to={`/b2b-sales/${b2bSale.id}`}
     >
-      {proformaInvoice.b2b_sale?.sale_code ?? "B2B sale"}
+      {b2bSale.sale_code ?? "B2B sale"}
     </Link>
   );
 }
@@ -872,8 +800,10 @@ function finalInvoiceLink(proformaInvoice: ProformaInvoiceWithRelations) {
 }
 
 function customerAddress(proformaInvoice: ProformaInvoiceWithRelations) {
-  if (proformaInvoice.b2b_sale?.billing_address) {
-    return proformaInvoice.b2b_sale.billing_address;
+  const b2bSale = relatedB2BSale(proformaInvoice);
+
+  if (b2bSale?.billing_address) {
+    return b2bSale.billing_address;
   }
 
   return [
@@ -886,6 +816,10 @@ function customerAddress(proformaInvoice: ProformaInvoiceWithRelations) {
   ]
     .filter(Boolean)
     .join(", ") || "-";
+}
+
+function relatedB2BSale(proformaInvoice: ProformaInvoiceWithRelations) {
+  return proformaInvoice.b2b_sale ?? proformaInvoice.linked_b2b_sales?.[0] ?? null;
 }
 
 function createdByName(proformaInvoice: ProformaInvoiceWithRelations) {

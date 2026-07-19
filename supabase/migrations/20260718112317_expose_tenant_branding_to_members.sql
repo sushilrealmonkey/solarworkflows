@@ -1,4 +1,4 @@
--- Active tenant members need the tenant logo in the application shell even
+-- Active tenant members need the tenant display name and logo even
 -- when their role cannot open Settings. Keep this read surface deliberately
 -- narrower than get_organization_settings, which also returns operational and
 -- financial configuration.
@@ -30,18 +30,25 @@ begin
   end if;
 
   select jsonb_build_object(
-    'organization_id', organization_settings.organization_id,
+    'organization_id', organizations.id,
+    'company_name', coalesce(
+      nullif(btrim(organization_settings.company_name), ''),
+      nullif(btrim(organizations.name), '')
+    ),
     'company_logo_url', nullif(btrim(organization_settings.company_logo_url), '')
   )
   into branding
-  from public.organization_settings
-  where organization_settings.organization_id = current_organization_id
+  from public.organizations
+  left join public.organization_settings
+    on organization_settings.organization_id = organizations.id
+  where organizations.id = current_organization_id
   limit 1;
 
   return coalesce(
     branding,
     jsonb_build_object(
       'organization_id', current_organization_id,
+      'company_name', null,
       'company_logo_url', null
     )
   );

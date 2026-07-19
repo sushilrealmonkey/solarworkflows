@@ -10,12 +10,9 @@ import type {
 } from "../invoices/types";
 
 export type ProformaInvoiceStatus =
-  | "draft"
-  | "sent"
+  | "unpaid"
   | "partially_paid"
-  | "paid"
-  | "converted"
-  | "cancelled";
+  | "paid";
 
 export type ProformaInvoice = {
   id: string;
@@ -86,6 +83,15 @@ export type ProformaInvoiceWithRelations = ProformaInvoice & {
     total_amount: number | null;
     status: string | null;
   } | null;
+  linked_b2b_sales?: Array<{
+    id: string;
+    sale_code: string | null;
+    billing_address: string | null;
+    delivery_address: string | null;
+    gst_number: string | null;
+    total_amount: number | null;
+    status: string | null;
+  }> | null;
   final_invoice?: Pick<
     InvoiceWithRelations,
     "id" | "invoice_code" | "total_amount" | "balance_due" | "status"

@@ -1338,7 +1338,7 @@ function SolarOperationsBrandGraphic({
   return (
     <div className={`h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-orange-100 bg-white shadow-sm sm:h-20 sm:w-36 ${className}`}>
       <OrganizationLogo
-        className="h-full w-full object-contain p-2"
+        className="h-full w-full object-contain"
         fallback={<SolarOperationsPlaceholder />}
         organizationName={organizationName}
         src={logoUrl}
