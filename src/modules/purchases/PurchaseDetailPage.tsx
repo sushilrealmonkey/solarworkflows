@@ -104,9 +104,16 @@ export function PurchaseDetailPage() {
     roleNames,
     "update",
   );
+  const canUpdatePurchases = hasPermission(
+    profile,
+    permissions,
+    "purchases",
+    "update",
+  );
   const canManageStatus =
-    hasPermission(profile, permissions, "inventory", "update") &&
-    canUpdatePricing;
+    canUpdatePurchases ||
+    (hasPermission(profile, permissions, "inventory", "update") &&
+      canUpdatePricing);
   const canCreateItems = hasPermission(
     profile,
     permissions,

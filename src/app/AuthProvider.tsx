@@ -104,6 +104,7 @@ const permissionModuleKeys = [
   "documents",
   "product_master",
   "product_pricing",
+  "purchases",
   "inventory",
   "vendors",
   "staff",

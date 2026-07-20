@@ -1,5 +1,5 @@
 begin;
-select plan(28);
+select plan(29);
 
 create temp table inventory_flow_test_ids (
   key text primary key,
@@ -33,6 +33,23 @@ begin
   );
 end;
 $$;
+
+select ok(
+  exists (
+    select 1
+    from public.roles
+    join public.role_permissions on role_permissions.role_id = roles.id
+    join public.permissions on permissions.id = role_permissions.permission_id
+    join public.modules on modules.id = permissions.module_id
+    where roles.organization_id = (
+      select id from inventory_flow_test_ids where key = 'organization'
+    )
+      and roles.role_key = 'backend_team'
+      and modules.module_key = 'purchases'
+      and permissions.action_key = 'update'
+  ),
+  'Backend standard role has purchase-specific update access'
+);
 
 update public.roles
 set company_id = (select id from inventory_flow_test_ids where key = 'company')
