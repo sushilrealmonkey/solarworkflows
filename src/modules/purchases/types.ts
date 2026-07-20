@@ -114,6 +114,7 @@ export type PurchaseOrderFormValues = {
   vendor_id: string;
   order_date: string;
   expected_delivery_date: string;
+  bill_invoice_no: string;
   notes: string;
   items: PurchaseOrderItemFormValues[];
 };

@@ -1,5 +1,5 @@
 begin;
-select plan(25);
+select plan(28);
 
 create temp table inventory_flow_test_ids (
   key text primary key,
@@ -483,6 +483,57 @@ select ok(
       )
   ),
   'final Material Received completes the order on the same inventory row'
+);
+
+do $$
+begin
+  perform public.update_received_purchase_order(
+    (select id from inventory_flow_test_ids where key = 'purchase_order'),
+    'FLOW-BILL-REVISED',
+    current_date + 7,
+    'Receipt paperwork updated'
+  );
+end;
+$$;
+
+select ok(
+  (
+    select purchase_orders.expected_delivery_date = current_date + 7
+      and purchase_orders.notes = 'Receipt paperwork updated'
+      and not exists (
+        select 1
+        from public.inventory_batches
+        where inventory_batches.purchase_order_id = purchase_orders.id
+          and inventory_batches.bill_no is distinct from 'FLOW-BILL-REVISED'
+      )
+    from public.purchase_orders
+    where purchase_orders.id = (
+      select id from inventory_flow_test_ids where key = 'purchase_order'
+    )
+  ),
+  'received PO edit updates allowed header fields and every receipt bill number'
+);
+
+select ok(
+  not exists (
+    select 1
+    from public.inventory_transactions
+    where inventory_transactions.reference_type = 'purchase_order'
+      and inventory_transactions.reference_id = (
+        select id from inventory_flow_test_ids where key = 'purchase_order'
+      )
+      and inventory_transactions.transaction_type = 'stock_in'
+      and inventory_transactions.bill_no is distinct from 'FLOW-BILL-REVISED'
+  ),
+  'received PO bill edit keeps inventory ledger metadata in sync'
+);
+
+select is(
+  public.purchase_order_bill_invoice_no(
+    (select id from inventory_flow_test_ids where key = 'purchase_order')
+  ),
+  'FLOW-BILL-REVISED',
+  'PO detail retrieves the corrected bill or invoice number through its controlled RPC'
 );
 
 do $$

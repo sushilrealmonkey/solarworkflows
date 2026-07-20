@@ -321,6 +321,40 @@ export async function createPurchaseOrder(
   return order;
 }
 
+export async function fetchPurchaseOrderBillInvoiceNumber(
+  id: string,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("purchase_order_bill_invoice_no", {
+    target_purchase_order_id: id,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return typeof data === "string" ? data : "";
+}
+
+export async function updateReceivedPurchaseOrder(
+  id: string,
+  values: PurchaseOrderFormValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("update_received_purchase_order", {
+    target_purchase_order_id: id,
+    bill_invoice_no: nullable(values.bill_invoice_no),
+    target_expected_delivery_date: nullable(values.expected_delivery_date),
+    target_notes: nullable(values.notes),
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as PurchaseOrder;
+}
+
 export async function updatePurchaseOrder(
   profile: UserProfile | null,
   id: string,

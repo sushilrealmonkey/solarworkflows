@@ -39,6 +39,7 @@ export function emptyPurchaseOrderForm(): PurchaseOrderFormValues {
     vendor_id: "",
     order_date: new Date().toISOString().slice(0, 10),
     expected_delivery_date: "",
+    bill_invoice_no: "",
     notes: "",
     items: [emptyPurchaseItemForm()],
   };
@@ -51,6 +52,7 @@ export function purchaseOrderToForm(
     vendor_id: order.vendor_id,
     order_date: order.order_date ?? new Date().toISOString().slice(0, 10),
     expected_delivery_date: order.expected_delivery_date ?? "",
+    bill_invoice_no: "",
     notes: order.notes ?? "",
     items:
       order.items && order.items.length > 0

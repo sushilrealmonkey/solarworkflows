@@ -978,6 +978,7 @@ export function PurchaseOrderFormModal({
   priceDefaults,
   canAddItems = true,
   canRemoveItems = true,
+  receiptLocked = false,
   onClose,
   onSubmit,
   saving,
@@ -992,6 +993,7 @@ export function PurchaseOrderFormModal({
   priceDefaults: Map<string, { current_purchase_price: number | null; gst_percent: number | null }>;
   canAddItems?: boolean;
   canRemoveItems?: boolean;
+  receiptLocked?: boolean;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
@@ -1018,6 +1020,47 @@ export function PurchaseOrderFormModal({
           ? priceDefaults.get(selectedItem.catalog_product_id)
           : null,
       ),
+    );
+  }
+
+  if (receiptLocked) {
+    return (
+      <Modal
+        title={title}
+        onClose={onClose}
+        onSubmit={onSubmit}
+        submitLabel={submitLabel}
+        submitting={saving}
+      >
+        <section className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 md:col-span-2">
+          Material has already been received. Supplier, order date, items,
+          quantities, and pricing are locked. You can still update the bill /
+          invoice number, expected delivery date, and notes.
+        </section>
+        <TextInput
+          label="Bill / Invoice No."
+          value={values.bill_invoice_no}
+          onChange={(bill_invoice_no) =>
+            setValues({ ...values, bill_invoice_no })
+          }
+        />
+        <p className="self-end pb-2 text-xs text-slate-500">
+          This number is applied to all material receipts recorded for this PO.
+        </p>
+        <TextInput
+          label="Expected Delivery"
+          type="date"
+          value={values.expected_delivery_date}
+          onChange={(expected_delivery_date) =>
+            setValues({ ...values, expected_delivery_date })
+          }
+        />
+        <TextArea
+          label="Notes"
+          value={values.notes}
+          onChange={(notes) => setValues({ ...values, notes })}
+        />
+      </Modal>
     );
   }
 

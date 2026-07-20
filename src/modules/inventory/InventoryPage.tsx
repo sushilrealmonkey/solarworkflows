@@ -131,13 +131,20 @@ export function InventoryPage() {
     try {
       setLoading(true);
       setError(null);
+      const openingCandidatesPromise = canManageStock
+        ? fetchInventoryOpeningBalanceCandidates().catch((openingStockError) => {
+            console.error(
+              "Unable to load inventory opening balance candidates.",
+              openingStockError,
+            );
+            return [];
+          })
+        : Promise.resolve([]);
       const [nextItems, nextTransactions, nextMasters, openingCandidates] = await Promise.all([
         fetchInventoryItems(profile, archiveScope),
         fetchInventoryTransactions(profile),
         fetchInventoryMasters(profile),
-        canManageStock
-          ? fetchInventoryOpeningBalanceCandidates()
-          : Promise.resolve([]),
+        openingCandidatesPromise,
       ]);
       setItems(nextItems);
       setTransactions(nextTransactions);

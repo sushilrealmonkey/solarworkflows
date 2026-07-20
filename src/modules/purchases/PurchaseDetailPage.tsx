@@ -28,11 +28,13 @@ import {
 } from "./purchasePdfWorkflow";
 import {
   fetchPurchaseOrder,
+  fetchPurchaseOrderBillInvoiceNumber,
   fetchPurchaseOrderSafe,
   fetchPurchasePriceDefaults,
   fetchPurchaseVendorOptions,
   receivePurchaseOrderItems,
   updatePurchaseOrder,
+  updateReceivedPurchaseOrder,
 } from "./purchaseApi";
 import {
   emptyPurchaseReceiveForm,
@@ -87,6 +89,7 @@ export function PurchaseDetailPage() {
   const [updating, setUpdating] = useState(false);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [preparingPdf, setPreparingPdf] = useState(false);
+  const [billInvoiceNumber, setBillInvoiceNumber] = useState("");
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
   const canViewPricing = hasAdminPricingAccess(
@@ -134,7 +137,6 @@ export function PurchaseDetailPage() {
   const canEditPurchaseOrder =
     canViewPricing &&
     canManageStatus &&
-    !purchaseHasReceipt &&
     !order?.archived_at &&
     order?.status !== "cancelled";
 
@@ -155,6 +157,15 @@ export function PurchaseDetailPage() {
         fetchInventoryItems(profile),
       ]);
       setOrder(nextOrder);
+      setBillInvoiceNumber(
+        nextOrder &&
+          canViewPricing &&
+          (nextOrder.items?.some((item) => (item.received_quantity ?? 0) > 0) ||
+            nextOrder.status === "partially_received" ||
+            nextOrder.status === "received")
+          ? await fetchPurchaseOrderBillInvoiceNumber(nextOrder.id)
+          : "",
+      );
       setVendors(
         nextOrder?.vendor &&
           !nextVendors.some((vendor) => vendor.id === nextOrder.vendor?.id)
@@ -211,7 +222,12 @@ export function PurchaseDetailPage() {
     }
 
     try {
-      const nextVendors = await fetchPurchaseVendorOptions();
+      const [nextVendors, nextBillInvoiceNumber] = await Promise.all([
+        fetchPurchaseVendorOptions(),
+        purchaseHasReceipt
+          ? fetchPurchaseOrderBillInvoiceNumber(order.id)
+          : Promise.resolve(""),
+      ]);
       setVendors(
         order.vendor &&
           !nextVendors.some((vendor) => vendor.id === order.vendor?.id)
@@ -219,7 +235,10 @@ export function PurchaseDetailPage() {
           : nextVendors,
       );
       setFormErrors(null);
-      setEditing(purchaseOrderToForm(order));
+      setEditing({
+        ...purchaseOrderToForm(order),
+        bill_invoice_no: nextBillInvoiceNumber,
+      });
     } catch (nextError) {
       showToast(
         nextError instanceof Error
@@ -246,7 +265,11 @@ export function PurchaseDetailPage() {
 
     try {
       setSaving(true);
-      await updatePurchaseOrder(profile, order.id, editing);
+      if (purchaseHasReceipt) {
+        await updateReceivedPurchaseOrder(order.id, editing);
+      } else {
+        await updatePurchaseOrder(profile, order.id, editing);
+      }
       const nextOrder = await fetchPurchaseOrder(profile, order.id);
 
       if (canGeneratePurchasePdf) {
@@ -437,6 +460,12 @@ export function PurchaseDetailPage() {
                   value={<PurchaseStatusBadge value={order.status} />}
                 />
                 <DetailItem label="Order Date" value={formatDate(order.order_date)} />
+                {purchaseHasReceipt ? (
+                  <DetailItem
+                    label="Bill / Invoice No."
+                    value={billInvoiceNumber || "-"}
+                  />
+                ) : null}
                 <DetailItem
                   label="Expected Delivery"
                   value={formatDate(order.expected_delivery_date)}
@@ -623,6 +652,7 @@ export function PurchaseDetailPage() {
               priceDefaults={priceDefaults}
               canAddItems={canCreateItems}
               canRemoveItems={canDelete}
+              receiptLocked={purchaseHasReceipt}
               onClose={() => setEditing(null)}
               onSubmit={handleEditSubmit}
               saving={saving}
