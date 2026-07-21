@@ -266,7 +266,7 @@ otp_expiry = 3600
 
 # Keep this template in sync with the hosted Supabase Auth invite template.
 [auth.email.template.invite]
-subject = "{{ if .Data.company_name }}You're Invited to Bizlee from {{ .Data.company_name }}{{ else }}You're Invited to Bizlee{{ end }}"
+subject = "You're Invited to Bizlee Solar CRM"
 content_path = "./supabase/templates/invite.html"
 
 [auth.email.template.recovery]
