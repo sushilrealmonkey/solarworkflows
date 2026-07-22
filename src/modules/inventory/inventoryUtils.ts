@@ -75,15 +75,21 @@ export function emptyInventoryTransactionForm(
 }
 
 export function isLowStock(item: InventoryItem) {
-  return availableStockNumber(item) <= stockNumber(item.minimum_stock);
+  return (
+    isActiveInventoryItem(item) &&
+    availableStockNumber(item) <= stockNumber(item.minimum_stock)
+  );
 }
 
 export function isOutOfStock(item: InventoryItem) {
-  return availableStockNumber(item) <= 0;
+  return isActiveInventoryItem(item) && availableStockNumber(item) <= 0;
 }
 
 export function isActiveInventoryItem(item: InventoryItem) {
-  return item.status === "active";
+  return (
+    item.status === "active" &&
+    item.catalog_product?.status !== "discontinued"
+  );
 }
 
 export function stockNumber(value: number | null | undefined) {
