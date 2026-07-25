@@ -3,6 +3,13 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-07-24
+
+- Added the public Meta WhatsApp webhook endpoint at
+  `/api/webhooks/whatsapp`, including `GET` verification, JSON `POST`
+  acknowledgement, server-only token configuration, and a production Node
+  server that preserves Vite SPA routing.
+
 ## 2026-07-16
 
 - Implemented AI Assistant Phase 1: `/today` screen with an AI daily brief and

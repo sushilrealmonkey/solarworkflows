@@ -2,6 +2,32 @@
 
 SolarWorkflows currently uses Supabase as the backend server layer. The frontend
 is a Vite React app that talks to Supabase through the configured public client.
+In production, a small Node server serves the built app and backend-only HTTP
+routes that must live on the app's custom domain.
+
+## Public HTTP Endpoints
+
+The production server exposes the Meta WhatsApp callback at:
+
+```text
+https://app.getbizlee.com/api/webhooks/whatsapp
+```
+
+The route accepts Meta's `GET` verification request and returns
+`hub.challenge` only when `hub.mode=subscribe` and `hub.verify_token` matches
+the server-only `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN`. Valid JSON `POST`
+requests for incoming messages and delivery/read status events receive a
+successful acknowledgement. Event processing is intentionally not implemented
+yet.
+
+Configure this value in the Railway service environment:
+
+```text
+META_WHATSAPP_WEBHOOK_VERIFY_TOKEN=
+```
+
+Use the same secret value in Meta's webhook configuration. Never prefix it with
+`VITE_` or expose it to browser code.
 
 ## Local Frontend
 
@@ -92,6 +118,9 @@ The frontend custom domain should be configured in Railway as
 - Confirm `/create-password` serves the frontend app shell.
 - Confirm Railway frontend environment variables point to the intended Supabase
   project.
+- Confirm `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN` is configured for the service.
+- Confirm the WhatsApp webhook `GET` verification and JSON `POST`
+  acknowledgement work at `/api/webhooks/whatsapp`.
 - Confirm the Supabase Edge Function secret `APP_BASE_URL` matches the deployed
   frontend origin.
 - Confirm Supabase Auth URL Configuration has the production Site URL and
