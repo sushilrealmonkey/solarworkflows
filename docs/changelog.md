@@ -3,6 +3,14 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-07-25
+
+- Secured Meta WhatsApp webhook POST requests with raw-body
+  `X-Hub-Signature-256` validation using the server-only Meta app secret.
+- Added tenant-scoped WhatsApp phone number, conversation, and message storage
+  with read-only tenant RLS and a service-role-only idempotent inbound message
+  persistence RPC.
+
 ## 2026-07-24
 
 - Added the public Meta WhatsApp webhook endpoint at

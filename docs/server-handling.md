@@ -15,19 +15,59 @@ https://app.getbizlee.com/api/webhooks/whatsapp
 
 The route accepts Meta's `GET` verification request and returns
 `hub.challenge` only when `hub.mode=subscribe` and `hub.verify_token` matches
-the server-only `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN`. Valid JSON `POST`
-requests for incoming messages and delivery/read status events receive a
-successful acknowledgement. Event processing is intentionally not implemented
-yet.
+the server-only `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN`.
 
-Configure this value in the Railway service environment:
+Every `POST` must include a valid `X-Hub-Signature-256` generated with the Meta
+app secret. The server verifies the HMAC-SHA256 signature against the exact raw
+request bytes before parsing JSON. Invalid or missing signatures are rejected.
+Never use the verification token as the app secret.
+
+Configure these values in the Railway service environment:
 
 ```text
 META_WHATSAPP_WEBHOOK_VERIFY_TOKEN=
+META_WHATSAPP_APP_SECRET=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
 ```
 
-Use the same secret value in Meta's webhook configuration. Never prefix it with
-`VITE_` or expose it to browser code.
+Use the webhook verification token in Meta's webhook configuration. Obtain the
+app secret from the matching Meta app. The Supabase service-role key is used
+only by the backend to call the restricted persistence RPC. Never prefix any of
+these secrets with `VITE_` or expose them to browser code.
+
+Inbound messages are routed to a tenant through
+`whatsapp_phone_numbers.meta_phone_number_id`. Before enabling delivery for a
+Meta phone number, insert one active mapping to its owning `company_id` from a
+trusted database/admin context. A Meta phone number can belong to only one
+company:
+
+```sql
+insert into public.whatsapp_phone_numbers (
+  company_id,
+  meta_phone_number_id,
+  meta_business_account_id,
+  display_phone_number
+)
+values (
+  '<COMPANY_UUID>',
+  '<META_PHONE_NUMBER_ID>',
+  '<META_BUSINESS_ACCOUNT_ID>',
+  '<DISPLAY_PHONE_NUMBER>'
+);
+```
+
+Do not expose this insert to browser clients. Authenticated tenant users have
+read-only, company-scoped access to their WhatsApp phone number, conversation,
+and message rows. Only the service role can call
+`persist_inbound_whatsapp_message`.
+
+Inbound messages are stored idempotently by Meta message ID. A retry returns
+the existing message rather than creating a duplicate. Delivery/read status
+events continue to receive a successful acknowledgement but are not persisted
+yet. Messages for an unmapped or inactive Meta phone number are acknowledged
+and logged without being stored, so the mapping must be configured before
+subscribing production traffic.
 
 ## Local Frontend
 
@@ -119,8 +159,14 @@ The frontend custom domain should be configured in Railway as
 - Confirm Railway frontend environment variables point to the intended Supabase
   project.
 - Confirm `META_WHATSAPP_WEBHOOK_VERIFY_TOKEN` is configured for the service.
-- Confirm the WhatsApp webhook `GET` verification and JSON `POST`
+- Confirm `META_WHATSAPP_APP_SECRET`, `SUPABASE_URL`, and
+  `SUPABASE_SERVICE_ROLE_KEY` are configured for the service.
+- Confirm every subscribed Meta phone number has an active, correct
+  `whatsapp_phone_numbers` tenant mapping.
+- Confirm the WhatsApp webhook `GET` verification and signed JSON `POST`
   acknowledgement work at `/api/webhooks/whatsapp`.
+- Replay the same signed test message and confirm only one `whatsapp_messages`
+  row exists.
 - Confirm the Supabase Edge Function secret `APP_BASE_URL` matches the deployed
   frontend origin.
 - Confirm Supabase Auth URL Configuration has the production Site URL and

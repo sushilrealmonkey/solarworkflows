@@ -1,4 +1,40 @@
+import {
+  createHmac,
+  timingSafeEqual,
+} from "node:crypto";
+
+import { extractInboundWhatsAppMessages } from "./payload.js";
+import { persistInboundWhatsAppMessage } from "./persistence.js";
+
 const VERIFY_TOKEN_ENV_NAME = "META_WHATSAPP_WEBHOOK_VERIFY_TOKEN";
+const APP_SECRET_ENV_NAME = "META_WHATSAPP_APP_SECRET";
+const SIGNATURE_PREFIX = "sha256=";
+
+export function verifyMetaWebhookSignature(
+  rawBody: Buffer,
+  signatureHeader: string | null,
+  appSecret: string,
+): boolean {
+  if (
+    !signatureHeader?.startsWith(SIGNATURE_PREFIX) ||
+    !appSecret
+  ) {
+    return false;
+  }
+
+  const suppliedHex = signatureHeader.slice(SIGNATURE_PREFIX.length);
+
+  if (!/^[\da-f]{64}$/i.test(suppliedHex)) {
+    return false;
+  }
+
+  const expectedSignature = createHmac("sha256", appSecret)
+    .update(rawBody)
+    .digest();
+  const suppliedSignature = Buffer.from(suppliedHex, "hex");
+
+  return timingSafeEqual(expectedSignature, suppliedSignature);
+}
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -29,15 +65,58 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  try {
-    const payload: unknown = await request.json();
+  const appSecret = process.env[APP_SECRET_ENV_NAME];
 
-    console.info(
-      "Meta WhatsApp webhook:",
-      JSON.stringify(payload, null, 2),
+  if (!appSecret) {
+    console.error(
+      `WhatsApp webhook is missing ${APP_SECRET_ENV_NAME}`,
     );
 
-    // Incoming messages and message status updates will be processed here.
+    return Response.json(
+      { received: false },
+      { status: 503 },
+    );
+  }
+
+  try {
+    const rawBody = Buffer.from(await request.arrayBuffer());
+    const signature = request.headers.get("x-hub-signature-256");
+
+    if (!verifyMetaWebhookSignature(rawBody, signature, appSecret)) {
+      console.warn("Rejected WhatsApp webhook with invalid signature");
+
+      return Response.json(
+        { received: false },
+        { status: 401 },
+      );
+    }
+
+    let payload: unknown;
+
+    try {
+      payload = JSON.parse(rawBody.toString("utf8")) as unknown;
+    } catch {
+      return Response.json(
+        { received: false },
+        { status: 400 },
+      );
+    }
+
+    const messages = extractInboundWhatsAppMessages(payload);
+    const results = await Promise.all(
+      messages.map(persistInboundWhatsAppMessage),
+    );
+    const unmappedPhoneNumberIds = messages
+      .filter((_, index) => !results[index]?.mapped)
+      .map((message) => message.metaPhoneNumberId);
+
+    if (unmappedPhoneNumberIds.length > 0) {
+      console.error(
+        "WhatsApp messages were not persisted because their phone " +
+          "number IDs are not mapped to active tenants:",
+        [...new Set(unmappedPhoneNumberIds)].join(", "),
+      );
+    }
 
     return Response.json(
       { received: true },
@@ -48,7 +127,7 @@ export async function POST(request: Request): Promise<Response> {
 
     return Response.json(
       { received: false },
-      { status: 400 },
+      { status: 500 },
     );
   }
 }
