@@ -2,7 +2,10 @@ import { createHmac } from "node:crypto";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { extractInboundWhatsAppMessages } from "./payload.js";
+import {
+  extractInboundWhatsAppMessages,
+  extractWhatsAppStatusUpdates,
+} from "./payload.js";
 import {
   POST,
   verifyMetaWebhookSignature,
@@ -104,6 +107,42 @@ test("extracts tenant routing and inbound message fields", () => {
   ]);
 });
 
+test("extracts supported statuses and safely bounds failure fields", () => {
+  const updates = extractWhatsAppStatusUpdates({
+    object: "whatsapp_business_account",
+    entry: [{
+      changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "100200300" },
+          statuses: [{
+            id: "wamid.failed-1",
+            status: "failed",
+            timestamp: "1767225600",
+            errors: [{
+              code: "131047",
+              title: "Message expired",
+              message: "The message could not be delivered",
+              error_data: { details: "Customer window expired" },
+            }],
+          }],
+        },
+      }],
+    }],
+  });
+
+  assert.deepEqual(updates, [{
+    metaPhoneNumberId: "100200300",
+    metaMessageId: "wamid.failed-1",
+    status: "failed",
+    sourceTimestamp: "2026-01-01T00:00:00.000Z",
+    errorCode: "131047",
+    errorTitle: "Message expired",
+    errorMessage: "The message could not be delivered",
+    errorDetails: "Customer window expired",
+  }]);
+});
+
 test("rejects an invalid POST signature before parsing the body", async () => {
   const previousAppSecret = process.env.META_WHATSAPP_APP_SECRET;
   process.env.META_WHATSAPP_APP_SECRET = "test-app-secret";
@@ -148,6 +187,7 @@ test("acknowledges a correctly signed status-only webhook", async () => {
                   {
                     id: "wamid.status-1",
                     status: "read",
+                    timestamp: "1767225600",
                   },
                 ],
               },
@@ -163,6 +203,7 @@ test("acknowledges a correctly signed status-only webhook", async () => {
   process.env.META_WHATSAPP_APP_SECRET = appSecret;
 
   try {
+    const processedStatuses: string[] = [];
     const response = await POST(
       new Request("https://example.test/api/webhooks/whatsapp", {
         method: "POST",
@@ -172,6 +213,88 @@ test("acknowledges a correctly signed status-only webhook", async () => {
         },
         body: rawBody,
       }),
+      {
+        persistMessage: async () => ({
+          mapped: true,
+          inserted: false,
+          companyId: null,
+          conversationId: null,
+          messageId: null,
+        }),
+        processStatus: async (update) => {
+          processedStatuses.push(update.status);
+
+          return {
+            mapped: true,
+            found: true,
+            updated: true,
+            companyId: "company-1",
+            messageId: "message-1",
+            status: update.status,
+          };
+        },
+      },
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { received: true });
+    assert.deepEqual(processedStatuses, ["read"]);
+  } finally {
+    if (previousAppSecret === undefined) {
+      delete process.env.META_WHATSAPP_APP_SECRET;
+    } else {
+      process.env.META_WHATSAPP_APP_SECRET = previousAppSecret;
+    }
+  }
+});
+
+test("acknowledges a signed callback for an unknown message ID", async () => {
+  const previousAppSecret = process.env.META_WHATSAPP_APP_SECRET;
+  const appSecret = "test-app-secret";
+  const rawBody = Buffer.from(JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [{
+      changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "100200300" },
+          statuses: [{
+            id: "wamid.unknown",
+            status: "delivered",
+            timestamp: "1767225600",
+          }],
+        },
+      }],
+    }],
+  }));
+  const signature = createHmac("sha256", appSecret)
+    .update(rawBody)
+    .digest("hex");
+  process.env.META_WHATSAPP_APP_SECRET = appSecret;
+
+  try {
+    const response = await POST(
+      new Request("https://example.test/api/webhooks/whatsapp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Hub-Signature-256": `sha256=${signature}`,
+        },
+        body: rawBody,
+      }),
+      {
+        persistMessage: async () => {
+          throw new Error("No inbound message should be created");
+        },
+        processStatus: async () => ({
+          mapped: true,
+          found: false,
+          updated: false,
+          companyId: "company-1",
+          messageId: null,
+          status: null,
+        }),
+      },
     );
 
     assert.equal(response.status, 200);

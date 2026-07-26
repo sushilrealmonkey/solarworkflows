@@ -148,4 +148,138 @@ begin
 end;
 $$;
 
+do $$
+declare
+  company_a uuid;
+  company_b uuid;
+  phone_a text := 'status-phone-a-' || gen_random_uuid()::text;
+  phone_b text := 'status-phone-b-' || gen_random_uuid()::text;
+  message_id constant text := 'wamid.shared-status-test';
+  result record;
+begin
+  if has_function_privilege(
+    'authenticated',
+    'public.process_whatsapp_message_status(text,text,text,timestamptz,text,text,text,text)'::regprocedure,
+    'execute'
+  ) then
+    raise exception 'authenticated clients must not execute the status RPC';
+  end if;
+
+  insert into public.companies (company_name, company_slug)
+  values (
+    'WhatsApp status tenant A',
+    'whatsapp-status-a-' || gen_random_uuid()::text
+  )
+  returning id into company_a;
+
+  insert into public.companies (company_name, company_slug)
+  values (
+    'WhatsApp status tenant B',
+    'whatsapp-status-b-' || gen_random_uuid()::text
+  )
+  returning id into company_b;
+
+  insert into public.whatsapp_phone_numbers (company_id, meta_phone_number_id)
+  values (company_a, phone_a), (company_b, phone_b);
+
+  perform public.persist_inbound_whatsapp_message(
+    phone_a, message_id, '911111111111', null, 'text', 'A',
+    '2026-07-25T08:00:00Z', '{"id":"wamid.shared-status-test"}'
+  );
+  perform public.persist_inbound_whatsapp_message(
+    phone_b, message_id, '922222222222', null, 'text', 'B',
+    '2026-07-25T08:00:00Z', '{"id":"wamid.shared-status-test"}'
+  );
+
+  select * into result
+  from public.process_whatsapp_message_status(
+    phone_a, message_id, 'read', '2026-07-25T08:03:00Z'
+  );
+
+  if result.updated is distinct from true or result.status <> 'read' then
+    raise exception 'read callback was not applied';
+  end if;
+
+  -- Duplicate callback is a no-op.
+  select * into result
+  from public.process_whatsapp_message_status(
+    phone_a, message_id, 'read', '2026-07-25T08:03:00Z'
+  );
+
+  if result.updated is distinct from false or result.status <> 'read' then
+    raise exception 'duplicate read callback was not idempotent';
+  end if;
+
+  -- A delayed callback stores its own timestamp without regressing status.
+  select * into result
+  from public.process_whatsapp_message_status(
+    phone_a, message_id, 'delivered', '2026-07-25T08:02:00Z'
+  );
+
+  if result.status <> 'read' then
+    raise exception 'out-of-order delivered callback regressed read status';
+  end if;
+
+  if (
+    select delivered_at
+    from public.whatsapp_messages
+    where company_id = company_a and meta_message_id = message_id
+  ) is distinct from '2026-07-25T08:02:00Z'::timestamptz then
+    raise exception 'delivered timestamp was not stored';
+  end if;
+
+  -- The same Meta ID on another phone/tenant must remain untouched.
+  if (
+    select status
+    from public.whatsapp_messages
+    where company_id = company_b and meta_message_id = message_id
+  ) <> 'received' then
+    raise exception 'status update crossed tenant/phone boundaries';
+  end if;
+
+  select * into result
+  from public.process_whatsapp_message_status(
+    phone_b, 'wamid.unknown', 'sent', '2026-07-25T08:01:00Z'
+  );
+
+  if result.mapped is distinct from true
+    or result.message_found is distinct from false
+    or (
+      select count(*) from public.whatsapp_messages
+      where meta_message_id = 'wamid.unknown'
+    ) <> 0 then
+    raise exception 'unknown status callback created a message';
+  end if;
+
+  select * into result
+  from public.process_whatsapp_message_status(
+    phone_b,
+    message_id,
+    'failed',
+    '2026-07-25T08:04:00Z',
+    '131047',
+    'Expired',
+    'Delivery failed',
+    'Window expired'
+  );
+
+  if result.status <> 'failed' then
+    raise exception 'failed callback was not applied';
+  end if;
+
+  if not exists (
+    select 1
+    from public.whatsapp_messages
+    where company_id = company_b
+      and meta_message_id = message_id
+      and failure_error_code = '131047'
+      and failure_error_title = 'Expired'
+      and failure_error_message = 'Delivery failed'
+      and failure_error_details = 'Window expired'
+  ) then
+    raise exception 'failure metadata was not stored';
+  end if;
+end;
+$$;
+
 rollback;

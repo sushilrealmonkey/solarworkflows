@@ -3,7 +3,10 @@ import {
   type SupabaseClient,
 } from "@supabase/supabase-js";
 
-import type { InboundWhatsAppMessage } from "./payload.js";
+import type {
+  InboundWhatsAppMessage,
+  WhatsAppStatusUpdate,
+} from "./payload.js";
 
 const SUPABASE_URL_ENV_NAME = "SUPABASE_URL";
 const SUPABASE_SERVICE_ROLE_KEY_ENV_NAME = "SUPABASE_SERVICE_ROLE_KEY";
@@ -22,6 +25,24 @@ export interface PersistInboundWhatsAppMessageResult {
   companyId: string | null;
   conversationId: string | null;
   messageId: string | null;
+}
+
+interface ProcessWhatsAppStatusRow {
+  mapped: boolean;
+  message_found: boolean;
+  updated: boolean;
+  company_id: string | null;
+  message_id: string | null;
+  status: string | null;
+}
+
+export interface ProcessWhatsAppStatusResult {
+  mapped: boolean;
+  found: boolean;
+  updated: boolean;
+  companyId: string | null;
+  messageId: string | null;
+  status: string | null;
 }
 
 let serverSupabaseClient: SupabaseClient | undefined;
@@ -88,5 +109,45 @@ export async function persistInboundWhatsAppMessage(
     companyId: row.company_id,
     conversationId: row.conversation_id,
     messageId: row.message_id,
+  };
+}
+
+export async function processWhatsAppStatusUpdate(
+  update: WhatsAppStatusUpdate,
+): Promise<ProcessWhatsAppStatusResult> {
+  const { data, error } = await getServerSupabaseClient().rpc(
+    "process_whatsapp_message_status",
+    {
+      p_meta_phone_number_id: update.metaPhoneNumberId,
+      p_meta_message_id: update.metaMessageId,
+      p_status: update.status,
+      p_source_timestamp: update.sourceTimestamp,
+      p_error_code: update.errorCode,
+      p_error_title: update.errorTitle,
+      p_error_message: update.errorMessage,
+      p_error_details: update.errorDetails,
+    },
+  );
+
+  if (error) {
+    throw new Error(
+      `Could not process WhatsApp status (${error.code})`,
+      { cause: error },
+    );
+  }
+
+  const row = (data as ProcessWhatsAppStatusRow[] | null)?.[0];
+
+  if (!row) {
+    throw new Error("WhatsApp status RPC returned no result");
+  }
+
+  return {
+    mapped: row.mapped,
+    found: row.message_found,
+    updated: row.updated,
+    companyId: row.company_id,
+    messageId: row.message_id,
+    status: row.status,
   };
 }
