@@ -3,8 +3,14 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 
-import { extractInboundWhatsAppMessages } from "./payload.js";
-import { persistInboundWhatsAppMessage } from "./persistence.js";
+import {
+  extractInboundWhatsAppMessages,
+  extractWhatsAppStatusUpdates,
+} from "./payload.js";
+import {
+  persistInboundWhatsAppMessage,
+  processWhatsAppStatusUpdate,
+} from "./persistence.js";
 
 const VERIFY_TOKEN_ENV_NAME = "META_WHATSAPP_WEBHOOK_VERIFY_TOKEN";
 const APP_SECRET_ENV_NAME = "META_WHATSAPP_APP_SECRET";
@@ -64,7 +70,20 @@ export async function GET(request: Request): Promise<Response> {
   });
 }
 
-export async function POST(request: Request): Promise<Response> {
+interface WebhookDependencies {
+  persistMessage: typeof persistInboundWhatsAppMessage;
+  processStatus: typeof processWhatsAppStatusUpdate;
+}
+
+const defaultDependencies: WebhookDependencies = {
+  persistMessage: persistInboundWhatsAppMessage,
+  processStatus: processWhatsAppStatusUpdate,
+};
+
+export async function POST(
+  request: Request,
+  dependencies: WebhookDependencies = defaultDependencies,
+): Promise<Response> {
   const appSecret = process.env[APP_SECRET_ENV_NAME];
 
   if (!appSecret) {
@@ -103,18 +122,30 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const messages = extractInboundWhatsAppMessages(payload);
-    const results = await Promise.all(
-      messages.map(persistInboundWhatsAppMessage),
-    );
+    const statusUpdates = extractWhatsAppStatusUpdates(payload);
+    const [results, statusResults] = await Promise.all([
+      Promise.all(messages.map(dependencies.persistMessage)),
+      Promise.all(statusUpdates.map(dependencies.processStatus)),
+    ]);
     const unmappedPhoneNumberIds = messages
       .filter((_, index) => !results[index]?.mapped)
       .map((message) => message.metaPhoneNumberId);
 
     if (unmappedPhoneNumberIds.length > 0) {
       console.error(
-        "WhatsApp messages were not persisted because their phone " +
-          "number IDs are not mapped to active tenants:",
-        [...new Set(unmappedPhoneNumberIds)].join(", "),
+        "WhatsApp messages were not persisted because a phone number ID " +
+          "is not mapped to an active tenant",
+      );
+    }
+
+    const ignoredStatusCount = statusResults.filter(
+      (result) => !result.mapped || !result.found,
+    ).length;
+
+    if (ignoredStatusCount > 0) {
+      console.warn(
+        `Ignored ${ignoredStatusCount} WhatsApp status callback(s) ` +
+          "without a tenant-scoped message match",
       );
     }
 

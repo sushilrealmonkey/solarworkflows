@@ -9,6 +9,24 @@ export interface InboundWhatsAppMessage {
   rawPayload: Record<string, unknown>;
 }
 
+export type WhatsAppDeliveryStatus =
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed"
+  | "deleted";
+
+export interface WhatsAppStatusUpdate {
+  metaPhoneNumberId: string;
+  metaMessageId: string;
+  status: WhatsAppDeliveryStatus;
+  sourceTimestamp: string;
+  errorCode: string | null;
+  errorTitle: string | null;
+  errorMessage: string | null;
+  errorDetails: string | null;
+}
+
 type JsonObject = Record<string, unknown>;
 
 function isObject(value: unknown): value is JsonObject {
@@ -42,6 +60,37 @@ function parseMetaTimestamp(value: unknown): string {
   return Number.isNaN(date.getTime())
     ? new Date().toISOString()
     : date.toISOString();
+}
+
+function parseRequiredMetaTimestamp(value: unknown): string | null {
+  const timestamp = getString(value);
+  const seconds = timestamp ? Number(timestamp) : Number.NaN;
+
+  if (!Number.isFinite(seconds) || seconds < 0) {
+    return null;
+  }
+
+  const date = new Date(seconds * 1_000);
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getLimitedString(value: unknown, maximumLength: number): string | null {
+  const text = getString(value);
+
+  return text ? text.slice(0, maximumLength) : null;
+}
+
+function getDeliveryStatus(value: unknown): WhatsAppDeliveryStatus | null {
+  const status = getString(value);
+
+  return status === "sent" ||
+    status === "delivered" ||
+    status === "read" ||
+    status === "failed" ||
+    status === "deleted"
+    ? status
+    : null;
 }
 
 function getContactNames(value: JsonObject): Map<string, string> {
@@ -128,4 +177,65 @@ export function extractInboundWhatsAppMessages(
   }
 
   return inboundMessages;
+}
+
+export function extractWhatsAppStatusUpdates(
+  payload: unknown,
+): WhatsAppStatusUpdate[] {
+  const root = getObject(payload);
+
+  if (getString(root?.object) !== "whatsapp_business_account") {
+    return [];
+  }
+
+  const updates: WhatsAppStatusUpdate[] = [];
+
+  for (const entryValue of getArray(root?.entry)) {
+    const entry = getObject(entryValue);
+
+    for (const changeValue of getArray(entry?.changes)) {
+      const change = getObject(changeValue);
+
+      if (getString(change?.field) !== "messages") {
+        continue;
+      }
+
+      const value = getObject(change?.value);
+      const metadata = getObject(value?.metadata);
+      const metaPhoneNumberId = getString(metadata?.phone_number_id);
+
+      if (!value || !metaPhoneNumberId) {
+        continue;
+      }
+
+      for (const statusValue of getArray(value.statuses)) {
+        const statusObject = getObject(statusValue);
+        const metaMessageId = getString(statusObject?.id);
+        const status = getDeliveryStatus(statusObject?.status);
+        const sourceTimestamp = parseRequiredMetaTimestamp(
+          statusObject?.timestamp,
+        );
+
+        if (!statusObject || !metaMessageId || !status || !sourceTimestamp) {
+          continue;
+        }
+
+        const error = getObject(getArray(statusObject.errors)[0]);
+        const errorData = getObject(error?.error_data);
+
+        updates.push({
+          metaPhoneNumberId,
+          metaMessageId,
+          status,
+          sourceTimestamp,
+          errorCode: getLimitedString(error?.code, 100),
+          errorTitle: getLimitedString(error?.title, 500),
+          errorMessage: getLimitedString(error?.message, 2_000),
+          errorDetails: getLimitedString(errorData?.details, 4_000),
+        });
+      }
+    }
+  }
+
+  return updates;
 }
