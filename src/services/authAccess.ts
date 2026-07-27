@@ -301,7 +301,7 @@ export async function verifyPhoneSignupOtpAndSyncProfile(
   }
 
   if (!/^\d{6}$/.test(normalizedToken)) {
-    throw new Error("Enter the 6-digit SMS code.");
+    throw new Error("Enter the 6-digit WhatsApp code.");
   }
 
   const { error } = await supabase.auth.verifyOtp({
@@ -481,11 +481,11 @@ function mapPhoneAuthError(message: string) {
     normalizedMessage.includes("unsupported provider") ||
     normalizedMessage.includes("sms provider")
   ) {
-    return "SMS signup is not enabled for this Supabase project yet.";
+    return "WhatsApp signup is not enabled for this Supabase project yet.";
   }
 
   if (normalizedMessage.includes("rate limit")) {
-    return "Please wait before requesting another SMS code.";
+    return "Please wait before requesting another WhatsApp code.";
   }
 
   if (
@@ -500,10 +500,13 @@ function mapPhoneAuthError(message: string) {
     normalizedMessage.includes("otp") ||
     normalizedMessage.includes("expired")
   ) {
-    return "That SMS code is invalid or expired. Request a new code.";
+    return "That WhatsApp code is invalid or expired. Request a new code.";
   }
 
-  return message || "SMS verification could not be completed. Please try again.";
+  return (
+    message ||
+    "WhatsApp verification could not be completed. Please try again."
+  );
 }
 
 function mapWorkspaceOnboardingError(message: string) {

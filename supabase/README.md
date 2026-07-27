@@ -41,15 +41,16 @@ Sender email: team@getbizlee.com
 Store the Resend API key only in the Supabase SMTP password field. Never add it
 to this repository or expose it through a `VITE_` environment variable.
 
-## Black SMS phone OTP
+## WhatsApp phone OTP
 
 Supabase Auth generates and verifies the six-digit OTP. The signed `send-sms`
-Edge Function only delivers that code through Black SMS and does not store it.
+Edge Function delivers that code through an approved Meta WhatsApp
+authentication template and does not store it.
 
 Required server-only Function secrets are `SEND_SMS_HOOK_SECRET`,
-`BLACKSMS_API_KEY`, and `BLACKSMS_SENDER_ID`. Black SMS uses the sender ID's
-configured OTP template and substitutes the code supplied as
-`variables_values`.
+`META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`,
+`META_WHATSAPP_GRAPH_API_VERSION`, `META_WHATSAPP_OTP_TEMPLATE_NAME`, and
+`META_WHATSAPP_OTP_TEMPLATE_LANGUAGE`.
 
 Deploy with `npx supabase functions deploy send-sms --no-verify-jwt`, then set
 the hosted **Authentication > Hooks > Send SMS** HTTP URL to

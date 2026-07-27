@@ -17,7 +17,7 @@ import { AuthThemeCard, AuthThemeShell } from "./AuthTheme";
 
 type SignupMethod = "phone" | "email";
 
-const SHOW_PHONE_SIGNUP = false;
+const SHOW_PHONE_SIGNUP = true;
 
 type SignupNotice = {
   title: string;
@@ -28,7 +28,7 @@ type SignupNotice = {
 export function SignupPage() {
   const { status, profile, refresh } = useAuth();
   const navigate = useNavigate();
-  const [signupMethod, setSignupMethod] = useState<SignupMethod>("email");
+  const [signupMethod, setSignupMethod] = useState<SignupMethod>("phone");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -123,15 +123,15 @@ export function SignupPage() {
         await requestPhoneSignupOtp(normalizedPhone);
         setIsOtpSent(true);
         setNotice({
-          title: "SMS code sent",
-          description: `Enter the 6-digit code sent to ${normalizedPhone}.`,
+          title: "WhatsApp code sent",
+          description: `Enter the 6-digit WhatsApp code sent to ${normalizedPhone}.`,
           tone: "success",
         });
         return;
       }
 
       if (!/^\d{6}$/.test(otpCode.trim())) {
-        setErrorMessage("Enter the 6-digit SMS code.");
+        setErrorMessage("Enter the 6-digit WhatsApp code.");
         return;
       }
 
@@ -156,7 +156,7 @@ export function SignupPage() {
       const normalizedPhone = getIndiaSmsPhone(phone);
       await requestPhoneSignupOtp(normalizedPhone);
       setNotice({
-        title: "New SMS code sent",
+        title: "New WhatsApp code sent",
         description: `Enter the latest 6-digit code sent to ${normalizedPhone}.`,
         tone: "success",
       });
@@ -217,7 +217,7 @@ export function SignupPage() {
             <SignupMethodButton
               active={signupMethod === "phone"}
               disabled={isBusy}
-              label="Mobile & SMS"
+              label="Mobile & WhatsApp"
               onClick={() => selectSignupMethod("phone")}
             />
             <SignupMethodButton
@@ -256,7 +256,7 @@ export function SignupPage() {
                 />
               </div>
               <span className="mt-2 block text-xs leading-5 text-slate-400">
-                India (+91) is selected by default. Standard SMS rates may apply.
+                India (+91) is selected by default. We will send the code on WhatsApp.
               </span>
             </label>
 
@@ -264,7 +264,7 @@ export function SignupPage() {
               <>
                 <label className="block">
                   <span className="text-sm font-semibold text-white">
-                    SMS verification code
+                    WhatsApp verification code
                   </span>
                   <input
                     autoComplete="one-time-code"
@@ -302,7 +302,7 @@ export function SignupPage() {
                     onClick={() => void handleResendCode()}
                     type="button"
                   >
-                    Resend SMS code
+                    Resend WhatsApp code
                   </button>
                 </div>
               </>
@@ -323,7 +323,7 @@ export function SignupPage() {
                     : "Sending code"
                   : isOtpSent
                     ? "Verify & create account"
-                    : "Send SMS code"}
+                    : "Send WhatsApp code"}
             </button>
           </form>
         ) : (
