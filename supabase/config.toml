@@ -311,8 +311,8 @@ timebox = "720h"
 # enabled = true
 # uri = "pg-functions://<database>/<schema>/<hook_name>"
 
-# Black SMS is connected through a signed HTTP Send SMS Hook. The hosted hook
-# URL and signing secret are deployment values and must never be committed.
+# WhatsApp OTP delivery is connected through a signed HTTP Send SMS Hook. The
+# hosted hook URL and signing secret are deployment values and must not be committed.
 [auth.hook.send_sms]
 enabled = true
 uri = "env(SEND_SMS_HOOK_URI)"
