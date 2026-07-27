@@ -151,9 +151,26 @@ export async function syncCurrentAuthUserProfile(): Promise<LoginAccessResult> {
     throw new Error("Supabase environment variables are not configured.");
   }
 
-  const { data: syncedProfile, error: syncError } = await supabase.rpc(
-    "sync_auth_user_profile",
-  );
+  const retryDelaysMs = [0, 1_000, 2_000, 4_000, 8_000];
+  let syncedProfile: unknown = null;
+  let syncError: { message: string } | null = null;
+
+  for (const delayMs of retryDelaysMs) {
+    if (delayMs > 0) {
+      await delay(delayMs);
+    }
+
+    const result = await supabase.rpc("sync_auth_user_profile");
+    syncedProfile = result.data;
+    syncError = result.error;
+
+    if (
+      !syncError ||
+      !syncError.message.toLowerCase().includes("jwt issued at future")
+    ) {
+      break;
+    }
+  }
 
   if (syncError) {
     if (!syncError.message.toLowerCase().includes("no invited user profile")) {
@@ -532,4 +549,10 @@ function mapWorkspaceOnboardingError(message: string) {
   }
 
   return message || "The workspace could not be created. Please try again.";
+}
+
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
