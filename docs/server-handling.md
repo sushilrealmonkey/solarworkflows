@@ -57,17 +57,41 @@ values (
 );
 ```
 
-Do not expose this insert to browser clients. Authenticated tenant users have
-read-only, company-scoped access to their WhatsApp phone number, conversation,
-and message rows. Only the service role can call
-`persist_inbound_whatsapp_message`.
+Do not expose this insert to browser clients. Only active super admins can read
+WhatsApp phone number, conversation, and message rows. Only the service role
+can call `persist_inbound_whatsapp_message`.
 
 Inbound messages are stored idempotently by Meta message ID. A retry returns
-the existing message rather than creating a duplicate. Delivery/read status
-events continue to receive a successful acknowledgement but are not persisted
-yet. Messages for an unmapped or inactive Meta phone number are acknowledged
-and logged without being stored, so the mapping must be configured before
-subscribing production traffic.
+the existing message rather than creating a duplicate. Delivery callbacks
+update the matching outbound message through the tenant-scoped
+`process_whatsapp_message_status` RPC, including sent, delivered, read, failed,
+and deleted states. Unknown message IDs are acknowledged and logged without
+changing data. Messages for an unmapped or inactive Meta phone number are
+acknowledged and logged without being stored, so the mapping must be configured
+before subscribing production traffic.
+
+## Super-admin WhatsApp API
+
+The production server exposes authenticated, same-origin endpoints for the
+internal Bizlee WhatsApp console:
+
+```text
+GET  /api/whatsapp/phone-numbers
+GET  /api/whatsapp/templates?phoneNumberId=<UUID>
+GET  /api/whatsapp/messages
+POST /api/whatsapp/send-template
+```
+
+Every request must include the current Supabase access token as a Bearer token.
+The server validates that token with Supabase Auth and then checks the
+server-owned `users_profile` row for an active super admin. Frontend route
+visibility is only a convenience; the server check and database RLS policies
+are the authorization boundaries.
+
+The Meta access token and Graph API version remain backend-only environment
+variables. Template messages accepted by Meta are stored as outbound WhatsApp
+messages and progress through webhook delivery callbacks. Tenant roles cannot
+read the WhatsApp tables.
 
 ## Local Frontend
 

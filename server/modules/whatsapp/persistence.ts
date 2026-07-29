@@ -47,7 +47,7 @@ export interface ProcessWhatsAppStatusResult {
 
 let serverSupabaseClient: SupabaseClient | undefined;
 
-function getServerSupabaseClient(): SupabaseClient {
+export function getServerSupabaseClient(): SupabaseClient {
   if (serverSupabaseClient) {
     return serverSupabaseClient;
   }

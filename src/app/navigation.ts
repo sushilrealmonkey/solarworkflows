@@ -80,5 +80,6 @@ export const navigationItems: NavigationItem[] = [
 export const platformNavigationItems = [
   navigationRoute("/dashboard"),
   navigationRoute("/companies"),
+  navigationRoute("/whatsapp-messaging"),
   navigationRoute("/settings"),
 ];

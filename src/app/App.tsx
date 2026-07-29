@@ -48,6 +48,7 @@ import { ProformaInvoicesPage } from "../modules/proforma-invoices/ProformaInvoi
 import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/ProformaInvoiceDetailPage";
 import { CompaniesPage } from "../modules/companies/CompaniesPage";
 import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
+import { WhatsAppMessagingPage } from "../modules/whatsapp-messaging/WhatsAppMessagingPage";
 import {
   SettingsPage,
 } from "../modules/settings/SettingsPage";
@@ -71,6 +72,10 @@ export default function App() {
           <Route path="/" element={<DefaultWorkspaceRedirect />} />
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/companies/:id" element={<CompanyDetailPage />} />
+          <Route
+            path="/whatsapp-messaging"
+            element={<WhatsAppMessagingPage />}
+          />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/today" element={<TodayPage />} />
           <Route
@@ -154,6 +159,7 @@ export default function App() {
                   "/dashboard",
                   "/companies",
                   "/companies/:id",
+                  "/whatsapp-messaging",
                   "/customers/project-based",
                   "/customers/b2b-direct",
                   "/leads",

@@ -13,6 +13,14 @@ import {
   GET as verifyWhatsAppWebhook,
   POST as receiveWhatsAppWebhook,
 } from "./modules/whatsapp/webhook.js";
+import {
+  handleWhatsAppAdminRequest,
+  isWhatsAppAdminPath,
+} from "./modules/whatsapp/admin.js";
+import {
+  handleWhatsAppWorkspaceRequest,
+  isWhatsAppWorkspacePath,
+} from "./modules/whatsapp/workspace.js";
 
 const WHATSAPP_WEBHOOK_PATH = "/api/webhooks/whatsapp";
 const MAX_WEBHOOK_BODY_BYTES = 1_000_000;
@@ -154,6 +162,50 @@ async function handleWhatsAppWebhook(
   await sendFetchResponse(fetchResponse, response);
 }
 
+async function handleWhatsAppAdminApi(
+  request: IncomingMessage,
+  response: ServerResponse,
+  requestUrl: URL,
+): Promise<void> {
+  const requestInit: RequestInit = {
+    method: request.method,
+    headers: toFetchHeaders(request.headers),
+  };
+
+  if (request.method === "POST") {
+    requestInit.body = await readRequestBody(request);
+  }
+
+  await sendFetchResponse(
+    await handleWhatsAppAdminRequest(
+      new Request(requestUrl, requestInit),
+    ),
+    response,
+  );
+}
+
+async function handleWhatsAppWorkspaceApi(
+  request: IncomingMessage,
+  response: ServerResponse,
+  requestUrl: URL,
+): Promise<void> {
+  const requestInit: RequestInit = {
+    method: request.method,
+    headers: toFetchHeaders(request.headers),
+  };
+
+  if (request.method === "POST" || request.method === "PUT") {
+    requestInit.body = await readRequestBody(request);
+  }
+
+  await sendFetchResponse(
+    await handleWhatsAppWorkspaceRequest(
+      new Request(requestUrl, requestInit),
+    ),
+    response,
+  );
+}
+
 function isPathInsideDist(filePath: string): boolean {
   return (
     filePath === DIST_DIRECTORY ||
@@ -251,6 +303,16 @@ const server = createServer(async (request, response) => {
 
     if (requestUrl.pathname === WHATSAPP_WEBHOOK_PATH) {
       await handleWhatsAppWebhook(request, response, requestUrl);
+      return;
+    }
+
+    if (isWhatsAppWorkspacePath(requestUrl.pathname)) {
+      await handleWhatsAppWorkspaceApi(request, response, requestUrl);
+      return;
+    }
+
+    if (isWhatsAppAdminPath(requestUrl.pathname)) {
+      await handleWhatsAppAdminApi(request, response, requestUrl);
       return;
     }
 
