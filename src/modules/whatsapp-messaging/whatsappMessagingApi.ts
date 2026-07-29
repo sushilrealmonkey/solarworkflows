@@ -128,6 +128,20 @@ export function fetchConversationMessages(conversationId: string) {
   ).then((result) => result.messages);
 }
 
+export function sendFreeFormReply(input: {
+  conversationId: string;
+  text: string;
+}) {
+  return apiRequest<{
+    accepted: boolean;
+    recorded: boolean;
+    serviceWindowUntil: string;
+  }>("/api/whatsapp/send-text", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function fetchOutreachSettings() {
   return apiRequest<{ settings: {
     company_id: string;

@@ -8,6 +8,8 @@ const PHONE_NUMBER_PATH = "/api/whatsapp/phone-numbers";
 const TEMPLATE_PATH = "/api/whatsapp/templates";
 const MESSAGE_PATH = "/api/whatsapp/messages";
 const SEND_PATH = "/api/whatsapp/send-template";
+const SEND_TEXT_PATH = "/api/whatsapp/send-text";
+const SERVICE_WINDOW_MS = 24 * 60 * 60 * 1_000;
 
 type JsonObject = Record<string, unknown>;
 
@@ -63,7 +65,8 @@ export function isWhatsAppAdminPath(pathname: string): boolean {
     pathname === PHONE_NUMBER_PATH ||
     pathname === TEMPLATE_PATH ||
     pathname === MESSAGE_PATH ||
-    pathname === SEND_PATH
+    pathname === SEND_PATH ||
+    pathname === SEND_TEXT_PATH
   );
 }
 
@@ -96,6 +99,13 @@ export async function handleWhatsAppAdminRequest(
     if (url.pathname === SEND_PATH && request.method === "POST") {
       return jsonResponse(
         await sendTemplateMessage(await parseJsonBody(request)),
+        201,
+      );
+    }
+
+    if (url.pathname === SEND_TEXT_PATH && request.method === "POST") {
+      return jsonResponse(
+        await sendFreeFormMessage(await parseJsonBody(request)),
         201,
       );
     }
@@ -352,6 +362,152 @@ async function sendTemplateMessage(body: JsonObject) {
   };
 }
 
+async function sendFreeFormMessage(body: JsonObject) {
+  const conversationId = requireUuid(getString(body.conversationId));
+  const text = requireFreeFormText(getString(body.text));
+  const supabase = getServerSupabaseClient();
+  const { data: conversation, error: conversationError } = await supabase
+    .from("whatsapp_conversations")
+    .select(
+      "id,company_id,whatsapp_phone_number_id,contact_wa_id,contact_name",
+    )
+    .eq("id", conversationId)
+    .maybeSingle();
+
+  if (conversationError || !conversation) {
+    throw new ApiError("WhatsApp conversation was not found", 404);
+  }
+
+  const { data: latestInbound, error: inboundError } = await supabase
+    .from("whatsapp_messages")
+    .select("source_timestamp")
+    .eq("conversation_id", conversationId)
+    .eq("direction", "inbound")
+    .order("source_timestamp", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (inboundError) {
+    throw new Error(
+      `Could not check the WhatsApp service window (${inboundError.code})`,
+    );
+  }
+
+  const serviceWindowUntil = latestInbound
+    ? new Date(latestInbound.source_timestamp).getTime() + SERVICE_WINDOW_MS
+    : 0;
+
+  if (!serviceWindowUntil || Date.now() >= serviceWindowUntil) {
+    throw new ApiError(
+      "The 24-hour WhatsApp service window is closed. Send an approved template instead.",
+      409,
+    );
+  }
+
+  const phoneNumber = await getPhoneNumber(
+    conversation.whatsapp_phone_number_id,
+  );
+  const providerResponse = await fetch(
+    `${graphBaseUrl()}/${phoneNumber.meta_phone_number_id}/messages`,
+    {
+      method: "POST",
+      headers: {
+        ...metaHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: normalizeWhatsAppRecipient(conversation.contact_wa_id),
+        type: "text",
+        text: { preview_url: false, body: text },
+      }),
+      signal: AbortSignal.timeout(10_000),
+    },
+  );
+  const providerPayload = await parseJson<MetaSendResponse>(providerResponse);
+  const metaMessageId = providerPayload.messages?.[0]?.id?.trim();
+
+  if (!providerResponse.ok || !metaMessageId) {
+    console.error("Meta free-form message send failed", {
+      status: providerResponse.status,
+      code: providerPayload.error?.code ?? null,
+    });
+    throw new ApiError(
+      providerPayload.error?.message?.slice(0, 300) ||
+        "Meta rejected the WhatsApp reply",
+      502,
+    );
+  }
+
+  let recorded = true;
+  try {
+    await persistFreeFormMessage({
+      conversationId,
+      phoneNumber,
+      text,
+      metaMessageId,
+    });
+  } catch (error) {
+    recorded = false;
+    console.error(
+      "Meta accepted a WhatsApp reply but local persistence failed",
+      { metaMessageId, error: safeError(error) },
+    );
+  }
+
+  return {
+    accepted: true,
+    metaMessageId,
+    recorded,
+    serviceWindowUntil: new Date(serviceWindowUntil).toISOString(),
+  };
+}
+
+async function persistFreeFormMessage(input: {
+  conversationId: string;
+  phoneNumber: PhoneNumberRow;
+  text: string;
+  metaMessageId: string;
+}) {
+  const supabase = getServerSupabaseClient();
+  const timestamp = new Date().toISOString();
+  const { error: messageError } = await supabase
+    .from("whatsapp_messages")
+    .insert({
+      company_id: input.phoneNumber.company_id,
+      conversation_id: input.conversationId,
+      whatsapp_phone_number_id: input.phoneNumber.id,
+      meta_message_id: input.metaMessageId,
+      direction: "outbound",
+      message_type: "text",
+      status: "sent",
+      sender_wa_id:
+        input.phoneNumber.display_phone_number ||
+        input.phoneNumber.meta_phone_number_id,
+      text_body: input.text,
+      source_timestamp: timestamp,
+      raw_payload: { type: "text", source: "super_admin_inbox" },
+    });
+
+  if (messageError) {
+    throw new Error(
+      `Could not persist WhatsApp reply (${messageError.code})`,
+    );
+  }
+
+  const { error: conversationError } = await supabase
+    .from("whatsapp_conversations")
+    .update({ last_message_at: timestamp })
+    .eq("id", input.conversationId);
+
+  if (conversationError) {
+    throw new Error(
+      `Could not update WhatsApp conversation (${conversationError.code})`,
+    );
+  }
+}
+
 async function persistOutboundMessage(input: {
   phoneNumber: PhoneNumberRow;
   recipient: string;
@@ -431,6 +587,17 @@ async function parseJsonBody(request: Request): Promise<JsonObject> {
 
 function getString(value: unknown): string | null {
   return typeof value === "string" ? value.trim() : null;
+}
+
+function requireFreeFormText(value: string | null): string {
+  if (!value || value.length > 4_096) {
+    throw new ApiError(
+      "Reply text must contain between 1 and 4096 characters",
+      400,
+    );
+  }
+
+  return value;
 }
 
 function getStringArray(

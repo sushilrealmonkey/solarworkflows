@@ -7,6 +7,7 @@ import {
   fetchConversationMessages, fetchConversations, fetchOutreachSettings,
   fetchRecentWhatsAppMessages, fetchWhatsAppPhoneNumbers, fetchWhatsAppTemplates,
   fetchWorkerHealth, importContactList, processCampaignsNow, saveOutreachSettings,
+  sendFreeFormReply,
 } from "./whatsappMessagingApi";
 import type {
   WhatsAppCampaign, WhatsAppContactList, WhatsAppConversation, WhatsAppMessage,
@@ -284,8 +285,32 @@ function ContactLists({ phoneNumbers, lists, onChanged, showToast }: {
 
 function Inbox({ conversations }: { conversations: WhatsAppConversation[] }) {
   const [selected, setSelected] = useState(""); const [thread, setThread] = useState<WhatsAppThreadMessage[]>([]);
-  useEffect(() => { if (!selected) return setThread([]); void fetchConversationMessages(selected).then(setThread); }, [selected]);
+  const [reply, setReply] = useState(""); const [sending, setSending] = useState(false);
+  const [replyError, setReplyError] = useState("");
+  async function loadThread(conversationId: string) {
+    setThread(await fetchConversationMessages(conversationId));
+  }
+  useEffect(() => {
+    setReply(""); setReplyError("");
+    if (!selected) { setThread([]); return; }
+    void loadThread(selected).catch((error) => setReplyError(messageOf(error)));
+  }, [selected]);
   const active = conversations.find((item) => item.id === selected);
+  const latestInbound = [...thread].reverse().find((message) => message.direction === "inbound");
+  const serviceWindowUntil = latestInbound
+    ? new Date(latestInbound.source_timestamp).getTime() + 24 * 60 * 60 * 1_000
+    : 0;
+  const serviceWindowOpen = serviceWindowUntil > Date.now();
+  async function submitReply(event: FormEvent) {
+    event.preventDefault();
+    if (!selected || !serviceWindowOpen || !reply.trim()) return;
+    setSending(true); setReplyError("");
+    try {
+      await sendFreeFormReply({ conversationId: selected, text: reply.trim() });
+      setReply(""); await loadThread(selected);
+    } catch (error) { setReplyError(messageOf(error)); }
+    finally { setSending(false); }
+  }
   return <div className="grid min-h-[520px] gap-5 lg:grid-cols-[320px_1fr]">
     <Panel title="Conversations" eyebrow={`${conversations.length} threads`}><div className="space-y-2">{conversations.map((c) =>
       <button key={c.id} onClick={() => setSelected(c.id)} className={`w-full rounded-lg border p-3 text-left ${selected === c.id ? "border-orange-300 bg-orange-50" : "border-stone-200"}`}>
@@ -293,11 +318,25 @@ function Inbox({ conversations }: { conversations: WhatsAppConversation[] }) {
       </button>)}</div></Panel>
     <Panel title={active?.contact_name || active?.contact_wa_id || "Select a conversation"} eyebrow="Webhook replies">
       {!active ? <Empty>Select a contact to view their complete message thread.</Empty> :
-        <div className="space-y-3">{thread.map((m) => <div key={m.id} className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}>
+        <><div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">{thread.map((m) => <div key={m.id} className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}>
           <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${m.direction === "outbound" ? "bg-[#06173f] text-white" : "bg-stone-100 text-slate-800"}`}>
             <p>{m.text_body || `[${m.message_type}]`}</p><p className="mt-1 text-[10px] opacity-70">{m.status} · {new Date(m.source_timestamp).toLocaleString()}</p>
-          </div></div>)}</div>}
-      <Notice>Replies appear here automatically from the existing Meta webhook. A free-form reply composer will only be enabled inside Meta’s 24-hour service window.</Notice>
+          </div></div>)}</div>
+        <form className="mt-4 space-y-3 border-t border-stone-200 pt-4" onSubmit={submitReply}>
+          <textarea className={`${input} min-h-24 resize-y py-3`} maxLength={4096}
+            placeholder={serviceWindowOpen ? "Type a WhatsApp reply…" : "The 24-hour service window is closed"}
+            value={reply} onChange={(event) => setReply(event.target.value)}
+            disabled={!serviceWindowOpen || sending} />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-slate-500">{serviceWindowOpen
+              ? `Free-form replies available until ${new Date(serviceWindowUntil).toLocaleString()}`
+              : "Send an approved template to restart the conversation."}</p>
+            <button className={primary} disabled={!serviceWindowOpen || !reply.trim() || sending}>
+              {sending ? "Sending…" : "Send reply"}</button>
+          </div>
+          {replyError ? <Notice tone="error">{replyError}</Notice> : null}
+        </form></>}
+      <Notice>Incoming replies appear automatically. Free-form replies are available for 24 hours after the contact&apos;s latest message.</Notice>
     </Panel>
   </div>;
 }
