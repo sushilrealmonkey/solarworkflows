@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const pageSizeOptions = [25, 50, 75, 100] as const;
+const defaultPageSizeOptions = [25, 50, 75, 100] as const;
 
 export type TablePaginationModel<T> = {
   page: number;
@@ -60,11 +60,13 @@ export function useTablePagination<T>(
 type TablePaginationProps = {
   label?: string;
   pagination: TablePaginationModel<unknown>;
+  pageSizeOptions?: readonly number[];
 };
 
 export function TablePagination({
   label = "records",
   pagination,
+  pageSizeOptions = defaultPageSizeOptions,
 }: TablePaginationProps) {
   if (pagination.totalItems === 0) {
     return null;
@@ -85,7 +87,7 @@ export function TablePagination({
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <label className="flex items-center gap-2">
+        {pageSizeOptions.length > 1 ? <label className="flex items-center gap-2">
           <span className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-slate-500">
             Rows
           </span>
@@ -102,7 +104,7 @@ export function TablePagination({
               </option>
             ))}
           </select>
-        </label>
+        </label> : null}
 
         <div className="flex items-center gap-2">
           <button

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   controlCampaign, createCampaign, fetchCampaigns, fetchContactLists,
@@ -84,6 +85,7 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
 }) {
   const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
   const [busy, setBusy] = useState(false);
+  const campaignPagination = useTablePagination(campaigns, 5);
   const [form, setForm] = useState({ name: "", phoneNumberId: "", contactListId: "",
     templateKey: "", batchSize: "20", delaySeconds: "5", scheduledAt: "",
     variableMappings: [] as string[] });
@@ -210,7 +212,7 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
       </Notice>
     </Panel>
     <Panel title="Campaign queue" eyebrow={`${campaigns.length} campaigns`}>
-      <div className="space-y-3">{campaigns.length ? campaigns.map((c) => <article key={c.id} className="rounded-xl border border-stone-200 p-4">
+      <div className="space-y-3">{campaigns.length ? campaignPagination.pageItems.map((c) => <article key={c.id} className="rounded-xl border border-stone-200 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-slate-900">{c.name}</h3>
           <p className="mt-1 text-xs text-slate-500">{c.template_name} · batch {c.batch_size} · {c.delay_seconds}s delay</p></div><Badge>{c.status}</Badge></div>
         <div className="mt-3 flex flex-wrap gap-1.5">
@@ -235,6 +237,8 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
           {c.status === "paused" ? <SmallButton onClick={() => act(c, "resume")}>Resume</SmallButton> : null}
           {!["completed", "cancelled"].includes(c.status) ? <SmallButton onClick={() => act(c, "cancel")}>Cancel</SmallButton> : null}
         </div></article>) : <Empty>No campaigns yet. Import a list first.</Empty>}</div>
+      <div className="mt-4"><TablePagination label="campaigns" pagination={campaignPagination}
+        pageSizeOptions={[5]} /></div>
     </Panel>
     </div>
   </div>;
@@ -248,6 +252,7 @@ function ContactLists({ phoneNumbers, lists, onChanged, showToast }: {
   const [phoneNumberId, setPhoneNumberId] = useState("");
   const [preview, setPreview] = useState<Array<{ phoneNumber: string; name: string; customFields: Record<string, string> }>>([]);
   const [consent, setConsent] = useState(false); const [busy, setBusy] = useState(false);
+  const listPagination = useTablePagination(lists, 10);
   async function choose(event: ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files?.[0] ?? null; setFile(selected);
     if (!selected) return setPreview([]);
@@ -276,10 +281,12 @@ function ContactLists({ phoneNumbers, lists, onChanged, showToast }: {
       {preview.length ? <Notice>{preview.length} valid unique contacts ready. Preview: {preview.slice(0, 3).map((r) => r.phoneNumber).join(", ")}</Notice> : null}
       <button className={primary} disabled={!preview.length || !consent || busy || !phoneNumberId}>{busy ? "Importing…" : "Import contact list"}</button>
     </form></Panel>
-    <Panel title="Saved lists" eyebrow={`${lists.length} lists`}><div className="space-y-3">{lists.length ? lists.map((list) =>
+    <Panel title="Saved lists" eyebrow={`${lists.length} lists`}><div className="space-y-3">{lists.length ? listPagination.pageItems.map((list) =>
       <article key={list.id} className="flex items-center justify-between rounded-xl border border-stone-200 p-4">
         <div><h3 className="font-semibold">{list.name}</h3><p className="mt-1 text-xs text-slate-500">{list.source_filename || "CSV import"}</p></div>
-        <Badge>{list.contact_count} contacts</Badge></article>) : <Empty>No contact lists imported.</Empty>}</div></Panel>
+        <Badge>{list.contact_count} contacts</Badge></article>) : <Empty>No contact lists imported.</Empty>}</div>
+      <div className="mt-4"><TablePagination label="lists" pagination={listPagination}
+        pageSizeOptions={[10]} /></div></Panel>
   </div>;
 }
 
@@ -287,6 +294,7 @@ function Inbox({ conversations }: { conversations: WhatsAppConversation[] }) {
   const [selected, setSelected] = useState(""); const [thread, setThread] = useState<WhatsAppThreadMessage[]>([]);
   const [reply, setReply] = useState(""); const [sending, setSending] = useState(false);
   const [replyError, setReplyError] = useState("");
+  const conversationPagination = useTablePagination(conversations, 10);
   async function loadThread(conversationId: string) {
     setThread(await fetchConversationMessages(conversationId));
   }
@@ -312,10 +320,11 @@ function Inbox({ conversations }: { conversations: WhatsAppConversation[] }) {
     finally { setSending(false); }
   }
   return <div className="grid min-h-[520px] gap-5 lg:grid-cols-[320px_1fr]">
-    <Panel title="Conversations" eyebrow={`${conversations.length} threads`}><div className="space-y-2">{conversations.map((c) =>
+    <Panel title="Conversations" eyebrow={`${conversations.length} threads`}><div className="space-y-2">{conversationPagination.pageItems.map((c) =>
       <button key={c.id} onClick={() => setSelected(c.id)} className={`w-full rounded-lg border p-3 text-left ${selected === c.id ? "border-orange-300 bg-orange-50" : "border-stone-200"}`}>
         <p className="font-semibold">{c.contact_name || c.contact_wa_id}</p><p className="mt-1 text-xs text-slate-500">{new Date(c.last_message_at).toLocaleString()}</p>
-      </button>)}</div></Panel>
+      </button>)}</div><div className="mt-4"><TablePagination label="threads"
+        pagination={conversationPagination} pageSizeOptions={[10]} /></div></Panel>
     <Panel title={active?.contact_name || active?.contact_wa_id || "Select a conversation"} eyebrow="Webhook replies">
       {!active ? <Empty>Select a contact to view their complete message thread.</Empty> :
         <><div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">{thread.map((m) => <div key={m.id} className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}>
@@ -343,12 +352,14 @@ function Inbox({ conversations }: { conversations: WhatsAppConversation[] }) {
 
 function Activity({ messages, onRefresh }: { messages: WhatsAppMessage[]; onRefresh: () => Promise<void> }) {
   const totals = useMemo(() => Object.fromEntries(["sent", "delivered", "read", "failed"].map((s) => [s, messages.filter((m) => m.status === s).length])), [messages]);
+  const activityPagination = useTablePagination(messages, 25);
   return <Panel title="Delivery activity" eyebrow="Latest 50 messages"><div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
     {Object.entries(totals).map(([label, value]) => <div key={label} className="rounded-lg bg-stone-50 p-3"><p className="text-xs capitalize text-slate-500">{label}</p><p className="text-2xl font-semibold">{value}</p></div>)}
   </div><button className={secondary} onClick={() => void onRefresh()}>Refresh</button>
-  <div className="mt-4 space-y-2">{messages.map((m) => <article key={m.id} className="flex items-center justify-between rounded-lg border border-stone-200 p-3">
+  <div className="mt-4 space-y-2">{activityPagination.pageItems.map((m) => <article key={m.id} className="flex items-center justify-between rounded-lg border border-stone-200 p-3">
     <div className="min-w-0"><p className="truncate text-sm font-semibold">{m.text_body || m.message_type}</p><p className="text-xs text-slate-500">{m.direction}</p></div><Badge>{m.status}</Badge>
-  </article>)}</div></Panel>;
+  </article>)}</div><div className="mt-4"><TablePagination label="messages"
+    pagination={activityPagination} pageSizeOptions={[25]} /></div></Panel>;
 }
 
 function Settings({ companyId, showToast }: { companyId: string; showToast: (message: string, tone?: "success" | "error" | "info") => void }) {
