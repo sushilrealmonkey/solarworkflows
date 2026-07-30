@@ -82,4 +82,5 @@ export const platformNavigationItems = [
   navigationRoute("/companies"),
   navigationRoute("/whatsapp-messaging"),
   navigationRoute("/settings"),
+  navigationRoute("/billing/plans"),
 ];

@@ -9,12 +9,13 @@ import {
 import { isPlatformPath } from "../app/redirects";
 import { useAuth } from "../app/AuthProvider";
 import { PortalLogo, PortalLogoIcon } from "../components/PortalBrand";
+import { SubscriptionNotice } from "../modules/billing/SubscriptionNotice";
 
 const linkBase =
   "group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
 
 export function DashboardLayout() {
-  const { profile, permissions, organization, signOut } = useAuth();
+  const { profile, permissions, organization, subscription, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -35,6 +36,12 @@ export function DashboardLayout() {
     );
 
     return navigationItems.reduce<NavigationItem[]>((items, item) => {
+        if (
+          item.path === "/today" &&
+          !subscription?.enabled_modules.includes("assistant")
+        ) {
+          return items;
+        }
         if (item.superAdminOnly) {
           return items;
         }
@@ -63,7 +70,7 @@ export function DashboardLayout() {
 
         return items;
       }, []);
-  }, [permissions, profile?.is_super_admin]);
+  }, [permissions, profile?.is_super_admin, subscription?.enabled_modules]);
 
   if (profile?.is_super_admin && !isPlatformPath(location.pathname)) {
     return <Navigate to="/dashboard" replace />;
@@ -103,6 +110,7 @@ export function DashboardLayout() {
       className="min-h-screen bg-[#fff8f1] text-slate-950"
       style={shellStyle}
     >
+      <SubscriptionNotice />
       <aside
         className={`fixed inset-y-0 left-0 hidden flex-col overflow-hidden border-r border-white/10 bg-[#06173f] px-3 py-5 text-white shadow-2xl shadow-slate-950/20 transition-[width] duration-300 lg:flex ${
           sidebarCollapsed ? "w-20" : "w-60"

@@ -26,6 +26,7 @@ export function isPlatformPath(pathname: string) {
     pathname === "/companies" ||
     pathname.startsWith("/companies/") ||
     pathname === "/whatsapp-messaging" ||
-    pathname === "/settings"
+    pathname === "/settings" ||
+    pathname === "/billing/plans"
   );
 }

@@ -52,6 +52,8 @@ import { WhatsAppMessagingPage } from "../modules/whatsapp-messaging/WhatsAppMes
 import {
   SettingsPage,
 } from "../modules/settings/SettingsPage";
+import { BillingPlansPage } from "../modules/billing/BillingPlansPage";
+import { SubscriptionRoute } from "../modules/billing/SubscriptionRoute";
 
 export default function App() {
   return (
@@ -77,7 +79,14 @@ export default function App() {
             element={<WhatsAppMessagingPage />}
           />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/today" element={<TodayPage />} />
+          <Route
+            path="/today"
+            element={
+              <SubscriptionRoute moduleKey="assistant">
+                <TodayPage />
+              </SubscriptionRoute>
+            }
+          />
           <Route
             path="/customers"
             element={<Navigate to="/customers/project-based" replace />}
@@ -101,10 +110,10 @@ export default function App() {
           <Route path="/quotations/:id" element={<QuotationDetailPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />
-          <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/payments/:id" element={<PaymentDetailPage />} />
-          <Route path="/b2b-sales" element={<B2BSalesPage />} />
-          <Route path="/b2b-sales/:id" element={<B2BSaleDetailPage />} />
+          <Route path="/payments" element={<SubscriptionRoute moduleKey="payments"><PaymentsPage /></SubscriptionRoute>} />
+          <Route path="/payments/:id" element={<SubscriptionRoute moduleKey="payments"><PaymentDetailPage /></SubscriptionRoute>} />
+          <Route path="/b2b-sales" element={<SubscriptionRoute moduleKey="b2b_sales"><B2BSalesPage /></SubscriptionRoute>} />
+          <Route path="/b2b-sales/:id" element={<SubscriptionRoute moduleKey="b2b_sales"><B2BSaleDetailPage /></SubscriptionRoute>} />
           <Route
             path="/product-master"
             element={<Navigate to="/products-materials/products" replace />}
@@ -115,11 +124,11 @@ export default function App() {
           />
           <Route
             path="/products-materials/products"
-            element={<ProductMasterPage />}
+            element={<SubscriptionRoute moduleKey="product_master"><ProductMasterPage /></SubscriptionRoute>}
           />
           <Route
             path="/products-materials/categories"
-            element={<CategoryMasterPage />}
+            element={<SubscriptionRoute moduleKey="product_master"><CategoryMasterPage /></SubscriptionRoute>}
           />
           <Route
             path="/products-materials/catalog-library"
@@ -127,30 +136,31 @@ export default function App() {
           />
           <Route
             path="/product-master/:id"
-            element={<ProductDetailPage />}
+            element={<SubscriptionRoute moduleKey="product_master"><ProductDetailPage /></SubscriptionRoute>}
           />
           <Route
             path="/products-materials/products/:id"
-            element={<ProductDetailPage />}
+            element={<SubscriptionRoute moduleKey="product_master"><ProductDetailPage /></SubscriptionRoute>}
           />
-          <Route path="/products-materials/:id" element={<ProductDetailPage />} />
-          <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/products-materials/:id" element={<SubscriptionRoute moduleKey="product_master"><ProductDetailPage /></SubscriptionRoute>} />
+          <Route path="/inventory" element={<SubscriptionRoute moduleKey="inventory"><InventoryPage /></SubscriptionRoute>} />
           <Route
             path="/inventory/opening-stock"
-            element={<InventoryOpeningStockPage />}
+            element={<SubscriptionRoute moduleKey="inventory"><InventoryOpeningStockPage /></SubscriptionRoute>}
           />
-          <Route path="/inventory/:id" element={<InventoryDetailPage />} />
-          <Route path="/vendors" element={<VendorsPage />} />
-          <Route path="/vendors/:id" element={<VendorDetailPage />} />
-          <Route path="/purchases" element={<PurchasesPage />} />
-          <Route path="/purchases/:id" element={<PurchaseDetailPage />} />
+          <Route path="/inventory/:id" element={<SubscriptionRoute moduleKey="inventory"><InventoryDetailPage /></SubscriptionRoute>} />
+          <Route path="/vendors" element={<SubscriptionRoute moduleKey="vendors"><VendorsPage /></SubscriptionRoute>} />
+          <Route path="/vendors/:id" element={<SubscriptionRoute moduleKey="vendors"><VendorDetailPage /></SubscriptionRoute>} />
+          <Route path="/purchases" element={<SubscriptionRoute moduleKey="purchases"><PurchasesPage /></SubscriptionRoute>} />
+          <Route path="/purchases/:id" element={<SubscriptionRoute moduleKey="purchases"><PurchaseDetailPage /></SubscriptionRoute>} />
           <Route path="/material-receive" element={<Navigate to="/purchases" replace />} />
-          <Route path="/proforma-invoices" element={<ProformaInvoicesPage />} />
-          <Route path="/proforma-invoices/:id" element={<ProformaInvoiceDetailPage />} />
-          <Route path="/invoices" element={<InvoicesPage />} />
-          <Route path="/invoices/:id" element={<InvoiceDetailPage />} />
+          <Route path="/proforma-invoices" element={<SubscriptionRoute moduleKey="invoices"><ProformaInvoicesPage /></SubscriptionRoute>} />
+          <Route path="/proforma-invoices/:id" element={<SubscriptionRoute moduleKey="invoices"><ProformaInvoiceDetailPage /></SubscriptionRoute>} />
+          <Route path="/invoices" element={<SubscriptionRoute moduleKey="invoices"><InvoicesPage /></SubscriptionRoute>} />
+          <Route path="/invoices/:id" element={<SubscriptionRoute moduleKey="invoices"><InvoiceDetailPage /></SubscriptionRoute>} />
           <Route path="/reports" element={<Navigate to="/dashboard" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/billing/plans" element={<BillingPlansPage />} />
           <Route path="/settings/*" element={<Navigate to="/settings" replace />} />
           {routes
             .filter(
@@ -179,6 +189,7 @@ export default function App() {
                   "/invoices",
                   "/reports",
                   "/settings",
+                  "/billing/plans",
                 ].includes(route.path),
             )
             .map((route) => (

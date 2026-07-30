@@ -144,4 +144,10 @@ export const routes: AppRoute[] = [
     moduleKey: "settings",
     description: "Organization preferences, branding, and access settings will live here.",
   },
+  {
+    path: "/billing/plans",
+    label: "Billing & Plans",
+    moduleKey: "settings",
+    description: "Bizlee trial, subscription, and monthly plan management.",
+  },
 ];

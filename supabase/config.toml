@@ -441,6 +441,12 @@ verify_jwt = false
 # A dedicated high-entropy worker secret authenticates cron invocations.
 verify_jwt = false
 
+[functions.razorpay-subscription-webhook]
+verify_jwt = false
+
+[functions.process-trial-reminders]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

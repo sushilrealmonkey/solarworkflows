@@ -44,6 +44,7 @@ import {
   type DashboardSummaryRow,
   type EpcAdminDashboardSnapshot,
 } from "./dashboardApi";
+import { TrialBanner } from "../billing/TrialBanner";
 
 export function DashboardPage() {
   const { profile } = useAuth();
@@ -124,6 +125,7 @@ function EpcAdminDashboard() {
 
   return (
     <div className="space-y-3 sm:space-y-5">
+      <TrialBanner />
       <section className="rounded-lg border border-orange-100 bg-white p-3 shadow-sm shadow-orange-950/5 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start xl:items-center">
           <SolarOperationsBrandGraphic

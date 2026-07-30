@@ -11,6 +11,8 @@ import {
   type ReactNode,
 } from "react";
 import { supabase } from "../services/supabaseClient";
+import { fetchSubscriptionAccess } from "../modules/billing/billingApi";
+import type { SubscriptionAccess } from "../modules/billing/types";
 
 export type UserProfile = {
   id: string;
@@ -55,6 +57,7 @@ type AuthContextValue = {
   roleNames: string[];
   permissions: UserPermission[];
   organization: OrganizationBranding;
+  subscription: SubscriptionAccess | null;
   errorMessage: string | null;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -123,6 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
   const [organization, setOrganization] =
     useState<OrganizationBranding>(defaultOrganization);
+  const [subscription, setSubscription] = useState<SubscriptionAccess | null>(
+    null,
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const resetUserState = useCallback(() => {
@@ -130,6 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoleNames([]);
     setPermissions([]);
     setOrganization(defaultOrganization);
+    setSubscription(null);
     setErrorMessage(null);
   }, []);
 
@@ -248,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (loadedProfile.is_super_admin) {
+        setSubscription(null);
         setRoleNames(["Super Admin"]);
         setPermissions([]);
         setStatus("ready");
@@ -260,6 +268,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStatus("inactive");
         return;
       }
+
+      const loadedSubscription = await fetchSubscriptionAccess();
+      setSubscription(loadedSubscription);
 
       const { data: roleRows, error: roleError } = await supabase.rpc(
         "get_current_user_role_names",
@@ -393,6 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleNames,
       permissions,
       organization,
+      subscription,
       errorMessage,
       refresh,
       signOut,
@@ -404,6 +416,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       roleNames,
       permissions,
       organization,
+      subscription,
       errorMessage,
       refresh,
       signOut,
