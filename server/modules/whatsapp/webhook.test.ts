@@ -307,3 +307,74 @@ test("acknowledges a signed callback for an unknown message ID", async () => {
     }
   }
 });
+
+test("routes signed inbound STOP messages to notification opt-out processing", async () => {
+  const previousAppSecret = process.env.META_WHATSAPP_APP_SECRET;
+  const appSecret = "test-app-secret";
+  const rawBody = Buffer.from(JSON.stringify({
+    object: "whatsapp_business_account",
+    entry: [{
+      changes: [{
+        field: "messages",
+        value: {
+          metadata: { phone_number_id: "100200300" },
+          messages: [{
+            from: "919999999999",
+            id: "wamid.stop-1",
+            timestamp: "1767225600",
+            text: { body: "STOP" },
+            type: "text",
+          }],
+        },
+      }],
+    }],
+  }));
+  const signature = createHmac("sha256", appSecret)
+    .update(rawBody)
+    .digest("hex");
+  process.env.META_WHATSAPP_APP_SECRET = appSecret;
+
+  try {
+    const optOutBodies: Array<string | null> = [];
+    const response = await POST(
+      new Request("https://example.test/api/webhooks/whatsapp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Hub-Signature-256": `sha256=${signature}`,
+        },
+        body: rawBody,
+      }),
+      {
+        persistMessage: async () => ({
+          mapped: true,
+          inserted: true,
+          companyId: "company-1",
+          conversationId: "conversation-1",
+          messageId: "message-1",
+        }),
+        processStatus: async () => ({
+          mapped: false,
+          found: false,
+          updated: false,
+          companyId: null,
+          messageId: null,
+          status: null,
+        }),
+        processOptOut: async (message) => {
+          optOutBodies.push(message.textBody);
+          return { action: "unsubscribed", affectedRecipients: 1 };
+        },
+      },
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(optOutBodies, ["STOP"]);
+  } finally {
+    if (previousAppSecret === undefined) {
+      delete process.env.META_WHATSAPP_APP_SECRET;
+    } else {
+      process.env.META_WHATSAPP_APP_SECRET = previousAppSecret;
+    }
+  }
+});

@@ -44,6 +44,7 @@ import {
   validateStaffForm,
 } from "./settingsUtils";
 import { CompanyLogoUploader } from "./CompanyLogoUploader";
+import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
 
 type StaffFormState = {
   mode: "create" | "edit";
@@ -77,6 +78,7 @@ export function SettingsPage() {
       />
 
       <OrganizationSettingsPage />
+      <NotificationPreferencesSection />
       <StaffManagementPage />
     </div>
   );

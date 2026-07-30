@@ -14,6 +14,11 @@ type RazorpayEntity = {
   };
 };
 
+type RazorpayPaymentEntity = {
+  id?: string;
+  amount?: number;
+};
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
@@ -78,6 +83,32 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (updateError) throw new Error(updateError.message);
     if (!updated) throw new Error("Webhook subscription did not match a company");
+
+    if (["subscription.pending", "subscription.halted", "payment.failed"].includes(eventType)) {
+      const payment = payload?.payload?.payment?.entity as
+        | RazorpayPaymentEntity
+        | undefined;
+      const { error: queueError } = await service.rpc(
+        "queue_notification_event",
+        {
+          p_company_id: companyId,
+          p_event_type: "subscription_action_required",
+          p_source_type: "razorpay_webhook",
+          p_source_record_id: entity.id,
+          p_idempotency_key: `razorpay:${eventId}`,
+          p_payload: {
+            amount: formatRupees(payment?.amount),
+            attempt_date: formatDate(new Date()),
+            reference: payment?.id ?? eventId,
+          },
+          p_notification_key: "subscription_action_required",
+          p_scheduled_at: new Date().toISOString(),
+        },
+      );
+      if (queueError) {
+        throw new Error(`Could not queue subscription notification: ${queueError.message}`);
+      }
+    }
 
     await service
       .from("subscription_webhook_events")
@@ -149,6 +180,24 @@ function resolvePlan(entity: RazorpayEntity | undefined) {
 
 function unixDate(value?: number) {
   return value ? new Date(value * 1000).toISOString() : null;
+}
+
+function formatRupees(amountPaise?: number) {
+  if (!Number.isFinite(amountPaise)) return "Amount unavailable";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format((amountPaise ?? 0) / 100);
+}
+
+function formatDate(value: Date) {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(value);
 }
 
 async function validSignature(body: string, received: string) {

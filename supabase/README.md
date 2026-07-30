@@ -61,6 +61,18 @@ Function secrets are present.
 The hosted Auth email rate limit is set to 30 messages per hour. Invite,
 recovery, signup, and email-change messages share this project-wide quota.
 
+## WhatsApp tenant notifications
+
+Tenant lifecycle, billing, requested daily-summary, security, and optional
+marketing notifications use the separate notification queue. Deploy
+`notification-settings`, `process-notifications`, and
+`process-daily-summaries`. Production sending remains disabled while
+`NOTIFICATION_TEST_MODE=true`; only numbers in
+`NOTIFICATION_TEST_RECIPIENTS` can be claimed.
+
+See `docs/whatsapp-tenant-notifications.md` for required secrets, Vault
+entries, consent behavior, and the rollout checklist.
+
 Setup-link delivery must create exactly one Auth token. Do not generate a
 second recovery link after calling `resetPasswordForEmail`, because issuing a
 new recovery token can invalidate the token that was just emailed.

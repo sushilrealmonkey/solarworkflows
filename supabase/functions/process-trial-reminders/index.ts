@@ -37,11 +37,47 @@ Deno.serve(async (request) => {
   if (error) return json({ error: error.message }, 500);
 
   let sent = 0;
+  let whatsappQueued = 0;
   for (const trial of (trials ?? []) as unknown as TrialRow[]) {
     const endsAt = new Date(trial.trial_ends_at).getTime();
     const days = Math.max(0, Math.ceil((endsAt - now) / 86400000));
     const milestone = days <= 0 ? "expired" : days <= 1 ? "day_1" : days <= 3 ? "day_3" : days <= 7 ? "day_7" : null;
     if (!milestone) continue;
+
+    const companyName = trial.companies?.company_name ?? "your company";
+    const endDate = formatDate(trial.trial_ends_at);
+    const { data: queued, error: queueError } = await service.rpc(
+      "queue_notification_event",
+      {
+        p_company_id: trial.company_id,
+        p_event_type: milestone === "expired"
+          ? "trial_expired"
+          : "trial_ending",
+        p_source_type: "company_subscription",
+        p_source_record_id: trial.company_id,
+        p_idempotency_key: `trial:${trial.company_id}:${milestone}`,
+        p_payload: milestone === "expired"
+          ? {
+            trial_end_date: endDate,
+          }
+          : {
+            days_remaining: days,
+            trial_end_date: endDate,
+          },
+        p_notification_key: milestone === "expired"
+          ? "trial_expired"
+          : "trial_ending",
+        p_scheduled_at: new Date().toISOString(),
+      },
+    );
+    if (queueError) {
+      console.error("Trial WhatsApp notification queue failed", queueError.message);
+    } else {
+      whatsappQueued += Number(
+        (queued as Array<{ delivery_count?: number }> | null)?.[0]
+          ?.delivery_count ?? 0,
+      );
+    }
 
     const { data: ownerCandidates } = await service
       .from("users_profile")
@@ -83,7 +119,7 @@ Deno.serve(async (request) => {
       await sendReminderEmail({
         email,
         name: owner.full_name ?? "there",
-        company: trial.companies?.company_name ?? "your company",
+        company: companyName,
         days,
       });
       sent += 1;
@@ -98,7 +134,11 @@ Deno.serve(async (request) => {
     }
   }
 
-  return json({ processed: trials?.length ?? 0, sent });
+  return json({
+    processed: trials?.length ?? 0,
+    email_sent: sent,
+    whatsapp_queued: whatsappQueued,
+  });
 });
 
 async function sendReminderEmail(input: {
@@ -139,6 +179,14 @@ function escapeHtml(value: string) {
     '"': "&quot;",
     "'": "&#039;",
   })[character]!);
+}
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(value));
 }
 function requiredEnv(name: string) {
   const value = Deno.env.get(name)?.trim();

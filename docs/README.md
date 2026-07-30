@@ -24,6 +24,7 @@ business logic that has not been approved for implementation.
 | [RLS Permission System](rls-permission-system.md) | Documents Supabase RLS and permission enforcement. |
 | [QA Testing Plan](QA_TESTING_PLAN.md) | Provides local/staging QA data and role-based test scenarios. |
 | [AI Assistant Phase 1 Spec](ai-assistant-phase1-spec.md) | Planned Today screen daily brief + chat: architecture, tool layer, schema, and build order. Not implemented yet. |
+| [WhatsApp Tenant Notifications](whatsapp-tenant-notifications.md) | Tenant notification queue, approved templates, preferences, AI summaries, consent, delivery tracking, and rollout controls. |
 | [Change Log](changelog.md) | Tracks notable project documentation and implementation changes. |
 
 ## Maintenance Rules

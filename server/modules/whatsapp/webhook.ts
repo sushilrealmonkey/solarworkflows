@@ -9,6 +9,7 @@ import {
 } from "./payload.js";
 import {
   persistInboundWhatsAppMessage,
+  processNotificationOptOut,
   processWhatsAppStatusUpdate,
 } from "./persistence.js";
 
@@ -73,11 +74,13 @@ export async function GET(request: Request): Promise<Response> {
 interface WebhookDependencies {
   persistMessage: typeof persistInboundWhatsAppMessage;
   processStatus: typeof processWhatsAppStatusUpdate;
+  processOptOut?: typeof processNotificationOptOut;
 }
 
 const defaultDependencies: WebhookDependencies = {
   persistMessage: persistInboundWhatsAppMessage,
   processStatus: processWhatsAppStatusUpdate,
+  processOptOut: processNotificationOptOut,
 };
 
 export async function POST(
@@ -127,6 +130,9 @@ export async function POST(
       Promise.all(messages.map(dependencies.persistMessage)),
       Promise.all(statusUpdates.map(dependencies.processStatus)),
     ]);
+    if (dependencies.processOptOut) {
+      await Promise.all(messages.map(dependencies.processOptOut));
+    }
     const unmappedPhoneNumberIds = messages
       .filter((_, index) => !results[index]?.mapped)
       .map((message) => message.metaPhoneNumberId);

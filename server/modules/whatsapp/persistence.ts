@@ -36,6 +36,14 @@ interface ProcessWhatsAppStatusRow {
   status: string | null;
 }
 
+interface ProcessNotificationStatusRow {
+  delivery_found: boolean;
+  updated: boolean;
+  company_id: string | null;
+  delivery_id: string | null;
+  status: string | null;
+}
+
 export interface ProcessWhatsAppStatusResult {
   mapped: boolean;
   found: boolean;
@@ -43,6 +51,11 @@ export interface ProcessWhatsAppStatusResult {
   companyId: string | null;
   messageId: string | null;
   status: string | null;
+}
+
+export interface ProcessNotificationOptOutResult {
+  action: "ignored" | "unsubscribed" | "resubscribed";
+  affectedRecipients: number;
 }
 
 let serverSupabaseClient: SupabaseClient | undefined;
@@ -115,39 +128,98 @@ export async function persistInboundWhatsAppMessage(
 export async function processWhatsAppStatusUpdate(
   update: WhatsAppStatusUpdate,
 ): Promise<ProcessWhatsAppStatusResult> {
-  const { data, error } = await getServerSupabaseClient().rpc(
-    "process_whatsapp_message_status",
-    {
-      p_meta_phone_number_id: update.metaPhoneNumberId,
-      p_meta_message_id: update.metaMessageId,
-      p_status: update.status,
-      p_source_timestamp: update.sourceTimestamp,
-      p_error_code: update.errorCode,
-      p_error_title: update.errorTitle,
-      p_error_message: update.errorMessage,
-      p_error_details: update.errorDetails,
-    },
-  );
+  const client = getServerSupabaseClient();
+  const [messageResult, notificationResult] = await Promise.all([
+    client.rpc(
+      "process_whatsapp_message_status",
+      {
+        p_meta_phone_number_id: update.metaPhoneNumberId,
+        p_meta_message_id: update.metaMessageId,
+        p_status: update.status,
+        p_source_timestamp: update.sourceTimestamp,
+        p_error_code: update.errorCode,
+        p_error_title: update.errorTitle,
+        p_error_message: update.errorMessage,
+        p_error_details: update.errorDetails,
+      },
+    ),
+    client.rpc(
+      "process_notification_delivery_status",
+      {
+        p_provider_message_id: update.metaMessageId,
+        p_status: update.status,
+        p_source_timestamp: update.sourceTimestamp,
+        p_error_code: update.errorCode,
+        p_error_message: update.errorMessage ?? update.errorDetails,
+      },
+    ),
+  ]);
 
-  if (error) {
+  if (messageResult.error) {
     throw new Error(
-      `Could not process WhatsApp status (${error.code})`,
-      { cause: error },
+      `Could not process WhatsApp status (${messageResult.error.code})`,
+      { cause: messageResult.error },
+    );
+  }
+  if (notificationResult.error) {
+    throw new Error(
+      `Could not process notification status (${notificationResult.error.code})`,
+      { cause: notificationResult.error },
     );
   }
 
-  const row = (data as ProcessWhatsAppStatusRow[] | null)?.[0];
+  const row = (
+    messageResult.data as ProcessWhatsAppStatusRow[] | null
+  )?.[0];
+  const notificationRow = (
+    notificationResult.data as ProcessNotificationStatusRow[] | null
+  )?.[0];
 
   if (!row) {
     throw new Error("WhatsApp status RPC returned no result");
   }
 
+  const notificationFound = notificationRow?.delivery_found ?? false;
+
   return {
-    mapped: row.mapped,
-    found: row.message_found,
-    updated: row.updated,
-    companyId: row.company_id,
-    messageId: row.message_id,
-    status: row.status,
+    mapped: row.mapped || notificationFound,
+    found: row.message_found || notificationFound,
+    updated: row.updated || (notificationRow?.updated ?? false),
+    companyId: row.company_id ?? notificationRow?.company_id ?? null,
+    messageId: row.message_id ?? notificationRow?.delivery_id ?? null,
+    status: row.status ?? notificationRow?.status ?? null,
+  };
+}
+
+export async function processNotificationOptOut(
+  message: InboundWhatsAppMessage,
+): Promise<ProcessNotificationOptOutResult> {
+  if (message.messageType !== "text" || !message.textBody) {
+    return { action: "ignored", affectedRecipients: 0 };
+  }
+  const { data, error } = await getServerSupabaseClient().rpc(
+    "process_notification_opt_out",
+    {
+      p_contact_wa_id: message.contactWaId,
+      p_text_body: message.textBody,
+    },
+  );
+  if (error) {
+    throw new Error(
+      `Could not process notification opt-out (${error.code})`,
+      { cause: error },
+    );
+  }
+  const row = (data as Array<{
+    action?: string;
+    affected_recipients?: number;
+  }> | null)?.[0];
+  const action = row?.action === "unsubscribed" ||
+      row?.action === "resubscribed"
+    ? row.action
+    : "ignored";
+  return {
+    action,
+    affectedRecipients: row?.affected_recipients ?? 0,
   };
 }
