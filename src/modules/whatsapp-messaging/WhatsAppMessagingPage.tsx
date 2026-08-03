@@ -71,7 +71,7 @@ export function WhatsAppMessagingPage() {
       {error ? <Notice tone="error">{error}</Notice> : null}
       {tab === "today" ? <TodayQueue campaigns={campaigns}
         showToast={showToast} /> : null}
-      {tab === "campaigns" ? <Campaigns companyId={companyId} phoneNumbers={phoneNumbers}
+      {tab === "campaigns" ? <Campaigns phoneNumbers={phoneNumbers}
         lists={lists} campaigns={campaigns} workerHealth={workerHealth}
         onChanged={refresh} showToast={showToast} /> : null}
       {tab === "contacts" ? <ContactLists phoneNumbers={phoneNumbers} lists={lists}
@@ -83,8 +83,8 @@ export function WhatsAppMessagingPage() {
   );
 }
 
-function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, onChanged, showToast }: {
-  companyId: string; phoneNumbers: WhatsAppPhoneNumber[]; lists: WhatsAppContactList[];
+function Campaigns({ phoneNumbers, lists, campaigns, workerHealth, onChanged, showToast }: {
+  phoneNumbers: WhatsAppPhoneNumber[]; lists: WhatsAppContactList[];
   campaigns: WhatsAppCampaign[]; workerHealth: WhatsAppWorkerHealth | null;
   onChanged: () => Promise<void>;
   showToast: (message: string, tone?: "success" | "error" | "info") => void;
@@ -221,7 +221,7 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
         <Field label="Schedule (optional)"><input className={input} type="datetime-local" value={form.scheduledAt}
           onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} /></Field>
         <div className="flex items-end"><button className={primary}
-          disabled={busy || !companyId}>
+          disabled={busy}>
           {busy ? "Creating…" : "Create campaign"}</button></div>
       </form>
       <Notice>
