@@ -8,6 +8,7 @@ import type {
   WhatsAppTemplate,
   WhatsAppThreadMessage,
   WhatsAppWorkerHealth,
+  WhatsAppDailyQueue,
 } from "./types";
 
 type ApiErrorPayload = {
@@ -96,6 +97,35 @@ export function createCampaign(input: Record<string, unknown>) {
 export function controlCampaign(campaignId: string, action: string) {
   return apiRequest<{ id: string; status: string }>("/api/whatsapp/campaign-control", {
     method: "POST", body: JSON.stringify({ campaignId, action }),
+  });
+}
+
+export function updateCampaignDailyLimit(
+  campaignId: string,
+  dailyMessageLimit: number,
+  dailySendTime: string,
+  sendTimezone: string,
+) {
+  return apiRequest<{ id: string; daily_message_limit: number; daily_send_time: string; send_timezone: string }>(
+    "/api/whatsapp/campaign-daily-limit",
+    { method: "PUT", body: JSON.stringify({ campaignId, dailyMessageLimit, dailySendTime, sendTimezone }) },
+  );
+}
+
+export function fetchDailyQueue(campaignId: string) {
+  return apiRequest<{ queue: WhatsAppDailyQueue }>(
+    `/api/whatsapp/daily-queue?campaignId=${encodeURIComponent(campaignId)}`,
+  ).then((result) => result.queue);
+}
+
+export function markDailyQueueInCrm(
+  campaignId: string,
+  recipientIds: string[],
+  marked = true,
+) {
+  return apiRequest<{ updated: number }>("/api/whatsapp/daily-queue", {
+    method: "PUT",
+    body: JSON.stringify({ campaignId, recipientIds, marked }),
   });
 }
 

@@ -23,6 +23,7 @@ export type UserProfile = {
   company_id: string | null;
   status: string | null;
   is_super_admin: boolean | null;
+  platform_role: "backend_staff" | null;
 };
 
 export type UserPermission = {
@@ -158,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: profileData, error: profileError } = await supabase
         .from("users_profile")
         .select(
-          "id, auth_user_id, full_name, phone, organization_id, company_id, status, is_super_admin",
+          "id, auth_user_id, full_name, phone, organization_id, company_id, status, is_super_admin, platform_role",
         )
         .eq("auth_user_id", activeSession.user.id)
         .maybeSingle();
@@ -266,6 +267,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRoleNames([]);
         setPermissions([]);
         setStatus("inactive");
+        return;
+      }
+
+      if (loadedProfile.platform_role === "backend_staff") {
+        setSubscription(null);
+        setRoleNames(["Backend Staff"]);
+        setPermissions([]);
+        setStatus("ready");
         return;
       }
 

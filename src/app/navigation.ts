@@ -80,6 +80,7 @@ export const navigationItems: NavigationItem[] = [
 export const platformNavigationItems = [
   navigationRoute("/dashboard"),
   navigationRoute("/companies"),
+  navigationRoute("/platform-staff"),
   navigationRoute("/whatsapp-messaging"),
   navigationRoute("/settings"),
   navigationRoute("/billing/plans"),

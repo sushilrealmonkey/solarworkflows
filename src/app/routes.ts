@@ -18,8 +18,14 @@ export const routes: AppRoute[] = [
     path: "/whatsapp-messaging",
     label: "WhatsApp Outreach",
     moduleKey: "whatsapp_messaging",
-    description:
-      "Super-admin-only WhatsApp template sending and delivery monitoring for Bizlee.",
+    description: "WhatsApp template sending and delivery monitoring for authorized platform staff.",
+    superAdminOnly: true,
+  },
+  {
+    path: "/platform-staff",
+    label: "Platform Staff",
+    moduleKey: "platform_staff",
+    description: "Super-admin management for role-based platform staff.",
     superAdminOnly: true,
   },
   {

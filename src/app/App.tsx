@@ -49,11 +49,13 @@ import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/Proforma
 import { CompaniesPage } from "../modules/companies/CompaniesPage";
 import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
 import { WhatsAppMessagingPage } from "../modules/whatsapp-messaging/WhatsAppMessagingPage";
+import { PlatformStaffPage } from "../modules/platform-staff/PlatformStaffPage";
 import {
   SettingsPage,
 } from "../modules/settings/SettingsPage";
 import { BillingPlansPage } from "../modules/billing/BillingPlansPage";
 import { SubscriptionRoute } from "../modules/billing/SubscriptionRoute";
+import { NotificationsPage } from "../modules/notifications/NotificationsPage";
 
 export default function App() {
   return (
@@ -72,8 +74,10 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<DashboardLayout />}>
           <Route path="/" element={<DefaultWorkspaceRedirect />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/companies/:id" element={<CompanyDetailPage />} />
+          <Route path="/platform-staff" element={<PlatformStaffPage />} />
           <Route
             path="/whatsapp-messaging"
             element={<WhatsAppMessagingPage />}

@@ -45,6 +45,7 @@ import {
 } from "./settingsUtils";
 import { CompanyLogoUploader } from "./CompanyLogoUploader";
 import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
+import { BillingInvoicesSection } from "./BillingInvoicesSection";
 
 type StaffFormState = {
   mode: "create" | "edit";
@@ -78,6 +79,7 @@ export function SettingsPage() {
       />
 
       <OrganizationSettingsPage />
+      <BillingInvoicesSection />
       <NotificationPreferencesSection />
       <StaffManagementPage />
     </div>

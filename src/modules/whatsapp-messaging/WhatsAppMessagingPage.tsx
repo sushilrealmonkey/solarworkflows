@@ -8,16 +8,19 @@ import {
   fetchConversationMessages, fetchConversations, fetchOutreachSettings,
   fetchRecentWhatsAppMessages, fetchWhatsAppPhoneNumbers, fetchWhatsAppTemplates,
   fetchWorkerHealth, importContactList, processCampaignsNow, saveOutreachSettings,
-  sendFreeFormReply,
+  sendFreeFormReply, fetchDailyQueue,
+  updateCampaignDailyLimit,
 } from "./whatsappMessagingApi";
 import type {
   WhatsAppCampaign, WhatsAppContactList, WhatsAppConversation, WhatsAppMessage,
   WhatsAppPhoneNumber, WhatsAppTemplate, WhatsAppThreadMessage, WhatsAppWorkerHealth,
+  WhatsAppDailyQueue,
 } from "./types";
 
-type Tab = "campaigns" | "contacts" | "inbox" | "activity" | "settings";
+type Tab = "today" | "campaigns" | "contacts" | "inbox" | "activity" | "settings";
 const tabs: Array<{ id: Tab; label: string }> = [
-  { id: "campaigns", label: "Campaigns" }, { id: "contacts", label: "Contact Lists" },
+  { id: "today", label: "Today’s Contacts" }, { id: "campaigns", label: "Campaigns" },
+  { id: "contacts", label: "Contact Lists" },
   { id: "inbox", label: "Inbox" }, { id: "activity", label: "Activity" },
   { id: "settings", label: "Settings" },
 ];
@@ -25,7 +28,7 @@ const tabs: Array<{ id: Tab; label: string }> = [
 export function WhatsAppMessagingPage() {
   const { profile } = useAuth();
   const { showToast } = useToast();
-  const [tab, setTab] = useState<Tab>("campaigns");
+  const [tab, setTab] = useState<Tab>("today");
   const [phoneNumbers, setPhoneNumbers] = useState<WhatsAppPhoneNumber[]>([]);
   const [lists, setLists] = useState<WhatsAppContactList[]>([]);
   const [campaigns, setCampaigns] = useState<WhatsAppCampaign[]>([]);
@@ -49,9 +52,10 @@ export function WhatsAppMessagingPage() {
     }
   }, []);
 
-  useEffect(() => { if (profile?.is_super_admin) void refresh(); }, [profile?.is_super_admin, refresh]);
+  const canAccess = Boolean(profile?.is_super_admin || profile?.platform_role === "backend_staff");
+  useEffect(() => { if (canAccess) void refresh(); }, [canAccess, refresh]);
 
-  if (!profile?.is_super_admin) return <AccessDenied />;
+  if (!canAccess) return <AccessDenied />;
   return (
     <div className="space-y-5">
       <PageHeader title="WhatsApp Outreach"
@@ -65,6 +69,8 @@ export function WhatsAppMessagingPage() {
         ))}
       </nav>
       {error ? <Notice tone="error">{error}</Notice> : null}
+      {tab === "today" ? <TodayQueue campaigns={campaigns}
+        showToast={showToast} /> : null}
       {tab === "campaigns" ? <Campaigns companyId={companyId} phoneNumbers={phoneNumbers}
         lists={lists} campaigns={campaigns} workerHealth={workerHealth}
         onChanged={refresh} showToast={showToast} /> : null}
@@ -87,7 +93,8 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
   const [busy, setBusy] = useState(false);
   const campaignPagination = useTablePagination(campaigns, 5);
   const [form, setForm] = useState({ name: "", phoneNumberId: "", contactListId: "",
-    templateKey: "", batchSize: "20", delaySeconds: "5", scheduledAt: "",
+    templateKey: "", batchSize: "20", delaySeconds: "5", dailyMessageLimit: "10", scheduledAt: "",
+    dailySendTime: "09:00", sendTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     variableMappings: [] as string[] });
   const selectedTemplate = useMemo(
     () => templates.find((item) => `${item.name}:${item.language}` === form.templateKey) ?? null,
@@ -107,6 +114,8 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
     try {
       await createCampaign({ ...form, templateName, templateLanguage,
         batchSize: Number(form.batchSize), delaySeconds: Number(form.delaySeconds),
+        dailyMessageLimit: Number(form.dailyMessageLimit),
+        dailySendTime: form.dailySendTime, sendTimezone: form.sendTimezone,
         scheduledAt: form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
         variableMappings: form.variableMappings });
       showToast("Campaign created.", "success"); setForm({ ...form, name: "", templateKey: "", variableMappings: [] });
@@ -198,6 +207,12 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
         ) : null}
         <Field label="Batch size"><input className={input} type="number" min="1" max="100" value={form.batchSize}
           onChange={(e) => setForm({ ...form, batchSize: e.target.value })} /></Field>
+        <Field label="Daily contacts"><input className={input} type="number" min="1" max="10000"
+          value={form.dailyMessageLimit}
+          onChange={(e) => setForm({ ...form, dailyMessageLimit: e.target.value })} /></Field>
+        <Field label={`Daily send time (${form.sendTimezone})`}><input className={input} type="time"
+          required value={form.dailySendTime}
+          onChange={(e) => setForm({ ...form, dailySendTime: e.target.value })} /></Field>
         <Field label="Delay between messages (seconds)"><input className={input} type="number" min="1" max="3600" value={form.delaySeconds}
           onChange={(e) => setForm({ ...form, delaySeconds: e.target.value })} /></Field>
         <Field label="Schedule (optional)"><input className={input} type="datetime-local" value={form.scheduledAt}
@@ -214,7 +229,9 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
     <Panel title="Campaign queue" eyebrow={`${campaigns.length} campaigns`}>
       <div className="space-y-3">{campaigns.length ? campaignPagination.pageItems.map((c) => <article key={c.id} className="rounded-xl border border-stone-200 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-slate-900">{c.name}</h3>
-          <p className="mt-1 text-xs text-slate-500">{c.template_name} · batch {c.batch_size} · {c.delay_seconds}s delay</p></div><Badge>{c.status}</Badge></div>
+          <p className="mt-1 text-xs text-slate-500">{c.template_name} · {c.daily_message_limit}/day at {formatCampaignTime(c.daily_send_time)} ({c.send_timezone}) · batch {c.batch_size} · {c.delay_seconds}s delay</p></div><Badge>{c.status}</Badge></div>
+        {!['completed', 'cancelled'].includes(c.status) ?
+          <CampaignSchedule campaign={c} onChanged={onChanged} showToast={showToast} /> : null}
         <div className="mt-3 flex flex-wrap gap-1.5">
           {Object.entries(c.recipientSummary?.counts ?? {}).map(([status, count]) => (
             <span key={status} className="rounded-full bg-stone-100 px-2.5 py-1 text-xs text-slate-600">
@@ -241,6 +258,93 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
         pageSizeOptions={[5]} /></div>
     </Panel>
     </div>
+  </div>;
+}
+
+function CampaignSchedule({ campaign, onChanged, showToast }: {
+  campaign: WhatsAppCampaign;
+  onChanged: () => Promise<void>;
+  showToast: (message: string, tone?: "success" | "error" | "info") => void;
+}) {
+  const [dailyLimit, setDailyLimit] = useState(String(campaign.daily_message_limit));
+  const [sendTime, setSendTime] = useState(campaign.daily_send_time.slice(0, 5));
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    setDailyLimit(String(campaign.daily_message_limit));
+    setSendTime(campaign.daily_send_time.slice(0, 5));
+  }, [campaign.daily_message_limit, campaign.daily_send_time]);
+
+  async function save(event: FormEvent) {
+    event.preventDefault(); setBusy(true);
+    try {
+      await updateCampaignDailyLimit(
+        campaign.id, Number(dailyLimit), sendTime, campaign.send_timezone,
+      );
+      await onChanged(); showToast("Campaign daily schedule updated.", "success");
+    } catch (error) { showToast(messageOf(error), "error"); } finally { setBusy(false); }
+  }
+
+  return <form className="mt-3 grid gap-3 rounded-lg bg-stone-50 p-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+    onSubmit={save}>
+    <Field label="Daily contacts"><input className={input} type="number" min="1" max="10000"
+      value={dailyLimit} onChange={(event) => setDailyLimit(event.target.value)} /></Field>
+    <Field label={`Daily send time (${campaign.send_timezone})`}><input className={input} type="time"
+      required value={sendTime} onChange={(event) => setSendTime(event.target.value)} /></Field>
+    <button className={secondary} disabled={busy}>{busy ? "Saving…" : "Save schedule"}</button>
+  </form>;
+}
+
+function TodayQueue({ campaigns, showToast }: {
+  campaigns: WhatsAppCampaign[];
+  showToast: (message: string, tone?: "success" | "error" | "info") => void;
+}) {
+  const [campaignId, setCampaignId] = useState("");
+  const [queue, setQueue] = useState<WhatsAppDailyQueue | null>(null);
+  const eligibleCampaigns = campaigns.filter((campaign) =>
+    Boolean(campaign.started_at) && campaign.status !== "cancelled");
+
+  useEffect(() => {
+    if (!campaignId && eligibleCampaigns[0]) setCampaignId(eligibleCampaigns[0].id);
+  }, [campaignId, eligibleCampaigns]);
+
+  const load = useCallback(async () => {
+    if (!campaignId) { setQueue(null); return; }
+    try {
+      const value = await fetchDailyQueue(campaignId);
+      setQueue(value);
+    } catch (error) { showToast(messageOf(error), "error"); }
+  }, [campaignId, showToast]);
+  useEffect(() => { void load(); }, [load]);
+
+  return <div className="space-y-5">
+    <Panel title="Today’s outreach queue" eyebrow="Shared staff and admin view">
+      <div>
+        <Field label="Campaign"><select className={input} value={campaignId}
+          onChange={(event) => setCampaignId(event.target.value)}>
+          <option value="">Select campaign</option>
+          {eligibleCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>
+            {campaign.name} ({campaign.status})
+          </option>)}
+        </select></Field>
+      </div>
+      {queue ? <>
+        <div className="mt-5 grid grid-cols-3 gap-3">
+          <Metric label="Daily limit" value={queue.dailyMessageLimit} />
+          <Metric label="Sent today" value={queue.sentToday} />
+          <Metric label="Available today" value={queue.remainingToday} />
+        </div>
+        <div className="mt-4 space-y-2">
+          {queue.rows.map((row) => <article key={row.id}
+            className="flex min-h-16 items-center gap-3 rounded-lg border border-stone-200 p-3">
+            <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{row.name || "Unnamed contact"}</p>
+              <p className="font-mono text-sm text-slate-700">{row.phoneNumber}</p>
+              <p className="text-xs text-slate-500">{row.sentAt ? formatDateTime(row.sentAt) : "Queued for today"}</p></div>
+            <Badge>{row.status}</Badge>
+          </article>)}
+          {!queue.rows.length ? <Empty>No contacts are allocated for today.</Empty> : null}
+        </div>
+      </> : <Empty>Select a campaign to see today’s contacts.</Empty>}
+    </Panel>
   </div>;
 }
 
@@ -408,6 +512,7 @@ function Panel({ title, eyebrow, children }: { title: string; eyebrow: string; c
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</span>{children}</label>; }
 function Badge({ children }: { children: React.ReactNode }) { return <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold capitalize text-slate-700">{children}</span>; }
 function Notice({ children, tone = "info" }: { children: React.ReactNode; tone?: "info" | "error" }) { return <div className={`mt-4 rounded-lg border px-4 py-3 text-sm ${tone === "error" ? "border-rose-200 bg-rose-50 text-rose-900" : "border-blue-100 bg-blue-50 text-blue-900"}`}>{children}</div>; }
+function Metric({ label, value }: { label: string; value: number }) { return <div className="rounded-lg bg-stone-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="text-xl font-semibold text-slate-950">{value}</p></div>; }
 function Empty({ children }: { children: React.ReactNode }) { return <p className="rounded-lg border border-dashed border-stone-200 px-4 py-10 text-center text-sm text-slate-500">{children}</p>; }
 function SmallButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) { return <button type="button" onClick={onClick} className={secondary}>{children}</button>; }
 function AccessDenied() { return <section className="rounded-xl border border-rose-200 bg-rose-50 p-6"><h1 className="text-xl font-semibold text-rose-950">Access denied</h1><p className="mt-2 text-sm text-rose-800">WhatsApp Outreach is restricted to super admins.</p></section>; }
@@ -415,6 +520,7 @@ function messageOf(error: unknown) { return error instanceof Error ? error.messa
 function formatDateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString() : "Not available";
 }
+function formatCampaignTime(value: string) { return value.slice(0, 5); }
 const input = "min-h-11 w-full rounded-lg border border-stone-200 bg-white px-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100";
 const primary = "inline-flex min-h-11 items-center justify-center rounded-lg bg-[#06173f] px-5 text-sm font-semibold text-white disabled:opacity-50";
 const secondary = "rounded-lg border border-stone-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-stone-50";

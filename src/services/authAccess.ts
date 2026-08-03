@@ -9,6 +9,7 @@ export type SyncedProfile = {
   email: string | null;
   status: string | null;
   is_super_admin: boolean | null;
+  platform_role: "backend_staff" | null;
 };
 
 export type LoginAccessResult =

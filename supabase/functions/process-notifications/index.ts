@@ -68,6 +68,7 @@ Deno.serve(async (request) => {
   for (const delivery of claimed) {
     try {
       const parameters = resolveTemplateParameters(delivery);
+      const document = await resolveTemplateDocument(service, delivery);
       const provider = await sendMetaTextTemplate({
         accessToken: requireEnv("META_WHATSAPP_ACCESS_TOKEN"),
         graphVersion: requireEnv("META_WHATSAPP_GRAPH_API_VERSION"),
@@ -76,6 +77,7 @@ Deno.serve(async (request) => {
         templateName: delivery.template_name,
         languageCode: delivery.template_language,
         parameters,
+        document,
       });
 
       if (!provider.ok || !provider.messageId) {
@@ -149,6 +151,29 @@ function resolveTemplateParameters(delivery: ClaimedDelivery) {
     }
     return String(value).trim().slice(0, 1000);
   });
+}
+
+async function resolveTemplateDocument(
+  service: ReturnType<typeof createClient>,
+  delivery: ClaimedDelivery,
+) {
+  if (delivery.event_type !== "subscription_payment_received") return undefined;
+  const bucket = String(delivery.event_payload.invoice_pdf_bucket ?? "");
+  const path = String(delivery.event_payload.invoice_pdf_path ?? "");
+  const invoiceNumber = String(delivery.event_payload.invoice_number ?? "");
+  if (!bucket || !path || !invoiceNumber) {
+    throw new Error("Subscription invoice document metadata is missing");
+  }
+  const { data, error } = await service.storage
+    .from(bucket)
+    .createSignedUrl(path, 60 * 60);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Could not sign subscription invoice");
+  }
+  return {
+    url: data.signedUrl,
+    filename: `${invoiceNumber}.pdf`,
+  };
 }
 
 async function failDelivery(

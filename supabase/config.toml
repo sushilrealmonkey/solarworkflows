@@ -433,6 +433,9 @@ verify_jwt = false
 [functions.invite-settings-staff]
 verify_jwt = false
 
+[functions.invite-platform-staff]
+verify_jwt = false
+
 [functions.send-sms]
 # Supabase Auth authenticates this hook with a Standard Webhooks signature.
 verify_jwt = false

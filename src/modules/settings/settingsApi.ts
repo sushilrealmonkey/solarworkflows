@@ -11,6 +11,7 @@ import type {
   SettingsStaff,
   StaffFormValues,
 } from "./types";
+import type { SubscriptionInvoice } from "./BillingInvoicesSection";
 
 export const permissionModules = [
   "dashboard",
@@ -83,6 +84,27 @@ export async function fetchOrganizationSettings() {
   }
 
   return data as OrganizationSettings;
+}
+
+export async function fetchSubscriptionInvoices() {
+  const { data, error } = await requireSupabase()
+    .from("subscription_invoices")
+    .select(
+      "id, invoice_number, plan_key, billing_period, gross_amount_paise, taxable_amount_paise, gst_amount_paise, gst_rate, paid_at, pdf_path",
+    )
+    .order("paid_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SubscriptionInvoice[];
+}
+
+export async function openSubscriptionInvoice(filePath: string) {
+  const { data, error } = await requireSupabase().storage
+    .from("subscription-invoices")
+    .createSignedUrl(filePath, 60);
+  if (error || !data?.signedUrl) {
+    throw new Error(error?.message ?? "Unable to create invoice download.");
+  }
+  window.open(data.signedUrl, "_blank", "noopener,noreferrer");
 }
 
 export async function updateOrganizationSettings(

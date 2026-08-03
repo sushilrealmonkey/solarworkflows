@@ -3,6 +3,7 @@ import type {
   BillingPeriod,
   BillingPlan,
   CheckoutSession,
+  RazorpayAuthorizationResult,
   SubscriptionAccess,
 } from "./types";
 
@@ -58,6 +59,20 @@ export async function cancelRazorpaySubscription() {
   );
   if (error) throw new Error(error.message);
   if (!data?.scheduled) throw new Error("Cancellation could not be scheduled.");
+}
+
+export async function verifyRazorpayAuthorization(
+  authorization: RazorpayAuthorizationResult,
+) {
+  const { data, error } = await requireClient().functions.invoke(
+    "verify-razorpay-subscription",
+    { body: authorization },
+  );
+
+  if (error) throw new Error(error.message);
+  if (!data?.verified) {
+    throw new Error("The UPI AutoPay mandate could not be verified.");
+  }
 }
 
 export async function dismissSubscriptionMilestone(milestone: string) {

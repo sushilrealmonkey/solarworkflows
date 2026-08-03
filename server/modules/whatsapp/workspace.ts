@@ -9,13 +9,14 @@ class ApiError extends Error {
 
 export function isWhatsAppWorkspacePath(pathname: string) {
   return ["contact-lists", "campaigns", "campaign-control", "conversations",
-    "conversation-messages", "settings", "worker-health", "process-now"]
+    "conversation-messages", "settings", "worker-health", "process-now",
+    "daily-queue", "campaign-daily-limit"]
     .some((path) => pathname === `${ROOT}/${path}`);
 }
 
 export async function handleWhatsAppWorkspaceRequest(request: Request) {
   try {
-    const user = await requireSuperAdmin(request);
+    const user = await requireWhatsAppAccess(request);
     const url = new URL(request.url);
     if (url.pathname === `${ROOT}/contact-lists`) {
       if (request.method === "GET") return ok({ contactLists: await listContactLists() });
@@ -27,6 +28,14 @@ export async function handleWhatsAppWorkspaceRequest(request: Request) {
     }
     if (url.pathname === `${ROOT}/campaign-control` && request.method === "POST")
       return ok(await controlCampaign(await body(request)));
+    if (url.pathname === `${ROOT}/campaign-daily-limit` && request.method === "PUT")
+      return ok(await updateCampaignDailyLimit(await body(request)));
+    if (url.pathname === `${ROOT}/daily-queue`) {
+      if (request.method === "GET")
+        return ok({ queue: await listDailyQueue(uuid(url.searchParams.get("campaignId"))) });
+      if (request.method === "PUT")
+        return ok(await markDailyQueueInCrm(await body(request), user));
+    }
     if (url.pathname === `${ROOT}/worker-health` && request.method === "GET")
       return ok({ worker: await getWorkerHealth() });
     if (url.pathname === `${ROOT}/process-now` && request.method === "POST")
@@ -49,16 +58,16 @@ export async function handleWhatsAppWorkspaceRequest(request: Request) {
   }
 }
 
-async function requireSuperAdmin(request: Request): Promise<User> {
+async function requireWhatsAppAccess(request: Request): Promise<User> {
   const token = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
   if (!token) throw new ApiError("Authentication required", 401);
   const supabase = getServerSupabaseClient();
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) throw new ApiError("Invalid session", 401);
-  const { data: profile } = await supabase.from("users_profile").select("status,is_super_admin")
+  const { data: profile } = await supabase.from("users_profile").select("status,is_super_admin,platform_role")
     .eq("auth_user_id", data.user.id).maybeSingle();
-  if (!profile || profile.status !== "active" || profile.is_super_admin !== true)
-    throw new ApiError("Super-admin access required", 403);
+  if (!profile || profile.status !== "active" || (profile.is_super_admin !== true && profile.platform_role !== "backend_staff"))
+    throw new ApiError("WhatsApp Outreach access required", 403);
   return data.user;
 }
 
@@ -112,7 +121,7 @@ async function importContactList(input: JsonObject, user: User) {
 async function listCampaigns() {
   const supabase = getServerSupabaseClient();
   const { data, error } = await supabase.from("whatsapp_campaigns")
-    .select("id,company_id,name,status,template_name,template_language,batch_size,delay_seconds,scheduled_at,started_at,completed_at,next_batch_at,created_at,whatsapp_contact_lists(name,contact_count),whatsapp_phone_numbers(display_phone_number,verified_name)")
+    .select("id,company_id,name,status,template_name,template_language,batch_size,delay_seconds,daily_message_limit,daily_send_time,send_timezone,scheduled_at,started_at,completed_at,next_batch_at,created_at,whatsapp_contact_lists(name,contact_count),whatsapp_phone_numbers(display_phone_number,verified_name)")
     .order("created_at", { ascending: false })
     .limit(50);
   if (error) throw error;
@@ -235,6 +244,9 @@ async function createCampaign(input: JsonObject, user: User) {
     template_language: text(input.templateLanguage, 20),
     variable_mappings: Array.isArray(input.variableMappings) ? input.variableMappings : [],
     batch_size: integer(input.batchSize, 1, 100),
+    daily_message_limit: integer(input.dailyMessageLimit, 1, 10000),
+    daily_send_time: timeOfDay(input.dailySendTime),
+    send_timezone: timeZone(input.sendTimezone),
     delay_seconds: integer(input.delaySeconds, 1, 3600),
     scheduled_at: scheduledAt, status: scheduledAt ? "scheduled" : "draft", created_by: user.id,
   }).select("id,status").single();
@@ -264,8 +276,7 @@ async function controlCampaign(input: JsonObject) {
     dayStart.setUTCHours(0, 0, 0, 0);
     const [{ data: settings, error: settingsError },
       { count: campaignsStarted, error: campaignCountError },
-      { count: messagesSent, error: messageCountError },
-      { count: recipientsRemaining, error: recipientCountError }] = await Promise.all([
+      { count: messagesSent, error: messageCountError }] = await Promise.all([
       supabase.from("whatsapp_outreach_settings")
         .select("daily_campaign_limit,daily_message_limit")
         .eq("company_id", campaign.company_id).maybeSingle(),
@@ -277,11 +288,8 @@ async function controlCampaign(input: JsonObject) {
         .eq("company_id", campaign.company_id)
         .eq("direction", "outbound")
         .gte("source_timestamp", dayStart.toISOString()),
-      supabase.from("whatsapp_campaign_recipients").select("id", { count: "exact", head: true })
-        .eq("campaign_id", campaign.id)
-        .in("status", ["queued", "processing"]),
     ]);
-    if (settingsError || campaignCountError || messageCountError || recipientCountError) {
+    if (settingsError || campaignCountError || messageCountError) {
       throw new Error("Could not validate campaign safety limits");
     }
     const dailyCampaignLimit = settings?.daily_campaign_limit ?? 10;
@@ -289,13 +297,8 @@ async function controlCampaign(input: JsonObject) {
     if (action === "start" && (campaignsStarted ?? 0) >= dailyCampaignLimit) {
       throw new ApiError(`Daily campaign limit of ${dailyCampaignLimit} has been reached`, 409);
     }
-    const availableMessages = dailyMessageLimit - (messagesSent ?? 0);
-    if (availableMessages < (recipientsRemaining ?? 0)) {
-      throw new ApiError(
-        `Daily message limit allows only ${Math.max(availableMessages, 0)} more recipient(s)`,
-        409,
-      );
-    }
+    if ((messagesSent ?? 0) >= dailyMessageLimit)
+      throw new ApiError(`Company daily message limit of ${dailyMessageLimit} has been reached`, 409);
   }
 
   const patch: JsonObject = { status: next };
@@ -312,6 +315,87 @@ async function controlCampaign(input: JsonObject) {
     if (cancelError) throw cancelError;
   }
   return data;
+}
+
+async function updateCampaignDailyLimit(input: JsonObject) {
+  const campaignId = uuid(input.campaignId);
+  const dailyMessageLimit = integer(input.dailyMessageLimit, 1, 10000);
+  const dailySendTime = timeOfDay(input.dailySendTime);
+  const sendTimezone = timeZone(input.sendTimezone);
+  const { data, error } = await getServerSupabaseClient().from("whatsapp_campaigns")
+    .update({ daily_message_limit: dailyMessageLimit, daily_send_time: dailySendTime,
+      send_timezone: sendTimezone })
+    .eq("id", campaignId)
+    .select("id,daily_message_limit,daily_send_time,send_timezone")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function listDailyQueue(campaignId: string) {
+  const supabase = getServerSupabaseClient();
+  const { data: campaign, error: campaignError } = await supabase
+    .from("whatsapp_campaigns")
+    .select("id,name,daily_message_limit,daily_send_time,send_timezone")
+    .eq("id", campaignId)
+    .maybeSingle();
+  if (campaignError || !campaign) throw new ApiError("Campaign not found", 404);
+
+  const recentCutoff = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const campaignDay = dateInTimeZone(new Date(), campaign.send_timezone);
+  const { data: attempted, error: attemptedError } = await supabase
+    .from("whatsapp_campaign_recipients")
+    .select("id,status,attempted_at,crm_marked_at,whatsapp_contacts(name,phone_number),whatsapp_messages(status,source_timestamp)")
+    .eq("campaign_id", campaignId)
+    .gte("attempted_at", recentCutoff.toISOString())
+    .order("attempted_at", { ascending: true });
+  if (attemptedError) throw attemptedError;
+
+  const attemptedRows = (attempted ?? []).filter((row) => row.attempted_at &&
+    dateInTimeZone(new Date(row.attempted_at), campaign.send_timezone) === campaignDay);
+  const sentToday = attemptedRows.filter((row) => {
+    const message = relationOne(row.whatsapp_messages);
+    return ["sent", "delivered", "read"].includes(message?.status ?? row.status);
+  }).length;
+  const queuedSlots = Math.max(campaign.daily_message_limit - attemptedRows.length, 0);
+  const { data: queued, error: queuedError } = queuedSlots > 0
+    ? await supabase.from("whatsapp_campaign_recipients")
+      .select("id,status,attempted_at,crm_marked_at,whatsapp_contacts(name,phone_number),whatsapp_messages(status,source_timestamp)")
+      .eq("campaign_id", campaignId).eq("status", "queued")
+      .order("created_at", { ascending: true }).limit(queuedSlots)
+    : { data: [], error: null };
+  if (queuedError) throw queuedError;
+
+  const rows = [...attemptedRows, ...(queued ?? [])].map((row) => {
+    const contact = relationOne(row.whatsapp_contacts);
+    const message = relationOne(row.whatsapp_messages);
+    return {
+      id: row.id,
+      name: contact?.name ?? null,
+      phoneNumber: contact?.phone_number ?? "",
+      status: message?.status ?? row.status,
+      sentAt: message?.source_timestamp ?? row.attempted_at,
+      crmMarkedAt: row.crm_marked_at,
+    };
+  });
+  return { campaignId, campaignName: campaign.name, dailyMessageLimit: campaign.daily_message_limit,
+    sentToday, remainingToday: queuedSlots, rows };
+}
+
+async function markDailyQueueInCrm(input: JsonObject, user: User) {
+  const campaignId = uuid(input.campaignId);
+  if (!Array.isArray(input.recipientIds) || input.recipientIds.length < 1 || input.recipientIds.length > 1000)
+    throw new ApiError("Select between 1 and 1,000 contacts", 400);
+  const recipientIds = input.recipientIds.map(uuid);
+  const marked = input.marked !== false;
+  const { data, error } = await getServerSupabaseClient().from("whatsapp_campaign_recipients")
+    .update({ crm_marked_at: marked ? new Date().toISOString() : null,
+      crm_marked_by: marked ? user.id : null })
+    .eq("campaign_id", campaignId)
+    .in("id", recipientIds)
+    .select("id");
+  if (error) throw error;
+  return { updated: data?.length ?? 0 };
 }
 
 async function listConversations() {
@@ -379,6 +463,23 @@ function integer(value: unknown, min: number, max: number) {
   if (!Number.isInteger(result) || result < min || result > max)
     throw new ApiError("A numeric setting is invalid", 400);
   return result;
+}
+function timeOfDay(value: unknown) {
+  if (typeof value !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(value))
+    throw new ApiError("Choose a valid daily send time", 400);
+  return value;
+}
+function timeZone(value: unknown) {
+  if (typeof value !== "string" || !value.trim() || value.length > 100)
+    throw new ApiError("A valid timezone is required", 400);
+  try { new Intl.DateTimeFormat("en-US", { timeZone: value }).format(); }
+  catch { throw new ApiError("A valid timezone is required", 400); }
+  return value;
+}
+function dateInTimeZone(value: Date, zone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(value);
 }
 function stringArray(value: unknown, maxItems: number, maxLength: number) {
   if (!Array.isArray(value) || value.length > maxItems) throw new ApiError("Invalid keyword list", 400);

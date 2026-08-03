@@ -5,8 +5,13 @@ import {
   cancelRazorpaySubscription,
   createRazorpayCheckout,
   fetchBillingPlans,
+  verifyRazorpayAuthorization,
 } from "./billingApi";
-import type { BillingPeriod, BillingPlan } from "./types";
+import type {
+  BillingPeriod,
+  BillingPlan,
+  RazorpayAuthorizationResult,
+} from "./types";
 
 declare global {
   interface Window {
@@ -21,7 +26,7 @@ type RazorpayOptions = {
   description: string;
   prefill: { name?: string; email?: string; contact?: string };
   theme: { color: string };
-  handler: () => void;
+  handler: (response: RazorpayAuthorizationResult) => void;
   modal: { ondismiss: () => void };
 };
 
@@ -103,10 +108,22 @@ export function BillingPlansPage() {
           contact: checkout.customerPhone ?? undefined,
         },
         theme: { color: "#f97316" },
-        handler: () => {
-          setMessage("Payment received. Your plan will activate after secure verification.");
-          window.setTimeout(() => void refresh(), 2_000);
-          setCheckoutPlan(null);
+        handler: (response) => {
+          void verifyRazorpayAuthorization(response)
+            .then(async () => {
+              setMessage(
+                "UPI AutoPay mandate authorised. Your plan will activate after webhook confirmation.",
+              );
+              await refresh();
+            })
+            .catch((nextError) => {
+              setError(
+                nextError instanceof Error
+                  ? nextError.message
+                  : "Unable to verify the UPI AutoPay mandate.",
+              );
+            })
+            .finally(() => setCheckoutPlan(null));
         },
         modal: { ondismiss: () => setCheckoutPlan(null) },
       });
@@ -229,6 +246,14 @@ export function BillingPlansPage() {
             </span>
           </button>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950">
+        <p className="font-semibold">UPI AutoPay available</p>
+        <p>
+          Choose UPI in the secure Razorpay checkout and approve the recurring
+          mandate in your UPI app. Future renewals are collected automatically.
+        </p>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

@@ -74,7 +74,7 @@ export async function handleWhatsAppAdminRequest(
   request: Request,
 ): Promise<Response> {
   try {
-    await requireSuperAdmin(request);
+    await requireWhatsAppAccess(request);
     const url = new URL(request.url);
 
     if (url.pathname === PHONE_NUMBER_PATH && request.method === "GET") {
@@ -127,7 +127,7 @@ export async function handleWhatsAppAdminRequest(
   }
 }
 
-async function requireSuperAdmin(request: Request): Promise<User> {
+async function requireWhatsAppAccess(request: Request): Promise<User> {
   const authorization = request.headers.get("authorization");
   const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
 
@@ -145,7 +145,7 @@ async function requireSuperAdmin(request: Request): Promise<User> {
 
   const { data: profile, error: profileError } = await supabase
     .from("users_profile")
-    .select("status, is_super_admin")
+    .select("status, is_super_admin, platform_role")
     .eq("auth_user_id", userData.user.id)
     .maybeSingle();
 
@@ -153,9 +153,9 @@ async function requireSuperAdmin(request: Request): Promise<User> {
     profileError ||
     !profile ||
     profile.status !== "active" ||
-    profile.is_super_admin !== true
+    profile.is_super_admin !== true && profile.platform_role !== "backend_staff"
   ) {
-    throw new ApiError("Super-admin access required", 403);
+    throw new ApiError("WhatsApp Outreach access required", 403);
   }
 
   return userData.user;

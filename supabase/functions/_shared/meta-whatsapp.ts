@@ -24,21 +24,38 @@ export async function sendMetaTextTemplate(input: {
   templateName: string;
   languageCode: string;
   parameters: string[];
+  document?: {
+    url: string;
+    filename: string;
+  };
 }): Promise<MetaTemplateSendResult> {
   if (!/^v\d+\.\d+$/.test(input.graphVersion)) {
     throw new Error("META_WHATSAPP_GRAPH_API_VERSION is invalid");
   }
 
   const recipient = normalizePhone(input.recipient);
-  const components = input.parameters.length
-    ? [{
+  const components: Array<Record<string, unknown>> = [];
+  if (input.document) {
+    components.push({
+      type: "header",
+      parameters: [{
+        type: "document",
+        document: {
+          link: input.document.url,
+          filename: input.document.filename,
+        },
+      }],
+    });
+  }
+  if (input.parameters.length) {
+    components.push({
       type: "body",
       parameters: input.parameters.map((text) => ({
         type: "text",
         text,
       })),
-    }]
-    : [];
+    });
+  }
 
   const response = await fetch(
     `https://graph.facebook.com/${input.graphVersion}/${input.phoneNumberId}/messages`,

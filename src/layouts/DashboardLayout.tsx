@@ -10,6 +10,7 @@ import { isPlatformPath } from "../app/redirects";
 import { useAuth } from "../app/AuthProvider";
 import { PortalLogo, PortalLogoIcon } from "../components/PortalBrand";
 import { SubscriptionNotice } from "../modules/billing/SubscriptionNotice";
+import { NotificationBell } from "../modules/notifications/NotificationBell";
 
 const linkBase =
   "group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
@@ -25,6 +26,9 @@ export function DashboardLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const visibleNavigationItems = useMemo<NavigationItem[]>(() => {
+    if (profile?.platform_role === "backend_staff") {
+      return platformNavigationItems.filter((item) => item.path === "/whatsapp-messaging");
+    }
     if (profile?.is_super_admin) {
       return platformNavigationItems;
     }
@@ -70,10 +74,14 @@ export function DashboardLayout() {
 
         return items;
       }, []);
-  }, [permissions, profile?.is_super_admin, subscription?.enabled_modules]);
+  }, [permissions, profile?.is_super_admin, profile?.platform_role, subscription?.enabled_modules]);
 
   if (profile?.is_super_admin && !isPlatformPath(location.pathname)) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (profile?.platform_role === "backend_staff" && location.pathname !== "/whatsapp-messaging") {
+    return <Navigate to="/whatsapp-messaging" replace />;
   }
 
   const shellStyle = {
@@ -179,25 +187,27 @@ export function DashboardLayout() {
                 </p>
               </div>
             </div>
-            <button
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 shadow-sm lg:hidden"
-              aria-label="Open navigation"
-              onClick={() => setMobileMenuOpen(true)}
-              type="button"
-            >
-              <MenuIcon />
-            </button>
-            <div
-              className="relative hidden min-w-0 lg:block"
-              onBlur={handleUserMenuBlur}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setUserMenuOpen(false);
-                  event.currentTarget.querySelector("button")?.focus();
-                }
-              }}
-            >
+            <div className="flex items-center gap-2">
+              {profile?.id && !profile.is_super_admin ? <NotificationBell profileId={profile.id} /> : null}
               <button
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 shadow-sm lg:hidden"
+                aria-label="Open navigation"
+                onClick={() => setMobileMenuOpen(true)}
+                type="button"
+              >
+                <MenuIcon />
+              </button>
+              <div
+                className="relative hidden min-w-0 lg:block"
+                onBlur={handleUserMenuBlur}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setUserMenuOpen(false);
+                    event.currentTarget.querySelector("button")?.focus();
+                  }
+                }}
+              >
+                <button
                 aria-expanded={userMenuOpen}
                 aria-haspopup="menu"
                 className="flex max-w-56 items-center gap-2 rounded-lg px-2 py-1.5 text-right transition-colors hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 active:bg-orange-100 sm:max-w-72"
@@ -217,9 +227,9 @@ export function DashboardLayout() {
                 >
                   ▾
                 </span>
-              </button>
-              {userMenuOpen ? (
-                <div
+                </button>
+                {userMenuOpen ? (
+                  <div
                   aria-label="User menu"
                   className="absolute right-0 top-[calc(100%+0.5rem)] z-40 w-56 rounded-lg border border-stone-200 bg-white p-1.5 shadow-lg"
                   role="menu"
@@ -238,8 +248,9 @@ export function DashboardLayout() {
                       {logoutError}
                     </p>
                   ) : null}
-                </div>
-              ) : null}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </header>

@@ -63,6 +63,9 @@ export type WhatsAppCampaign = {
   template_language: string;
   batch_size: number;
   delay_seconds: number;
+  daily_message_limit: number;
+  daily_send_time: string;
+  send_timezone: string;
   scheduled_at: string | null;
   started_at: string | null;
   completed_at: string | null;
@@ -82,6 +85,22 @@ export type WhatsAppCampaign = {
       code: string | null;
     }>;
   };
+};
+
+export type WhatsAppDailyQueue = {
+  campaignId: string;
+  campaignName: string;
+  dailyMessageLimit: number;
+  sentToday: number;
+  remainingToday: number;
+  rows: Array<{
+    id: string;
+    name: string | null;
+    phoneNumber: string;
+    status: string;
+    sentAt: string | null;
+    crmMarkedAt: string | null;
+  }>;
 };
 
 export type WhatsAppWorkerHealth = {

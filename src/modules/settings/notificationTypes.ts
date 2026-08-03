@@ -2,6 +2,7 @@ export type NotificationPreferenceKey =
   | "trial_ending"
   | "trial_expired"
   | "subscription_action_required"
+  | "subscription_payment_received"
   | "requested_daily_summary"
   | "new_signin_alert"
   | "account_change_notice"

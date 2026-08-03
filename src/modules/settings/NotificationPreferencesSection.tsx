@@ -36,6 +36,12 @@ const definitions: Array<{
     group: "account",
   },
   {
+    key: "subscription_payment_received",
+    title: "Payment receipts and GST invoices",
+    description: "Payment confirmations with the GST invoice attached.",
+    group: "account",
+  },
+  {
     key: "new_signin_alert",
     title: "New sign-in alerts",
     description: "Important activity detected on your account.",
