@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && tsc -p tsconfig.server.json && vite build",
     "lint": "eslint .",
-    "start": "node --env-file=.env server-dist/index.js",
+    "start": "node --env-file-if-exists=.env server-dist/index.js",
     "test:webhook": "tsc -p tsconfig.server.json && node --test server-dist/modules/whatsapp/webhook.test.js",
     "setup:super-admin": "node scripts/setup-super-admin.mjs",
     "preview": "vite preview"
