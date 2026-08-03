@@ -158,9 +158,6 @@ site_url = "https://app.getbizlee.com"
 additional_redirect_urls = [
   "https://solarworkflows-production.up.railway.app",
   "https://solarworkflows-production.up.railway.app/**",
-  "https://solarcrm.realmonkey.ai/**",
-  "https://solarcrm.realmonkey.ai/create-password",
-  "https://solarcrm.realmonkey.ai/reset-password",
   "https://app.getbizlee.com",
   "https://app.getbizlee.com/**",
   "https://app.getbizlee.com/create-password",

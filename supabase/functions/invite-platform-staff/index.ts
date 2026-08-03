@@ -145,7 +145,19 @@ function normalizeUuid(value: unknown) {
 }
 
 function appBaseUrl(request: Request) {
-  return (Deno.env.get("APP_BASE_URL") ?? request.headers.get("origin") ?? "").replace(/\/$/, "");
+  const configuredBaseUrl = normalizeBaseUrl(Deno.env.get("APP_BASE_URL"));
+  const originBaseUrl = normalizeBaseUrl(request.headers.get("origin"));
+  const allowedOrigins = new Set([
+    configuredBaseUrl,
+    ...(Deno.env.get("APP_ALLOWED_ORIGINS") ?? "").split(",").map(normalizeBaseUrl),
+  ].filter(Boolean).map((value) => value.toLowerCase()));
+  if (originBaseUrl && allowedOrigins.has(originBaseUrl.toLowerCase())) return originBaseUrl;
+  if (configuredBaseUrl) return configuredBaseUrl;
+  throw new Error("APP_BASE_URL is not configured");
+}
+
+function normalizeBaseUrl(value: string | null | undefined) {
+  return (value ?? "").trim().replace(/\/+$/, "");
 }
 
 function requiredEnv(name: string) {
