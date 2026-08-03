@@ -7,9 +7,16 @@ import { PortalLogo } from "../../components/PortalBrand";
 import {
   isValidLoginEmail,
   isValidPassword,
+  isValidSmsPhone,
   normalizeEmail,
+  normalizeSmsPhone,
+  requestPhoneLoginOtp,
   signInWithPasswordAndSyncProfile,
+  verifyPhoneLoginOtpAndSyncProfile,
+  type LoginAccessResult,
 } from "../../services/authAccess";
+
+type LoginMethod = "phone" | "email";
 
 type AccessNotice = {
   title: string;
@@ -21,8 +28,12 @@ export function LoginPage() {
   const { status, profile, refresh } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>("phone");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [isOtpSent, setIsOtpSent] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -63,35 +74,90 @@ export function LoginPage() {
         normalizedEmail,
         password,
       );
-
-      if (accessResult.status === "unassigned") {
-        setIsRedirecting(true);
-        await refresh();
-        navigate("/onboarding", { replace: true });
-        return;
-      }
-
-      if (accessResult.status === "inactive") {
-        await refresh();
-        setAccessNotice({
-          title: "Account inactive",
-          description:
-            "This account exists, but it is inactive for the organization workspace.",
-          tone: "error",
-        });
-        return;
-      }
-
-      setIsRedirecting(true);
-      await refresh();
-      navigate(safeAuthenticatedRedirect(accessResult.profile, "/dashboard"), {
-        replace: true,
-      });
+      await continueAfterLogin(accessResult);
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
       setIsSigningIn(false);
     }
+  }
+
+  async function handlePhoneLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrorMessage(null);
+    setAccessNotice(null);
+
+    const normalizedPhone = getIndiaSmsPhone(phone);
+
+    if (!/^[6-9]\d{9}$/.test(phone) || !isValidSmsPhone(normalizedPhone)) {
+      setErrorMessage("Enter a valid 10-digit Indian mobile number.");
+      return;
+    }
+
+    try {
+      setIsSigningIn(true);
+
+      if (!isOtpSent) {
+        await requestPhoneLoginOtp(normalizedPhone);
+        setIsOtpSent(true);
+        return;
+      }
+
+      if (!/^\d{6}$/.test(otpCode.trim())) {
+        setErrorMessage("Enter the 6-digit WhatsApp code.");
+        return;
+      }
+
+      const accessResult = await verifyPhoneLoginOtpAndSyncProfile(
+        normalizedPhone,
+        otpCode,
+      );
+      await continueAfterLogin(accessResult);
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSigningIn(false);
+    }
+  }
+
+  async function handleResendCode() {
+    setErrorMessage(null);
+    setAccessNotice(null);
+
+    try {
+      setIsSigningIn(true);
+      await requestPhoneLoginOtp(getIndiaSmsPhone(phone));
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error));
+    } finally {
+      setIsSigningIn(false);
+    }
+  }
+
+  async function continueAfterLogin(accessResult: LoginAccessResult) {
+    if (accessResult.status === "unassigned") {
+      setIsRedirecting(true);
+      await refresh();
+      navigate("/onboarding", { replace: true });
+      return;
+    }
+
+    if (accessResult.status === "inactive") {
+      await refresh();
+      setAccessNotice({
+        title: "Account inactive",
+        description:
+          "This account exists, but it is inactive for the organization workspace.",
+        tone: "error",
+      });
+      return;
+    }
+
+    setIsRedirecting(true);
+    await refresh();
+    navigate(safeAuthenticatedRedirect(accessResult.profile, "/dashboard"), {
+      replace: true,
+    });
   }
 
   function applyQaAccount(account: TestLoginAccount) {
@@ -163,6 +229,115 @@ export function LoginPage() {
 
             {accessNotice ? <AccessNoticeCard notice={accessNotice} /> : null}
 
+            <div
+              aria-label="Login method"
+              className="mt-6 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1"
+              role="group"
+            >
+              <LoginMethodButton
+                active={loginMethod === "phone"}
+                disabled={isBusy}
+                label="Mobile & WhatsApp"
+                onClick={() => {
+                  setLoginMethod("phone");
+                  setErrorMessage(null);
+                  setAccessNotice(null);
+                }}
+              />
+              <LoginMethodButton
+                active={loginMethod === "email"}
+                disabled={isBusy}
+                label="Email & password"
+                onClick={() => {
+                  setLoginMethod("email");
+                  setErrorMessage(null);
+                  setAccessNotice(null);
+                }}
+              />
+            </div>
+
+            {loginMethod === "phone" ? (
+              <form className="mt-8 space-y-6" onSubmit={handlePhoneLogin}>
+                <label className="block">
+                  <span className="text-sm font-semibold text-[#06173f]">
+                    Mobile number
+                  </span>
+                  <div className="relative mt-3">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex w-16 items-center justify-center border-r border-slate-200 font-semibold text-slate-600">
+                      +91
+                    </span>
+                    <input
+                      aria-label="10-digit Indian mobile number"
+                      autoComplete="tel-national"
+                      className="w-full rounded-xl border border-slate-200 bg-white py-4 pl-20 pr-4 text-base text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
+                      disabled={isBusy || isOtpSent}
+                      inputMode="numeric"
+                      maxLength={10}
+                      onChange={(event) =>
+                        setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))
+                      }
+                      placeholder="98765 43210"
+                      required
+                      type="tel"
+                      value={phone}
+                    />
+                  </div>
+                </label>
+
+                {isOtpSent ? (
+                  <>
+                    <label className="block">
+                      <span className="text-sm font-semibold text-[#06173f]">
+                        WhatsApp verification code
+                      </span>
+                      <input
+                        autoComplete="one-time-code"
+                        className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-4 text-center text-xl font-semibold tracking-[0.35em] text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-orange-500 focus:ring-4 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+                        disabled={isBusy}
+                        inputMode="numeric"
+                        maxLength={6}
+                        onChange={(event) =>
+                          setOtpCode(event.target.value.replace(/\D/g, ""))
+                        }
+                        placeholder="000000"
+                        required
+                        type="text"
+                        value={otpCode}
+                      />
+                    </label>
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+                      <button
+                        className="font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-60"
+                        disabled={isBusy}
+                        onClick={() => {
+                          setIsOtpSent(false);
+                          setOtpCode("");
+                          setErrorMessage(null);
+                        }}
+                        type="button"
+                      >
+                        Change mobile number
+                      </button>
+                      <button
+                        className="font-semibold text-orange-700 hover:text-orange-800 disabled:opacity-60"
+                        disabled={isBusy}
+                        onClick={() => void handleResendCode()}
+                        type="button"
+                      >
+                        Resend WhatsApp code
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+
+                <FormError message={errorMessage} />
+                <LoginSubmitButton
+                  isRedirecting={isRedirecting}
+                  isSigningIn={isSigningIn}
+                  label={isOtpSent ? "Verify & sign in" : "Send WhatsApp code"}
+                />
+              </form>
+            ) : (
             <form className="mt-8 space-y-6" onSubmit={handlePasswordLogin}>
               <label className="block">
                 <span className="text-sm font-semibold text-[#06173f]">
@@ -250,6 +425,7 @@ export function LoginPage() {
                 Forgot password?
               </Link>
             </form>
+            )}
 
             <div className="mt-8 flex items-center gap-4">
               <span className="h-px flex-1 bg-slate-200" />
@@ -434,6 +610,62 @@ function AccessNoticeCard({ notice }: { notice: AccessNotice }) {
   );
 }
 
+function LoginMethodButton({
+  active,
+  disabled,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  disabled: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      aria-pressed={active}
+      className={`rounded-lg px-3 py-2.5 text-xs font-semibold transition sm:text-sm ${
+        active
+          ? "bg-[#06173f] text-white shadow-sm"
+          : "text-slate-600 hover:bg-white hover:text-slate-950"
+      }`}
+      disabled={disabled}
+      onClick={onClick}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
+function LoginSubmitButton({
+  isRedirecting,
+  isSigningIn,
+  label,
+}: {
+  isRedirecting: boolean;
+  isSigningIn: boolean;
+  label: string;
+}) {
+  return (
+    <button
+      className="group relative flex w-full items-center justify-center overflow-hidden rounded-xl bg-[#06173f] px-4 py-4 text-base font-semibold text-white shadow-xl shadow-slate-950/15 transition hover:bg-[#0a1f52] active:bg-[#06173f] disabled:cursor-not-allowed disabled:opacity-60"
+      disabled={isRedirecting || isSigningIn}
+      type="submit"
+    >
+      <span className="relative">
+        {isRedirecting ? "Redirecting" : isSigningIn ? "Please wait" : label}
+      </span>
+      <span
+        aria-hidden="true"
+        className="absolute right-8 text-orange-500 transition-transform group-hover:translate-x-1"
+      >
+        <ArrowRightIcon />
+      </span>
+    </button>
+  );
+}
+
 function FormError({ message }: { message: string | null }) {
   if (!message) {
     return null;
@@ -534,4 +766,8 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Supabase auth error. Please try again.";
+}
+
+function getIndiaSmsPhone(phone: string) {
+  return normalizeSmsPhone(`+91${phone}`);
 }

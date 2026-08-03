@@ -334,6 +334,36 @@ export async function verifyPhoneSignupOtpAndSyncProfile(
   return syncCurrentAuthUserProfile();
 }
 
+export async function requestPhoneLoginOtp(phone: string) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedPhone = normalizeSmsPhone(phone);
+
+  if (!isValidSmsPhone(normalizedPhone)) {
+    throw new Error("Enter a mobile number with its country code.");
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    phone: normalizedPhone,
+    options: {
+      shouldCreateUser: false,
+    },
+  });
+
+  if (error) {
+    throw new Error(mapPhoneAuthError(error.message));
+  }
+}
+
+export async function verifyPhoneLoginOtpAndSyncProfile(
+  phone: string,
+  token: string,
+): Promise<LoginAccessResult> {
+  return verifyPhoneSignupOtpAndSyncProfile(phone, token);
+}
+
 export async function signInWithGoogle(redirectTo: string) {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
@@ -494,11 +524,18 @@ function mapPhoneAuthError(message: string) {
   const normalizedMessage = message.toLowerCase();
 
   if (
+    normalizedMessage.includes("signups not allowed") ||
+    normalizedMessage.includes("user not found")
+  ) {
+    return "No account was found for this mobile number. Create an account first.";
+  }
+
+  if (
     normalizedMessage.includes("provider is not enabled") ||
     normalizedMessage.includes("unsupported provider") ||
     normalizedMessage.includes("sms provider")
   ) {
-    return "WhatsApp signup is not enabled for this Supabase project yet.";
+    return "WhatsApp authentication is not enabled for this Supabase project yet.";
   }
 
   if (normalizedMessage.includes("rate limit")) {
