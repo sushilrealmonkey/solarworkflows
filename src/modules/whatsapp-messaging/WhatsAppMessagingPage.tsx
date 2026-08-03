@@ -201,6 +201,9 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
                   <option value="name">Contact name</option>
                   <option value="phone_number">Phone number</option>
                 </select>
+                {!mapping ? <p className="mt-1 text-xs text-amber-700">
+                  Choose the contact field to insert into this template variable.
+                </p> : null}
               </Field>
             ))}
           </div>
@@ -218,7 +221,7 @@ function Campaigns({ companyId, phoneNumbers, lists, campaigns, workerHealth, on
         <Field label="Schedule (optional)"><input className={input} type="datetime-local" value={form.scheduledAt}
           onChange={(e) => setForm({ ...form, scheduledAt: e.target.value })} /></Field>
         <div className="flex items-end"><button className={primary}
-          disabled={busy || !companyId || form.variableMappings.some((value) => !value)}>
+          disabled={busy || !companyId}>
           {busy ? "Creating…" : "Create campaign"}</button></div>
       </form>
       <Notice>
