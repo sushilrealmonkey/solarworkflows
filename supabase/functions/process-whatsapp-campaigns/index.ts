@@ -223,7 +223,8 @@ async function getCampaignSafety(
     client.from("whatsapp_campaigns")
       .select("id", { count: "exact", head: true })
       .eq("company_id", campaign.company_id)
-      .gte("started_at", dayStart.toISOString()),
+      .gte("started_at", dayStart.toISOString())
+      .neq("status", "cancelled"),
   ]);
   if (settingsError || messageCountError || campaignCountError) {
     throw new Error("Could not validate daily sending limits");

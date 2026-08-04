@@ -303,7 +303,10 @@ async function controlCampaign(input: JsonObject) {
   }
 
   const patch: JsonObject = { status: next };
-  if (action === "start") patch.started_at = new Date().toISOString();
+  if (action === "start") {
+    patch.started_at = new Date().toISOString();
+    patch.scheduled_at = null;
+  }
   if (action === "cancel") patch.completed_at = new Date().toISOString();
   const { data, error } = await supabase.from("whatsapp_campaigns")
     .update(patch).eq("id", campaignId).select("id,status").single();
