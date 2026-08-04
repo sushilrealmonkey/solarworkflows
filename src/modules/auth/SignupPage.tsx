@@ -9,6 +9,7 @@ import {
   normalizeEmail,
   normalizeSmsPhone,
   requestPhoneSignupOtp,
+  SignupIdentifierAlreadyRegisteredError,
   signUpWithPasswordAndSyncProfile,
   verifyPhoneSignupOtpAndSyncProfile,
   type LoginAccessResult,
@@ -98,7 +99,7 @@ export function SignupPage() {
 
       await continueAfterAuthenticatedSignup(result);
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      showSignupError(error, setNotice, setErrorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -141,7 +142,7 @@ export function SignupPage() {
       );
       await continueAfterAuthenticatedSignup(result);
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      showSignupError(error, setNotice, setErrorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -475,11 +476,22 @@ function SignupNoticeCard({ notice }: { notice: SignupNotice }) {
   }[notice.tone];
 
   return (
-    <div className={`mt-5 rounded-xl border px-4 py-4 ${toneClass}`}>
+    <div
+      className={`mt-5 rounded-xl border px-4 py-4 ${toneClass}`}
+      role={notice.tone === "warning" || notice.tone === "error" ? "alert" : "status"}
+    >
       <p className="text-sm font-semibold">{notice.title}</p>
       <p className="mt-1 text-sm leading-6 text-slate-200">
         {notice.description}
       </p>
+      {notice.tone === "warning" ? (
+        <Link
+          className="mt-3 inline-flex rounded-lg bg-amber-300 px-3 py-2 text-sm font-semibold text-amber-950 transition hover:bg-white"
+          to="/login"
+        >
+          Log in instead
+        </Link>
+      ) : null}
     </div>
   );
 }
@@ -502,6 +514,24 @@ function getErrorMessage(error: unknown) {
   }
 
   return "Your account could not be created. Please try again.";
+}
+
+function showSignupError(
+  error: unknown,
+  setNotice: (notice: SignupNotice | null) => void,
+  setErrorMessage: (message: string | null) => void,
+) {
+  if (error instanceof SignupIdentifierAlreadyRegisteredError) {
+    setErrorMessage(null);
+    setNotice({
+      title: "Account already available",
+      description: error.message,
+      tone: "warning",
+    });
+    return;
+  }
+
+  setErrorMessage(getErrorMessage(error));
 }
 
 function getIndiaSmsPhone(phone: string) {

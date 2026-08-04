@@ -21,6 +21,15 @@ export type SignupResult =
   | LoginAccessResult
   | { status: "confirmation_required"; message: string };
 
+export class SignupIdentifierAlreadyRegisteredError extends Error {
+  constructor(public readonly identifierType: "email" | "phone") {
+    super(
+      `This ${identifierType === "email" ? "email address" : "mobile number"} is already registered. Please log in instead.`,
+    );
+    this.name = "SignupIdentifierAlreadyRegisteredError";
+  }
+}
+
 export type WorkspaceOnboardingInput = {
   workspaceName: string;
   fullName: string;
@@ -257,6 +266,8 @@ export async function signUpWithPasswordAndSyncProfile(
     throw new Error("Use at least 8 characters for your password.");
   }
 
+  await assertSignupIdentifierAvailable("email", normalizedEmail);
+
   const { data, error } = await supabase.auth.signUp({
     email: normalizedEmail,
     password,
@@ -266,7 +277,16 @@ export async function signUpWithPasswordAndSyncProfile(
   });
 
   if (error) {
+    if (error.message.toLowerCase().includes("user already registered")) {
+      throw new SignupIdentifierAlreadyRegisteredError("email");
+    }
     throw new Error(mapPasswordError(error.message));
+  }
+
+  // With email confirmation enabled, Supabase can return an obfuscated user
+  // with no identities instead of reporting that the email is already in use.
+  if (data.user && data.user.identities?.length === 0) {
+    throw new SignupIdentifierAlreadyRegisteredError("email");
   }
 
   if (!data.session) {
@@ -290,6 +310,8 @@ export async function requestPhoneSignupOtp(phone: string) {
   if (!isValidSmsPhone(normalizedPhone)) {
     throw new Error("Enter a mobile number with its country code.");
   }
+
+  await assertSignupIdentifierAvailable("phone", normalizedPhone);
 
   const { error } = await supabase.auth.signInWithOtp({
     phone: normalizedPhone,
@@ -355,6 +377,30 @@ export async function requestPhoneLoginOtp(phone: string) {
 
   if (error) {
     throw new Error(mapPhoneAuthError(error.message));
+  }
+}
+
+async function assertSignupIdentifierAvailable(
+  type: "email" | "phone",
+  value: string,
+): Promise<void> {
+  const response = await fetch("/api/auth/signup-availability", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type, value }),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { registered?: boolean; error?: string }
+    | null;
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.error ?? "Account availability could not be checked. Please try again.",
+    );
+  }
+
+  if (payload?.registered) {
+    throw new SignupIdentifierAlreadyRegisteredError(type);
   }
 }
 

@@ -21,6 +21,10 @@ import {
   handleWhatsAppWorkspaceRequest,
   isWhatsAppWorkspacePath,
 } from "./modules/whatsapp/workspace.js";
+import {
+  handleSignupAvailabilityRequest,
+  SIGNUP_AVAILABILITY_PATH,
+} from "./modules/auth/availability.js";
 
 const WHATSAPP_WEBHOOK_PATH = "/api/webhooks/whatsapp";
 const MAX_WEBHOOK_BODY_BYTES = 1_000_000;
@@ -206,6 +210,26 @@ async function handleWhatsAppWorkspaceApi(
   );
 }
 
+async function handleSignupAvailabilityApi(
+  request: IncomingMessage,
+  response: ServerResponse,
+  requestUrl: URL,
+): Promise<void> {
+  const requestInit: RequestInit = {
+    method: request.method,
+    headers: toFetchHeaders(request.headers),
+  };
+
+  if (request.method === "POST") {
+    requestInit.body = await readRequestBody(request);
+  }
+
+  await sendFetchResponse(
+    await handleSignupAvailabilityRequest(new Request(requestUrl, requestInit)),
+    response,
+  );
+}
+
 function isPathInsideDist(filePath: string): boolean {
   return (
     filePath === DIST_DIRECTORY ||
@@ -303,6 +327,11 @@ const server = createServer(async (request, response) => {
 
     if (requestUrl.pathname === WHATSAPP_WEBHOOK_PATH) {
       await handleWhatsAppWebhook(request, response, requestUrl);
+      return;
+    }
+
+    if (requestUrl.pathname === SIGNUP_AVAILABILITY_PATH) {
+      await handleSignupAvailabilityApi(request, response, requestUrl);
       return;
     }
 
