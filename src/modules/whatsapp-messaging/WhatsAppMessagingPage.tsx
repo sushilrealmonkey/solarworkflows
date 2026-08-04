@@ -382,7 +382,13 @@ function ContactLists({ phoneNumbers, lists, onChanged, showToast }: {
         {phoneNumbers.map((item) => <option key={item.id} value={item.id}>{item.verifiedName || item.displayPhoneNumber}</option>)}
       </select></Field>
       <Field label="CSV file"><input className={input} type="file" accept=".csv,text/csv" onChange={choose} required /></Field>
-      <p className="text-xs text-slate-500">Required column: phone_number. Optional: name. Other columns become template fields.</p>
+      <div className="flex flex-col gap-2 rounded-lg border border-stone-200 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-slate-600">Required column: phone_number. Optional: name. Other columns become template fields.</p>
+        <a className={`${secondary} inline-flex min-h-10 shrink-0 items-center justify-center text-center`}
+          href="/whatsapp-contact-list-sample.csv" download="whatsapp-contact-list-sample.csv">
+          Download sample CSV
+        </a>
+      </div>
       <label className="flex gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900"><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
         I confirm every contact has consented to receive WhatsApp messages.</label>
       {preview.length ? <Notice>{preview.length} valid unique contacts ready. Preview: {preview.slice(0, 3).map((r) => r.phoneNumber).join(", ")}</Notice> : null}
