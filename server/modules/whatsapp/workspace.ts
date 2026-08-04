@@ -283,6 +283,7 @@ async function controlCampaign(input: JsonObject) {
       supabase.from("whatsapp_campaigns").select("id", { count: "exact", head: true })
         .eq("company_id", campaign.company_id)
         .gte("started_at", dayStart.toISOString())
+        .neq("status", "cancelled")
         .neq("id", campaign.id),
       supabase.from("whatsapp_messages").select("id", { count: "exact", head: true })
         .eq("company_id", campaign.company_id)
