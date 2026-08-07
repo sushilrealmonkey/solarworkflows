@@ -156,6 +156,8 @@ site_url = "https://app.getbizlee.com"
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
+  "bizlee://auth/callback",
+  "bizlee://reset-password",
   "https://solarworkflows-production.up.railway.app",
   "https://solarworkflows-production.up.railway.app/**",
   "https://app.getbizlee.com",
@@ -448,6 +450,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.process-notifications]
+# A dedicated high-entropy worker secret authenticates cron invocations.
+verify_jwt = false
+
+[functions.process-mobile-push]
 # A dedicated high-entropy worker secret authenticates cron invocations.
 verify_jwt = false
 

@@ -1,0 +1,67 @@
+openapi: 3.1.0
+info:
+  title: Bizlee Mobile API
+  version: 1.0.0
+servers:
+  - url: https://app.getbizlee.com/api/mobile/v1
+security:
+  - bearerAuth: []
+paths:
+  /session/context:
+    get:
+      summary: Resolve the active tenant, branding, roles, permissions, and subscription
+      responses: { "200": { description: Session context }, "401": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" } }
+  /dashboard:
+    get:
+      summary: Fetch the mobile tenant dashboard summary
+      responses: { "200": { description: Dashboard summary }, "403": { $ref: "#/components/responses/Error" } }
+  /enrollment:
+    post:
+      summary: Create the authenticated user's first EPC workspace
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [organizationName, fullName], properties: { organizationName: { type: string }, fullName: { type: string }, phone: { type: string } } } } } }
+      responses: { "201": { description: Workspace created }, "409": { $ref: "#/components/responses/Error" }, "422": { $ref: "#/components/responses/Error" } }
+  /devices:
+    post:
+      summary: Register or refresh an Expo push device
+      responses: { "200": { description: Device registered }, "422": { $ref: "#/components/responses/Error" } }
+  /devices/{deviceId}:
+    delete:
+      summary: Revoke the current user's matching mobile installation
+      parameters:
+        - { name: deviceId, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Device revoked } }
+  /assistant/brief:
+    post:
+      summary: Fetch the permission-scoped Bizlee AI daily brief
+      responses: { "200": { description: Daily brief } }
+  /assistant/chat:
+    post:
+      summary: Stream the permission-scoped Bizlee AI chat using server-sent events
+      responses: { "200": { description: SSE chat stream } }
+  /notifications:
+    get:
+      summary: List the current user's in-app notifications
+      responses: { "200": { description: Notification list } }
+  /{resource}:
+    get:
+      summary: List a permission-scoped mobile resource
+      parameters:
+        - { name: resource, in: path, required: true, schema: { type: string, enum: [customers, enquiries, site-surveys, quotations, projects, documents] } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50 } }
+        - { name: search, in: query, schema: { type: string } }
+      responses: { "200": { description: Cursor page }, "403": { $ref: "#/components/responses/Error" } }
+  /{resource}/{id}:
+    get:
+      summary: Read one tenant-scoped mobile record
+      parameters:
+        - { name: resource, in: path, required: true, schema: { type: string } }
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses: { "200": { description: Record }, "404": { $ref: "#/components/responses/Error" } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: Supabase-JWT }
+  responses:
+    Error:
+      description: Stable API error envelope
+      content: { application/json: { schema: { type: object, properties: { error: { type: object, required: [code, message, requestId], properties: { code: { type: string }, message: { type: string }, requestId: { type: string } } } } } } }

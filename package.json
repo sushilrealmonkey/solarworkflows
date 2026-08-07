@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "engines": {
     "node": ">=22.0.0"
   },
@@ -12,8 +16,12 @@
     "lint": "eslint .",
     "start": "node --env-file-if-exists=.env server-dist/index.js",
     "test:webhook": "tsc -p tsconfig.server.json && node --test server-dist/modules/whatsapp/webhook.test.js",
+    "test:mobile-api": "tsc -p tsconfig.server.json && node --test server-dist/modules/mobile-api/handler.test.js",
     "setup:super-admin": "node scripts/setup-super-admin.mjs",
     "preview": "vite preview"
+    ,"mobile:start": "npm run start --workspace=@bizlee/mobile"
+    ,"mobile:check": "npm run check --workspace=@bizlee/mobile"
+    ,"contracts:check": "npm run check --workspace=@bizlee/contracts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

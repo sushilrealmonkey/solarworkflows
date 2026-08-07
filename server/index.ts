@@ -25,6 +25,7 @@ import {
   handleSignupAvailabilityRequest,
   SIGNUP_AVAILABILITY_PATH,
 } from "./modules/auth/availability.js";
+import { handleMobileApiRequest, isMobileApiPath } from "./modules/mobile-api/handler.js";
 
 const WHATSAPP_WEBHOOK_PATH = "/api/webhooks/whatsapp";
 const MAX_WEBHOOK_BODY_BYTES = 1_000_000;
@@ -230,6 +231,12 @@ async function handleSignupAvailabilityApi(
   );
 }
 
+async function handleMobileApi(request: IncomingMessage, response: ServerResponse, requestUrl: URL): Promise<void> {
+  const requestInit: RequestInit = { method: request.method, headers: toFetchHeaders(request.headers) };
+  if (request.method !== "GET" && request.method !== "HEAD") requestInit.body = await readRequestBody(request);
+  await sendFetchResponse(await handleMobileApiRequest(new Request(requestUrl, requestInit)), response);
+}
+
 function isPathInsideDist(filePath: string): boolean {
   return (
     filePath === DIST_DIRECTORY ||
@@ -342,6 +349,11 @@ const server = createServer(async (request, response) => {
 
     if (isWhatsAppAdminPath(requestUrl.pathname)) {
       await handleWhatsAppAdminApi(request, response, requestUrl);
+      return;
+    }
+
+    if (isMobileApiPath(requestUrl.pathname)) {
+      await handleMobileApi(request, response, requestUrl);
       return;
     }
 

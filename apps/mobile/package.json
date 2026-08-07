@@ -1,0 +1,41 @@
+{
+  "name": "@bizlee/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bizlee/contracts": "0.1.0",
+    "@bizlee/domain": "0.1.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@supabase/supabase-js": "2.112.1",
+    "@tanstack/react-query": "5.101.4",
+    "expo": "~57.0.11",
+    "expo-constants": "57.0.9",
+    "expo-dev-client": "~57.0.10",
+    "expo-device": "57.0.1",
+    "expo-linking": "57.0.5",
+    "expo-notifications": "~57.0.9",
+    "expo-router": "~57.0.11",
+    "expo-secure-store": "57.0.1",
+    "expo-status-bar": "57.0.1",
+    "react": "19.2.3",
+    "react-hook-form": "7.84.0",
+    "react-native": "0.86.2",
+    "react-native-get-random-values": "1.11.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-url-polyfill": "3.0.0",
+    "zustand": "5.0.14"
+  },
+  "devDependencies": {
+    "@expo/ngrok": "^4.1.0",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  }
+}
