@@ -129,7 +129,7 @@ export async function processWhatsAppStatusUpdate(
   update: WhatsAppStatusUpdate,
 ): Promise<ProcessWhatsAppStatusResult> {
   const client = getServerSupabaseClient();
-  const [messageResult, notificationResult] = await Promise.all([
+  const [messageResult, notificationResult, replyAlertResult] = await Promise.all([
     client.rpc(
       "process_whatsapp_message_status",
       {
@@ -153,6 +153,16 @@ export async function processWhatsAppStatusUpdate(
         p_error_message: update.errorMessage ?? update.errorDetails,
       },
     ),
+    client.rpc(
+      "process_whatsapp_reply_alert_status",
+      {
+        p_provider_message_id: update.metaMessageId,
+        p_status: update.status,
+        p_source_timestamp: update.sourceTimestamp,
+        p_error_code: update.errorCode,
+        p_error_message: update.errorMessage ?? update.errorDetails,
+      },
+    ),
   ]);
 
   if (messageResult.error) {
@@ -167,6 +177,12 @@ export async function processWhatsAppStatusUpdate(
       { cause: notificationResult.error },
     );
   }
+  if (replyAlertResult.error) {
+    throw new Error(
+      `Could not process reply alert status (${replyAlertResult.error.code})`,
+      { cause: replyAlertResult.error },
+    );
+  }
 
   const row = (
     messageResult.data as ProcessWhatsAppStatusRow[] | null
@@ -174,20 +190,27 @@ export async function processWhatsAppStatusUpdate(
   const notificationRow = (
     notificationResult.data as ProcessNotificationStatusRow[] | null
   )?.[0];
+  const replyAlertRow = (
+    replyAlertResult.data as ProcessNotificationStatusRow[] | null
+  )?.[0];
 
   if (!row) {
     throw new Error("WhatsApp status RPC returned no result");
   }
 
-  const notificationFound = notificationRow?.delivery_found ?? false;
+  const notificationFound = (notificationRow?.delivery_found ?? false) ||
+    (replyAlertRow?.delivery_found ?? false);
 
   return {
     mapped: row.mapped || notificationFound,
     found: row.message_found || notificationFound,
-    updated: row.updated || (notificationRow?.updated ?? false),
-    companyId: row.company_id ?? notificationRow?.company_id ?? null,
-    messageId: row.message_id ?? notificationRow?.delivery_id ?? null,
-    status: row.status ?? notificationRow?.status ?? null,
+    updated: row.updated || (notificationRow?.updated ?? false) ||
+      (replyAlertRow?.updated ?? false),
+    companyId: row.company_id ?? notificationRow?.company_id ??
+      replyAlertRow?.company_id ?? null,
+    messageId: row.message_id ?? notificationRow?.delivery_id ??
+      replyAlertRow?.delivery_id ?? null,
+    status: row.status ?? notificationRow?.status ?? replyAlertRow?.status ?? null,
   };
 }
 

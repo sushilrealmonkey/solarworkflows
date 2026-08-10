@@ -18,6 +18,18 @@ type ClaimedDelivery = {
   attempt_count: number;
 };
 
+type ClaimedReplyAlert = {
+  delivery_id: string;
+  company_id: string;
+  sender_meta_phone_number_id: string;
+  phone_e164: string;
+  contact_name: string;
+  contact_mobile: string;
+  reply_preview: string;
+  received_at: string;
+  attempt_count: number;
+};
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);
@@ -126,8 +138,81 @@ Deno.serve(async (request) => {
     }
   }
 
-  return json(result);
+  const replyAlerts = await processReplyAlerts(service, limit);
+
+  return json({ ...result, replyAlerts });
 });
+
+async function processReplyAlerts(
+  service: ReturnType<typeof createClient>,
+  limit: number,
+) {
+  const { data, error } = await service.rpc(
+    "claim_whatsapp_reply_alert_batch",
+    { p_limit: limit },
+  );
+  if (error) {
+    console.error("Reply alert claim failed", error.message);
+    return { claimed: 0, sent: 0, retried: 0, cancelled: 0 };
+  }
+
+  const claimed = (data ?? []) as ClaimedReplyAlert[];
+  const result = { claimed: claimed.length, sent: 0, retried: 0, cancelled: 0 };
+  for (const delivery of claimed) {
+    const provider = await sendMetaTextTemplate({
+      accessToken: requireEnv("META_WHATSAPP_ACCESS_TOKEN"),
+      graphVersion: requireEnv("META_WHATSAPP_GRAPH_API_VERSION"),
+      phoneNumberId: delivery.sender_meta_phone_number_id,
+      recipient: delivery.phone_e164,
+      templateName: "bizlee_customer_reply_alert",
+      languageCode: "en",
+      parameters: [
+        delivery.contact_name,
+        delivery.contact_mobile,
+        delivery.reply_preview,
+        delivery.received_at,
+      ],
+    }).catch((sendError) => ({
+      ok: false as const,
+      status: 500,
+      messageId: null,
+      errorCode: "worker_error",
+      errorMessage: sendError instanceof Error ? sendError.message : "Reply alert send failed",
+      retryable: false,
+      payload: null,
+    }));
+
+    if (provider.ok && provider.messageId) {
+      const { error: completeError } = await service.rpc(
+        "complete_whatsapp_reply_alert",
+        { p_delivery_id: delivery.delivery_id, p_provider_message_id: provider.messageId },
+      );
+      if (completeError) {
+        console.error("Reply alert completion failed after Meta accepted it", {
+          deliveryId: delivery.delivery_id,
+          message: completeError.message,
+        });
+      } else result.sent += 1;
+      continue;
+    }
+
+    const retryable = provider.retryable && delivery.attempt_count < 5;
+    const { data: outcome, error: failError } = await service.rpc(
+      "fail_whatsapp_reply_alert",
+      {
+        p_delivery_id: delivery.delivery_id,
+        p_failure_code: provider.errorCode ?? `http_${provider.status}`,
+        p_failure_message: provider.errorMessage,
+        p_retryable: retryable,
+      },
+    );
+    if (failError) {
+      console.error("Could not record reply alert failure", failError.message);
+    } else if (outcome === "failed") result.retried += 1;
+    else result.cancelled += 1;
+  }
+  return result;
+}
 
 function resolveTemplateParameters(delivery: ClaimedDelivery) {
   if (!Array.isArray(delivery.variable_schema)) {
