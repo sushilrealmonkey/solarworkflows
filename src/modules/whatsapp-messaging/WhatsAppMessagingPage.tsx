@@ -438,7 +438,12 @@ function Inbox({ conversations }: { conversations: WhatsAppConversation[] }) {
         <p className="font-semibold">{c.contact_name || c.contact_wa_id}</p><p className="mt-1 text-xs text-slate-500">{new Date(c.last_message_at).toLocaleString()}</p>
       </button>)}</div><div className="mt-4"><TablePagination label="threads"
         pagination={conversationPagination} pageSizeOptions={[10]} /></div></Panel>
-    <Panel title={active?.contact_name || active?.contact_wa_id || "Select a conversation"} eyebrow="Webhook replies">
+    <Panel title={active
+      ? <span className="flex flex-col gap-1">
+          <span>{active.contact_name || active.contact_wa_id}</span>
+          <span className="text-sm font-normal text-slate-500">Mobile: {active.contact_wa_id}</span>
+        </span>
+      : "Select a conversation"} eyebrow="Webhook replies">
       {!active ? <Empty>Select a contact to view their complete message thread.</Empty> :
         <><div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">{thread.map((m) => <div key={m.id} className={`flex ${m.direction === "outbound" ? "justify-end" : "justify-start"}`}>
           <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${m.direction === "outbound" ? "bg-[#06173f] text-white" : "bg-stone-100 text-slate-800"}`}>
@@ -515,7 +520,7 @@ function parseCsvLine(line: string) {
     else value += char;
   } values.push(value.trim()); return values;
 }
-function Panel({ title, eyebrow, children }: { title: string; eyebrow: string; children: React.ReactNode }) {
+function Panel({ title, eyebrow, children }: { title: React.ReactNode; eyebrow: string; children: React.ReactNode }) {
   return <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-6"><p className="text-xs font-semibold uppercase tracking-[.15em] text-orange-600">{eyebrow}</p><h2 className="mb-5 mt-1 text-xl font-semibold text-slate-950">{title}</h2>{children}</section>;
 }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</span>{children}</label>; }
