@@ -296,8 +296,9 @@ function quotationPayload(values: QuotationFormValues) {
     discount_amount: discountAmount,
     total_amount: totalAmount,
     subsidy_amount: subsidyAmount,
-    net_payable_amount:
-      totalAmount === null ? null : Math.max(totalAmount - subsidyAmount, 0),
+    // Subsidy is credited to the customer separately and is informational on
+    // the quotation. It must not reduce the amount payable to the company.
+    net_payable_amount: totalAmount,
     material_items: values.material_items,
     work_description: nullable(values.work_description),
     pricing_total_rate: nullableNumber(values.pricing_total_rate),

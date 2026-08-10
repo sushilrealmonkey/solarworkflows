@@ -108,7 +108,8 @@ export function sourceDefaultMode(source: PaymentSource) {
 export function fallbackSummaryForProject(project: PaymentProjectOption): PaymentProjectSummary {
   const total = Number(project.quotation?.total_amount ?? 0);
   const subsidy = Number(project.quotation?.subsidy_amount ?? 0);
-  const receivable = Math.max(total - subsidy, 0);
+  // Subsidy is informational and does not reduce the company receivable.
+  const receivable = total;
 
   return {
     id: `fallback-${project.id}`,
