@@ -77,7 +77,7 @@ type ProformaFilters = {
 };
 
 export function ProformaInvoicesPage() {
-  const { profile, permissions, organization } = useAuth();
+  const { profile, permissions, organization, subscription } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [proformaInvoices, setProformaInvoices] = useState<
@@ -121,7 +121,8 @@ export function ProformaInvoicesPage() {
   const canUpdate = hasPermission(profile, permissions, "invoices", "update");
   const canDelete = hasPermission(profile, permissions, "invoices", "delete");
   const canCreatePayments = hasPermission(profile, permissions, "payments", "create");
-  const canCreateDocuments = hasPermission(
+  const canCreateDocuments =
+    subscription?.capability_access?.["documents.pro_sources"] === "full" && hasPermission(
     profile,
     permissions,
     "documents",

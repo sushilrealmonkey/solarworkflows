@@ -32,17 +32,19 @@ type RazorpayOptions = {
 
 const features = {
   starter: [
-    "Unlimited quotations",
-    "Leads, enquiries, and customers",
-    "Site surveys",
-    "Projects and installation tracking",
+    "3 total users, including the company admin",
+    "Leads, enquiries, customers, and site surveys",
+    "Product, category, and BOM template masters",
+    "Unlimited quotations and customer PDFs",
+    "Projects, installation, and project payments",
     "Dashboard and mobile workspace",
   ],
   premium: [
-    "Everything in Starter",
+    "Unlimited users",
+    "Everything in Core",
     "Dealer and B2B sales",
-    "Products, inventory, suppliers, and purchases",
-    "Proforma invoices, tax invoices, and payments",
+    "Inventory, suppliers, purchases, and dispatch",
+    "Proforma invoices, GST invoices, and commercial payments",
     "Bizlee AI",
   ],
 } satisfies Record<BillingPlan["plan_key"], string[]>;
@@ -71,9 +73,9 @@ export function BillingPlansPage() {
   const statusText = useMemo(() => {
     if (!subscription) return null;
     if (subscription.status === "trialing") {
-      return `${subscription.days_remaining} days remaining in Premium trial`;
+      return `${subscription.days_remaining} days remaining in your full-feature trial`;
     }
-    if (subscription.status === "grandfathered") return "Premium access";
+    if (subscription.status === "grandfathered") return "Bizlee Pro access";
     return `${subscription.plan_name ?? "No active plan"} · ${subscription.status.replace("_", " ")}`;
   }, [subscription]);
 
@@ -91,7 +93,7 @@ export function BillingPlansPage() {
       );
       if (checkout.upgradeCompleted) {
         await refresh();
-        setMessage("Your workspace has been upgraded to Bizlee Premium.");
+        setMessage(`Your workspace has been updated to ${plan.display_name}.`);
         setCheckoutPlan(null);
         return;
       }
@@ -266,19 +268,19 @@ export function BillingPlansPage() {
                 subscription?.status === "active" &&
                 subscription.plan_key === plan.plan_key &&
                 subscription.billing_period === billingPeriod;
-              const isPremium = plan.plan_key === "premium";
+              const isPro = plan.plan_key === "premium";
               const displayPricePaise =
                 billingPeriod === "yearly"
-                  ? plan.price_paise * 11
+                  ? plan.yearly_price_paise
                   : plan.price_paise;
               return (
                 <article
                   className={`relative rounded-2xl border bg-white p-5 shadow-sm ${
-                    isPremium ? "border-orange-300" : "border-stone-200"
+                    isPro ? "border-orange-300" : "border-stone-200"
                   }`}
                   key={plan.plan_key}
                 >
-                  {isPremium ? (
+                  {isPro ? (
                     <span className="absolute right-4 top-4 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">
                       Complete workspace
                     </span>
@@ -324,8 +326,8 @@ export function BillingPlansPage() {
                       ? "Current plan"
                       : checkoutPlan === plan.plan_key
                         ? "Opening secure checkout…"
-                        : subscription?.plan_key === "starter" && isPremium
-                          ? "Upgrade to Premium"
+                        : subscription?.plan_key === "starter" && isPro
+                          ? "Upgrade to Pro"
                           : `Choose ${plan.display_name.replace("Bizlee ", "")}`}
                   </button>
                   {!isSuperAdmin && !subscription?.is_admin ? (

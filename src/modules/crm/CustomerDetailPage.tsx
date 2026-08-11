@@ -57,7 +57,7 @@ import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function CustomerDetailPage() {
   const { id } = useParams();
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, subscription } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -79,27 +79,33 @@ export function CustomerDetailPage() {
   const [savingDocument, setSavingDocument] = useState(false);
 
   const canView = hasPermission(profile, permissions, "customers", "view");
-  const canUpdate = hasPermission(profile, permissions, "customers", "update");
-  const canDelete = hasPermission(profile, permissions, "customers", "delete");
+  const customerWriteAllowed =
+    customer?.customer_segment !== "b2b_direct" ||
+    !subscription ||
+    subscription.capability_access?.["customers.b2b_direct"] === "full";
+  const canUpdate =
+    customerWriteAllowed && hasPermission(profile, permissions, "customers", "update");
+  const canDelete =
+    customerWriteAllowed && hasPermission(profile, permissions, "customers", "delete");
   const canCreateB2BSale = hasPermission(profile, permissions, "b2b_sales", "create");
   const canViewB2BSales = hasPermission(profile, permissions, "b2b_sales", "view");
   const canViewInvoices = hasPermission(profile, permissions, "invoices", "view");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canViewDocuments = hasPermission(profile, permissions, "documents", "view");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
-  const canCreateDocument = hasPermission(
+  const canCreateDocument = customerWriteAllowed && hasPermission(
     profile,
     permissions,
     "documents",
     "create",
   );
-  const canDeleteDocument = hasPermission(
+  const canDeleteDocument = customerWriteAllowed && hasPermission(
     profile,
     permissions,
     "documents",
     "delete",
   );
-  const canUpdateDocument = hasPermission(
+  const canUpdateDocument = customerWriteAllowed && hasPermission(
     profile,
     permissions,
     "documents",

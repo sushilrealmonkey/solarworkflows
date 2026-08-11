@@ -10,6 +10,7 @@ import {
 import { formatDate, labelize } from "../crm/crmUtils";
 import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import type { LifecycleAction } from "../lifecycle/types";
+import { useAuth } from "../../app/AuthProvider";
 import {
   documentRelatedLabel,
   documentTypeOptions,
@@ -255,9 +256,20 @@ function DocumentActions({
     action: LifecycleAction,
   ) => void | Promise<void>;
 }) {
+  const { subscription } = useAuth();
+  const isProSource = Boolean(
+    document.invoice_id ||
+    document.proforma_invoice_id ||
+    document.purchase_order_id,
+  );
+  const proSourceWriteAllowed =
+    !isProSource ||
+    !subscription ||
+    subscription.capability_access?.["documents.pro_sources"] === "full";
+
   return (
     <div className="flex flex-wrap gap-2">
-      {document.preview_url ? (
+      {document.preview_url && proSourceWriteAllowed ? (
         <a
           className="inline-flex min-h-9 items-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
           href={document.preview_url}
@@ -266,12 +278,16 @@ function DocumentActions({
         >
           Preview File
         </a>
+      ) : isProSource && !proSourceWriteAllowed ? (
+        <span className="inline-flex min-h-9 items-center rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-800">
+          Upgrade to Pro to preview
+        </span>
       ) : null}
       <RecordLifecyclePanel
         archiveReason={document.archive_reason}
         archivedAt={document.archived_at}
-        canDelete={canDelete}
-        canUpdate={canUpdate}
+        canDelete={canDelete && proSourceWriteAllowed}
+        canUpdate={canUpdate && proSourceWriteAllowed}
         compact
         moduleKey="documents"
         onChanged={(action) => onLifecycleChanged(document, action)}

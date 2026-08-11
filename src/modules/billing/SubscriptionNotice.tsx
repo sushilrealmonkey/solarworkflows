@@ -69,7 +69,7 @@ export function SubscriptionNotice() {
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">
           {subscription?.is_admin
-            ? "Choose Starter or Premium to continue creating and updating business records."
+            ? "Choose Core or Pro to continue creating and updating business records."
             : "Your existing records are safe. Ask your company administrator to activate a monthly plan."}
         </p>
         <div className="mt-5 flex flex-col gap-2 sm:flex-row">

@@ -65,7 +65,7 @@ import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function ProformaInvoiceDetailPage() {
   const { id } = useParams();
-  const { profile, permissions, organization } = useAuth();
+  const { profile, permissions, organization, subscription } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [proformaInvoice, setProformaInvoice] =
@@ -96,7 +96,8 @@ export function ProformaInvoiceDetailPage() {
   const canDelete = hasPermission(profile, permissions, "invoices", "delete");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canCreatePayments = hasPermission(profile, permissions, "payments", "create");
-  const canCreateDocuments = hasPermission(
+  const canCreateDocuments =
+    subscription?.capability_access?.["documents.pro_sources"] === "full" && hasPermission(
     profile,
     permissions,
     "documents",

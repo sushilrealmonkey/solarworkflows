@@ -88,7 +88,7 @@ type B2BSaleFilters = {
 };
 
 export function B2BSalesPage() {
-  const { profile, permissions, roleNames, organization } = useAuth();
+  const { profile, permissions, roleNames, organization, subscription } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -138,7 +138,9 @@ export function B2BSalesPage() {
   const canCreate = hasPermission(profile, permissions, "b2b_sales", "create");
   const canUpdate = hasPermission(profile, permissions, "b2b_sales", "update");
   const canCreateInvoices = hasPermission(profile, permissions, "invoices", "create");
-  const canCreateDocuments = hasPermission(profile, permissions, "documents", "create");
+  const canCreateDocuments =
+    subscription?.capability_access?.["documents.pro_sources"] === "full" &&
+    hasPermission(profile, permissions, "documents", "create");
   const canCreatePayments = hasPermission(profile, permissions, "payments", "create");
   const canDispatchInventory =
     hasPermission(profile, permissions, "inventory", "create") ||

@@ -62,6 +62,40 @@ export type ProjectWithRelations = Project & {
   project_manager?: StaffOption | null;
 };
 
+export type FieldProject = {
+  id: string;
+  company_id: string;
+  organization_id: string;
+  project_code: string | null;
+  project_name: string | null;
+  project_status: ProjectStatus;
+  field_released_at: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+  installation_address: string | null;
+  system_capacity_kw: number | null;
+  start_date: string | null;
+  expected_completion_date: string | null;
+  field_notes: string | null;
+  assigned_team: Array<{ id: string; name: string | null }>;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ScopedProjectSummary = {
+  id: string;
+  organization_id: string;
+  project_code: string | null;
+  project_name: string | null;
+  project_status: ProjectStatus;
+  customer_name: string | null;
+  system_capacity_kw?: number | null;
+  expected_completion_date: string | null;
+  assigned_manager_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export type ProjectFormValues = {
   customer_id: string;
   lead_id: string;

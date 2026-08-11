@@ -42,6 +42,20 @@ paths:
     get:
       summary: List the current user's in-app notifications
       responses: { "200": { description: Notification list } }
+  /notifications/unread-count:
+    get:
+      summary: Count the current user's unread in-app notifications
+      responses: { "200": { description: Unread count } }
+  /notifications/{receiptId}/read:
+    post:
+      summary: Mark one current-user notification receipt as read
+      parameters:
+        - { name: receiptId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses: { "200": { description: Receipt updated }, "404": { $ref: "#/components/responses/Error" } }
+  /notifications/read-all:
+    post:
+      summary: Mark all current-user notification receipts as read
+      responses: { "200": { description: Receipts updated } }
   /{resource}:
     get:
       summary: List a permission-scoped mobile resource
@@ -51,6 +65,29 @@ paths:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50 } }
         - { name: search, in: query, schema: { type: string } }
       responses: { "200": { description: Cursor page }, "403": { $ref: "#/components/responses/Error" } }
+    post:
+      summary: Create a supported permission-scoped mobile resource
+      description: Creation is currently supported only for project-based customers and enquiries.
+      parameters:
+        - { name: resource, in: path, required: true, schema: { type: string, enum: [customers, enquiries] } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, phone]
+              properties:
+                fullName: { type: string }
+                phone: { type: string }
+                email: { type: string, format: email }
+                city: { type: string }
+                address: { type: string }
+                customerType: { type: string }
+                leadSource: { type: string }
+                requirementType: { type: string }
+                notes: { type: string }
+      responses: { "201": { description: Record created }, "403": { $ref: "#/components/responses/Error" }, "409": { $ref: "#/components/responses/Error" }, "422": { $ref: "#/components/responses/Error" } }
   /{resource}/{id}:
     get:
       summary: Read one tenant-scoped mobile record

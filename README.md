@@ -1,77 +1,87 @@
-# SolarWorkflows
+# SolarWorkflows / Bizlee
 
-SolarWorkflows is a multi-tenant SaaS foundation for solar installation business management. Realmonkey will manage multiple client companies with separate users, permissions, domains, documents, inventory, projects, invoices, and reports.
+SolarWorkflows is the source repository for Bizlee, a multi-tenant SaaS
+workspace for solar EPC companies. It includes a React web application, an Expo
+mobile application, a Node API/server layer, shared TypeScript packages, and a
+Supabase backend with authentication, Postgres, RLS, Storage, Edge Functions,
+and scheduled workers.
 
-This repository currently contains only the project foundation. Database schema, authentication flows, tenant business logic, and inventory logic are intentionally not implemented yet.
+## Implemented Product Areas
+
+- Tenant and platform authentication, onboarding, roles, and permissions
+- CRM, site surveys, quotations, projects, BOM templates, and documents
+- Product master, inventory, vendors, purchases, B2B sales, invoices, and payments
+- Bizlee AI daily brief and read-only data chat
+- Core/Pro subscriptions, trials, Razorpay billing, GST invoices, and plan access
+- In-app, mobile push, and opt-in WhatsApp notifications
+- Super-admin company, staff, subscription, and WhatsApp operations
+- Expo mobile workspace with dashboard, record lists/details, customer and
+  enquiry creation, notifications, deep links, and push registration
+
+Business behavior is implemented only where represented in the current code and
+migrations. Do not infer new workflows from this overview.
 
 ## Tech Stack
 
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- Supabase
-- React Router
+- React 19, TypeScript, Vite, Tailwind CSS, and React Router
+- Expo 57, React Native, and Expo Router
+- Node.js 22 production server and versioned mobile REST API
+- Supabase Auth, Postgres, RLS, Storage, Edge Functions, Realtime, Cron, and Vault
+- OpenAI for the permission-scoped Bizlee AI experience
+- Razorpay subscriptions and Meta WhatsApp integrations
+
+## Repository Layout
+
+```text
+apps/mobile/       Expo mobile application
+packages/          Shared contracts and domain packages
+server/            Node server, mobile API, and WhatsApp endpoints
+src/               React web application
+supabase/          Migrations, tests, configuration, and Edge Functions
+docs/              Product, architecture, operations, QA, and change history
+```
 
 ## Getting Started
 
-1. Install dependencies:
+1. Install workspace dependencies:
 
    ```bash
    npm install
    ```
 
-2. Copy the environment template:
+2. Copy `.env.example` to `.env` and configure the required public Supabase
+   values. Keep service-role, provider, and worker secrets server-side.
 
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Add Supabase project values to `.env` when backend work begins:
-
-   ```bash
-   VITE_SUPABASE_URL=
-   VITE_SUPABASE_ANON_KEY=
-   ```
-
-4. Start the development server:
+3. Start or verify the web application:
 
    ```bash
    npm run dev
+   npm run build
+   npm run lint
    ```
 
-5. Build for production:
+4. Configure `apps/mobile/.env.local` from its example, then start or type-check
+   the mobile application:
 
    ```bash
-   npm run build
+   npm run mobile:start
+   npm run mobile:check
    ```
 
-## Project Structure
+Additional checks include `npm run contracts:check`, `npm run test:webhook`, and
+`npm run test:mobile-api`.
 
-```text
-src/
-  app/          App wiring, routes, navigation, route guards
-  components/   Shared UI components
-  layouts/      Page shells and navigation layouts
-  modules/      Feature modules and placeholder pages
-  services/     External service clients
-  hooks/        Shared React hooks
-  utils/        Shared utilities
-  types/        Shared TypeScript types
-  config/       Runtime configuration
-supabase/       Supabase project files when backend work starts
-docs/           Product and engineering notes
-```
+## Documentation
 
-## Current Scope
+Start with [the documentation index](docs/README.md). It links the current scope,
+implemented functionality, architecture, data model, subscription access model,
+mobile application/API guide, deployment notes, QA plan, and change log.
 
-- React + TypeScript + Vite setup
-- Tailwind CSS setup
-- React Router setup
-- Mobile-first dashboard shell
-- Mobile bottom navigation
-- Desktop sidebar navigation
-- Placeholder protected route wrapper
-- Placeholder pages for initial platform areas
+## Project Guardrails
 
-No database schema, auth logic, inventory logic, or tenant business rules have been added in this foundation task.
+- Preserve tenant isolation and enforce authorization in Supabase/RLS.
+- Every new business table must use `company_id`; respect existing ownership
+  columns when changing older tables.
+- Never hardcode company-specific production values or expose server secrets.
+- Keep TypeScript code modular and all user interfaces mobile-first.
+- Do not add business logic unless it is explicitly approved.

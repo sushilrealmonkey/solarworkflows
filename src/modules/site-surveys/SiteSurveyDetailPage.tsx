@@ -22,10 +22,10 @@ import {
   requiredError,
   staffName,
 } from "../crm/crmUtils";
-import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
 import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import {
+  fetchFieldStaffOptions,
   fetchSiteSurvey,
   fetchSurveyLeadOptions,
   updateSiteSurvey,
@@ -94,7 +94,7 @@ export function SiteSurveyDetailPage() {
       const [nextSurvey, nextStaff, nextLeads] =
         await Promise.all([
           fetchSiteSurvey(profile, id),
-          fetchStaffOptions(profile),
+          fetchFieldStaffOptions(),
           fetchSurveyLeadOptions(profile),
         ]);
       setSurvey(nextSurvey);

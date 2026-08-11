@@ -26,9 +26,39 @@ export type UserProfile = {
   platform_role: "backend_staff" | null;
 };
 
+export type RoleKey =
+  | "admin"
+  | "sales_team"
+  | "backend_team"
+  | "accounts"
+  | "field_staff";
+
+export type PermissionAction =
+  | "view"
+  | "create"
+  | "update"
+  | "delete"
+  | "assign"
+  | "update_status"
+  | "update_technical"
+  | "upload_evidence"
+  | "fulfill"
+  | "receive"
+  | "correct_stock"
+  | "view_financials"
+  | "manage_pricing";
+
+export type RecordScope =
+  | "company"
+  | "assigned_or_unassigned_created"
+  | "related_operations"
+  | "related_finance"
+  | "assigned_field";
+
 export type UserPermission = {
   moduleKey: string;
-  actionKey: string;
+  actionKey: PermissionAction;
+  recordScope: RecordScope;
 };
 
 export type OrganizationBranding = {
@@ -56,6 +86,7 @@ type AuthContextValue = {
   session: Session | null;
   profile: UserProfile | null;
   roleNames: string[];
+  roleKeys: RoleKey[];
   permissions: UserPermission[];
   organization: OrganizationBranding;
   subscription: SubscriptionAccess | null;
@@ -66,6 +97,16 @@ type AuthContextValue = {
 
 type UserRoleNameRow = {
   role_name: string | null;
+};
+
+type UserRoleKeyRow = {
+  role_key: RoleKey | null;
+};
+
+type UserPermissionRow = {
+  module_key: string;
+  action_key: PermissionAction;
+  record_scope: RecordScope;
 };
 
 type OrganizationRow = {
@@ -95,35 +136,13 @@ const defaultOrganization: OrganizationBranding = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-const permissionModuleKeys = [
-  "dashboard",
-  "customers",
-  "leads",
-  "projects",
-  "site_surveys",
-  "quotations",
-  "invoices",
-  "payments",
-  "b2b_sales",
-  "documents",
-  "product_master",
-  "product_pricing",
-  "purchases",
-  "inventory",
-  "vendors",
-  "staff",
-  "reports",
-  "settings",
-];
-
-const permissionActionKeys = ["view", "create", "update", "delete"];
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const activeUserIdRef = useRef<string | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [roleNames, setRoleNames] = useState<string[]>([]);
+  const [roleKeys, setRoleKeys] = useState<RoleKey[]>([]);
   const [permissions, setPermissions] = useState<UserPermission[]>([]);
   const [organization, setOrganization] =
     useState<OrganizationBranding>(defaultOrganization);
@@ -135,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const resetUserState = useCallback(() => {
     setProfile(null);
     setRoleNames([]);
+    setRoleKeys([]);
     setPermissions([]);
     setOrganization(defaultOrganization);
     setSubscription(null);
@@ -182,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (loadedProfile.status !== "active") {
         setRoleNames([]);
+        setRoleKeys([]);
         setPermissions([]);
         setStatus("inactive");
         return;
@@ -258,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (loadedProfile.is_super_admin) {
         setSubscription(null);
         setRoleNames(["Super Admin"]);
+        setRoleKeys([]);
         setPermissions([]);
         setStatus("ready");
         return;
@@ -265,6 +287,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (loadedOrganization?.status && loadedOrganization.status !== "active") {
         setRoleNames([]);
+        setRoleKeys([]);
         setPermissions([]);
         setStatus("inactive");
         return;
@@ -273,6 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (loadedProfile.platform_role === "backend_staff") {
         setSubscription(null);
         setRoleNames(["Backend Staff"]);
+        setRoleKeys([]);
         setPermissions([]);
         setStatus("ready");
         return;
@@ -281,51 +305,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const loadedSubscription = await fetchSubscriptionAccess();
       setSubscription(loadedSubscription);
 
-      const { data: roleRows, error: roleError } = await supabase.rpc(
-        "get_current_user_role_names",
-      );
+      const [roleResult, roleKeyResult, permissionResult] = await Promise.all([
+        supabase.rpc("get_current_user_role_names"),
+        supabase.rpc("get_current_user_role_keys"),
+        supabase.rpc("get_current_user_permissions"),
+      ]);
 
-      if (roleError) {
-        throw new Error(roleError.message);
+      if (roleResult.error) {
+        throw new Error(roleResult.error.message);
+      }
+      if (roleKeyResult.error) {
+        throw new Error(roleKeyResult.error.message);
+      }
+      if (permissionResult.error) {
+        throw new Error(permissionResult.error.message);
       }
 
       const nextRoleNames = new Set(
-        ((roleRows ?? []) as UserRoleNameRow[])
+        ((roleResult.data ?? []) as UserRoleNameRow[])
           .map((row) => row.role_name)
           .filter((roleName): roleName is string => Boolean(roleName)),
       );
 
-      const permissionClient = supabase;
-      const permissionChecks = await Promise.all(
-        permissionModuleKeys.flatMap((moduleKey) =>
-          permissionActionKeys.map(async (actionKey) => {
-            const { data, error } = await permissionClient.rpc(
-              "user_has_permission",
-              {
-                module: moduleKey,
-                action: actionKey,
-              },
-            );
-
-            if (error) {
-              throw new Error(error.message);
-            }
-
-            return data
-              ? {
-                  moduleKey,
-                  actionKey,
-                }
-              : null;
-          }),
-        ),
-      );
-
       setRoleNames(Array.from(nextRoleNames));
+      setRoleKeys(
+        ((roleKeyResult.data ?? []) as UserRoleKeyRow[])
+          .map((row) => row.role_key)
+          .filter((roleKey): roleKey is RoleKey => Boolean(roleKey)),
+      );
       setPermissions(
-        permissionChecks.filter(
-          (permission): permission is UserPermission => permission !== null,
-        ),
+        ((permissionResult.data ?? []) as UserPermissionRow[]).map((permission) => ({
+          moduleKey: permission.module_key,
+          actionKey: permission.action_key,
+          recordScope: permission.record_scope,
+        })),
       );
       setStatus("ready");
     },
@@ -411,6 +424,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       roleNames,
+      roleKeys,
       permissions,
       organization,
       subscription,
@@ -423,6 +437,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       roleNames,
+      roleKeys,
       permissions,
       organization,
       subscription,

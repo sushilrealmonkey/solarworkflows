@@ -14,6 +14,16 @@ export type PlatformCompanyAdmin = {
   created_at: string | null;
 };
 
+export type PlatformTenantUserRole = {
+  id: string;
+  role_key: string | null;
+  role_name: string | null;
+};
+
+export type PlatformTenantUser = PlatformCompanyAdmin & {
+  roles: PlatformTenantUserRole[];
+};
+
 export type PlatformCompanyActivitySummary = {
   total_customers: number;
   total_leads: number;
@@ -48,6 +58,7 @@ export type PlatformCompany = {
   updated_at: string | null;
   settings: PlatformCompanySettings | null;
   admin: PlatformCompanyAdmin | null;
+  tenant_users?: PlatformTenantUser[];
   role_count: number;
   user_count: number;
   activity_summary?: PlatformCompanyActivitySummary;

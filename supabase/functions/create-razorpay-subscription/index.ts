@@ -48,7 +48,32 @@ Deno.serve(async (request) => {
     }
     if (!access.is_admin) return json({ error: "Company admin access required" }, 403);
     if (access.plan_key === "premium" && planKey === "starter" && access.status === "active") {
-      return json({ error: "Premium downgrades are not available yet" }, 409);
+      return json({ error: "Pro downgrades are not available yet" }, 409);
+    }
+
+    if (planKey === "starter") {
+      const { data: corePlan, error: planError } = await service
+        .from("subscription_plans")
+        .select("seat_limit")
+        .eq("plan_key", "starter")
+        .single();
+      if (planError) throw new Error(planError.message);
+
+      const { count: seatsUsed, error: seatsError } = await service
+        .from("users_profile")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", access.company_id)
+        .in("status", ["active", "invited"]);
+      if (seatsError) throw new Error(seatsError.message);
+
+      if (corePlan.seat_limit !== null && (seatsUsed ?? 0) > corePlan.seat_limit) {
+        return json({
+          error: `Bizlee Core supports ${corePlan.seat_limit} total users. Deactivate active or invited staff before choosing Core.`,
+          code: "seat_limit_exceeded",
+          seatLimit: corePlan.seat_limit,
+          seatsUsed: seatsUsed ?? 0,
+        }, 409);
+      }
     }
 
     const { data: profile } = await service
@@ -97,7 +122,7 @@ Deno.serve(async (request) => {
       return json({
         keyId: requiredEnv("RAZORPAY_KEY_ID"),
         upgradeCompleted: true,
-        planName: planKey === "starter" ? "Bizlee Starter" : "Bizlee Premium",
+        planName: displayPlanName(planKey),
         customerName: profile?.full_name ?? null,
         customerEmail: profile?.email ?? authData.user.email ?? null,
         customerPhone: profile?.phone ?? authData.user.phone ?? null,
@@ -113,7 +138,7 @@ Deno.serve(async (request) => {
       return json({
         keyId: requiredEnv("RAZORPAY_KEY_ID"),
         subscriptionId: currentSubscription.razorpay_subscription_id,
-        planName: planKey === "starter" ? "Bizlee Starter" : "Bizlee Premium",
+        planName: displayPlanName(planKey),
         customerName: profile?.full_name ?? null,
         customerEmail: profile?.email ?? authData.user.email ?? null,
         customerPhone: profile?.phone ?? authData.user.phone ?? null,
@@ -150,7 +175,7 @@ Deno.serve(async (request) => {
     return json({
       keyId: requiredEnv("RAZORPAY_KEY_ID"),
       subscriptionId: razorpaySubscription.id,
-      planName: planKey === "starter" ? "Bizlee Starter" : "Bizlee Premium",
+      planName: displayPlanName(planKey),
       customerName: profile?.full_name ?? null,
       customerEmail: profile?.email ?? authData.user.email ?? null,
       customerPhone: profile?.phone ?? authData.user.phone ?? null,
@@ -165,6 +190,10 @@ function planId(planKey: PlanKey, billingPeriod: BillingPeriod) {
   const prefix = planKey === "starter" ? "STARTER" : "PREMIUM";
   const suffix = billingPeriod === "yearly" ? "YEARLY" : "MONTHLY";
   return requiredEnv(`RAZORPAY_${prefix}_${suffix}_PLAN_ID`);
+}
+
+function displayPlanName(planKey: PlanKey) {
+  return planKey === "starter" ? "Bizlee Core" : "Bizlee Pro";
 }
 
 async function razorpayRequest(

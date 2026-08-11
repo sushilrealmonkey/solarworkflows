@@ -1,6 +1,7 @@
 import type { UserProfile } from "../../app/AuthProvider";
 import { supabase } from "../../services/supabaseClient";
 import type { Lead } from "../crm/types";
+import type { StaffOption } from "../crm/types";
 import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   SiteSurvey,
@@ -9,6 +10,8 @@ import type {
   SiteSurveyQuotationSummary,
   SiteSurveyStatus,
   SiteSurveyWithRelations,
+  FieldSurvey,
+  ScopedSurveySummary,
   SurveyCustomerSummary,
   SurveyLeadSummary,
 } from "./types";
@@ -235,6 +238,111 @@ export async function updateSiteSurveyStatus(
   }
 
   return data as SiteSurvey;
+}
+
+export async function fetchFieldSurveys() {
+  const { data, error } = await requireSupabase().rpc("get_field_site_surveys", {
+    target_survey_id: null,
+  });
+  if (error) throw new Error(error.message);
+  return addFieldSurveyFileUrls((data ?? []) as FieldSurvey[]);
+}
+
+export async function fetchFieldSurvey(id: string) {
+  const { data, error } = await requireSupabase().rpc("get_field_site_surveys", {
+    target_survey_id: id,
+  });
+  if (error) throw new Error(error.message);
+  const surveys = await addFieldSurveyFileUrls((data ?? []) as FieldSurvey[]);
+  return surveys[0] ?? null;
+}
+
+export async function fetchScopedSurveySummaries(id?: string) {
+  const { data, error } = await requireSupabase().rpc(
+    "get_scoped_site_survey_summaries",
+    { target_survey_id: id ?? null },
+  );
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ScopedSurveySummary[];
+}
+
+export async function fetchFieldStaffOptions() {
+  const { data, error } = await requireSupabase().rpc("get_field_staff_options", {
+    target_project_id: null,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: { id: string; full_name: string | null; phone: string | null }) => ({
+    id: row.id,
+    full_name: row.full_name,
+    phone: row.phone,
+    email: null,
+    status: "active",
+    organization_id: null,
+  })) as StaffOption[];
+}
+
+export async function updateFieldSurveyStatus(
+  id: string,
+  status: "in_progress" | "completed",
+) {
+  const { data, error } = await requireSupabase().rpc(
+    "update_field_site_survey_status",
+    { target_survey_id: id, new_status: status },
+  );
+  if (error) throw new Error(error.message);
+  return data as Pick<FieldSurvey, "id" | "survey_status" | "completed_at" | "updated_at">;
+}
+
+export async function updateFieldSurveyTechnical(
+  id: string,
+  patch: Partial<Pick<FieldSurvey,
+    | "roof_type" | "roof_area_sqft" | "shadow_free_area_sqft"
+    | "recommended_capacity_kw" | "sanctioned_load_kw" | "phase_type"
+    | "latitude" | "longitude" | "address_notes" | "remarks"
+  >>,
+) {
+  const { data, error } = await requireSupabase().rpc(
+    "update_field_site_survey_technical",
+    { target_survey_id: id, technical_patch: patch },
+  );
+  if (error) throw new Error(error.message);
+  return data as FieldSurvey;
+}
+
+export async function uploadFieldSurveyEvidence(
+  profile: UserProfile | null,
+  survey: FieldSurvey,
+  file: File,
+  kind: "photo" | "document",
+) {
+  const uploaded = await uploadSiteSurveyFile(
+    profile,
+    survey as unknown as SiteSurveyWithRelations,
+    file,
+    kind === "photo" ? "photos" : "documents",
+  );
+  const { error } = await requireSupabase().rpc("register_field_survey_evidence", {
+    target_survey_id: survey.id,
+    evidence_kind: kind,
+    evidence: uploaded,
+  });
+  if (error) throw new Error(error.message);
+  return uploaded;
+}
+
+async function addFieldSurveyFileUrls(surveys: FieldSurvey[]) {
+  const client = requireSupabase();
+  return Promise.all(surveys.map(async (survey) => ({
+    ...survey,
+    site_photos: await Promise.all((survey.site_photos ?? []).map(async (photo) => {
+      const filePath = photo.file_path ?? storagePathFromUrl(photo.url);
+      if (!filePath) return photo;
+      const { data } = await client.storage
+        .from(siteSurveyUploadBucket)
+        .createSignedUrl(filePath, 60 * 10);
+      return { ...photo, url: data?.signedUrl ?? photo.url };
+    })),
+  })));
 }
 
 export async function uploadSiteSurveyPhoto(

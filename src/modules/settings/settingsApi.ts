@@ -202,6 +202,16 @@ export async function updateStaff(id: string, values: StaffFormValues) {
   return data as SettingsStaff;
 }
 
+export async function deactivateStaffForSeatLimit(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("deactivate_staff_for_seat_limit", {
+    target_profile_id: id,
+  });
+
+  if (error) throw new Error(error.message);
+  return data as SettingsStaff;
+}
+
 async function getFunctionErrorMessage(error: unknown) {
   if (error instanceof FunctionsHttpError) {
     try {

@@ -30,7 +30,6 @@ import {
   requiredError,
   staffName,
 } from "../crm/crmUtils";
-import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
 import {
   recordPaletteCardClassName,
@@ -43,6 +42,7 @@ import {
 } from "../shared/quotationWorkflow";
 import {
   createSiteSurvey,
+  fetchFieldStaffOptions,
   fetchSiteSurveys,
   fetchSurveyLead,
   fetchSurveyLeadOptions,
@@ -154,7 +154,7 @@ export function SiteSurveysPage() {
         await Promise.all([
           fetchSiteSurveys(profile, archiveScope),
           fetchSurveyLeadOptions(profile),
-          fetchStaffOptions(profile),
+          fetchFieldStaffOptions(),
         ]);
       setSurveys(nextSurveys);
       setLeads(nextLeads);

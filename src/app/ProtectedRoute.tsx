@@ -1,8 +1,9 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
+import { moduleKeyForPath } from "./routes";
 
 export function ProtectedRoute() {
-  const { status, errorMessage } = useAuth();
+  const { status, errorMessage, permissions, profile } = useAuth();
   const location = useLocation();
 
   if (status === "loading") {
@@ -39,6 +40,25 @@ export function ProtectedRoute() {
         eyebrow="Unable to load access"
         title="Something blocked the workspace"
         description={errorMessage ?? "Please try again after a moment."}
+      />
+    );
+  }
+
+  const moduleKey = moduleKeyForPath(location.pathname);
+  const canViewModule =
+    !moduleKey ||
+    Boolean(profile?.is_super_admin) ||
+    permissions.some(
+      (permission) =>
+        permission.moduleKey === moduleKey && permission.actionKey === "view",
+    );
+
+  if (!canViewModule) {
+    return (
+      <AccessStateScreen
+        eyebrow="Access denied"
+        title="This module is not available"
+        description="Your role, record scope, or subscription does not allow this route."
       />
     );
   }

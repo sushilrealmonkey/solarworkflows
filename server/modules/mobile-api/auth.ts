@@ -12,7 +12,8 @@ export async function requireAuthenticatedClient(request: Request) {
   const admin = getServerSupabaseClient();
   const { data: authData, error: authError } = await admin.auth.getUser(token);
   if (authError || !authData.user) throw new MobileApiError(401, "INVALID_SESSION", "The session is invalid or expired");
-  const url = process.env.SUPABASE_URL; const key = process.env.SUPABASE_ANON_KEY;
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY;
   if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY must be configured");
   const client = createClient(url, key, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
   return { token, user: authData.user, client };

@@ -19,11 +19,15 @@ tenant-isolated platform.
 ## Experience Goals
 
 - Mobile-first workflows for field, sales, finance, inventory, and admin users.
+- A focused native mobile workspace for field and day-to-day staff activity,
+  backed by the same tenant and permission boundaries as the web application.
 - Clear module navigation with consistent list, detail, create, and edit
   patterns.
 - Reliable document and PDF handling for quotations, invoices, customer files,
   and operational records.
 - Audit-friendly records that can explain who changed what and when.
+- Timely, consent-aware in-app, push, and WhatsApp notifications without leaking
+  customer or tenant data.
 - A developer experience where each module is easy to locate, test, and extend.
 
 ## Long-Term Direction

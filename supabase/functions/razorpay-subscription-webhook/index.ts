@@ -332,7 +332,12 @@ async function renderSubscriptionInvoice(invoice: Record<string, unknown>) {
   text("TAXABLE VALUE", 340, 555, 9, bold);
   text("GST", 470, 555, 9, bold);
   page.drawRectangle({ x: 42, y: 515, width: 511, height: 30, color: rgb(0.96, 0.97, 0.98) });
-  text(`Bizlee ${String(invoice.plan_key)} - ${String(invoice.billing_period)}`, 50, 526, 10);
+  text(
+    `${invoice.plan_key === "starter" ? "Bizlee Core" : "Bizlee Pro"} - ${String(invoice.billing_period)}`,
+    50,
+    526,
+    10,
+  );
   text(money(invoice.taxable_amount_paise), 340, 526, 10);
   text("18%", 470, 526, 10);
   text("Taxable amount", 340, 470, 10);

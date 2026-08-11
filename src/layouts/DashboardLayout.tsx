@@ -40,21 +40,22 @@ export function DashboardLayout() {
     );
 
     return navigationItems.reduce<NavigationItem[]>((items, item) => {
-        if (
-          item.path === "/today" &&
-          !subscription?.enabled_modules.includes("assistant")
-        ) {
-          return items;
-        }
         if (item.superAdminOnly) {
           return items;
         }
 
-        const children = item.children?.filter(
-          (child) =>
-            !child.superAdminOnly &&
-            Boolean(child.moduleKey && viewableModules.has(child.moduleKey)),
-        );
+        const children = item.children
+          ?.filter(
+            (child) =>
+              !child.superAdminOnly &&
+              Boolean(child.moduleKey && viewableModules.has(child.moduleKey)),
+          )
+          .map((child) => ({
+            ...child,
+            planAccess:
+              subscription?.module_access?.[child.planModuleKey ?? child.moduleKey ?? ""] ??
+              "full",
+          }));
 
         if (item.children && (!children || children.length === 0)) {
           return items;
@@ -69,12 +70,15 @@ export function DashboardLayout() {
 
         items.push({
           ...item,
+          planAccess:
+            subscription?.module_access?.[item.planModuleKey ?? item.moduleKey ?? ""] ??
+            "full",
           children,
         });
 
         return items;
       }, []);
-  }, [permissions, profile?.is_super_admin, profile?.platform_role, subscription?.enabled_modules]);
+  }, [permissions, profile?.is_super_admin, profile?.platform_role, subscription?.module_access]);
 
   if (profile?.is_super_admin && !isPlatformPath(location.pathname)) {
     return <Navigate to="/dashboard" replace />;
@@ -390,6 +394,7 @@ function SidebarNavigation({
                         }
                       >
                         <span className="truncate">{child.label}</span>
+                        <PlanBadge access={child.planAccess} />
                       </NavLink>
                     ))}
                   </div>
@@ -416,6 +421,7 @@ function SidebarNavigation({
               <span className={collapsed ? "sr-only" : "ml-3 truncate"}>
                 {item.label}
               </span>
+              {!collapsed ? <PlanBadge access={item.planAccess} /> : null}
             </NavLink>
           );
         })
@@ -425,6 +431,16 @@ function SidebarNavigation({
         </div>
       )}
     </nav>
+  );
+}
+
+function PlanBadge({ access }: { access?: NavigationItem["planAccess"] }) {
+  if (!access || access === "full") return null;
+
+  return (
+    <span className="ml-auto rounded-full border border-orange-300/40 bg-orange-300/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-100">
+      {access === "locked" ? "Pro" : "Read only"}
+    </span>
   );
 }
 

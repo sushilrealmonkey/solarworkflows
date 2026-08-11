@@ -9,7 +9,11 @@
 - React Router
 - Supabase JavaScript client
 - Supabase database, authentication, storage, migrations, and RLS
+- Expo 57, React Native, and Expo Router for the native mobile client
+- Node.js 22 for production SPA hosting and backend-only HTTP routes
+- npm workspaces for `apps/*` and `packages/*`
 - jsPDF for generated document/PDF workflows
+- OpenAI Chat Completions, Razorpay Subscriptions, and Meta WhatsApp integrations
 
 ## Runtime Configuration
 
@@ -23,9 +27,17 @@ VITE_SUPABASE_ANON_KEY=
 
 Never expose service-role keys or private secrets in frontend code.
 
+The Expo client reads `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`,
+`EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_EAS_PROJECT_ID`. These are
+public bundle values; Razorpay secrets, Meta credentials, worker secrets, OpenAI
+keys, and the Supabase service role remain server-side.
+
 ## Frontend Structure
 
 ```text
+apps/mobile/       Expo Router application
+packages/          Shared mobile/API contracts and domain helpers
+server/            Node server, mobile REST API, and WhatsApp handlers
 src/
   app/          App wiring, routes, navigation, auth provider, route guards
   components/   Shared UI and layout-level components
@@ -46,7 +58,7 @@ Quotation, Customer, and Project detail pages.
 
 Routes are declared in `src/app/routes.ts`. Navigation is derived from those
 route definitions in `src/app/navigation.ts`, including grouped product/material
-routes and super-admin-only entries.
+routes, BOM templates, super-admin-only entries, and subscription plan metadata.
 
 Route definitions should include:
 
@@ -70,6 +82,16 @@ Generated PDFs are tracked through document metadata and Supabase storage.
 Quotation PDFs use the `quotation_pdf` document type; proforma, invoice, and
 purchase order PDF workflows use their own document types and the same storage
 boundary.
+
+The Node server exposes `/api/mobile/v1`, authenticated super-admin WhatsApp
+endpoints, and the signed Meta webhook while preserving Vite SPA fallbacks. The
+mobile API passes the caller's Supabase JWT through for tenant business reads and
+writes, so RLS remains authoritative.
+
+Subscription authorization intersects role permissions with module/capability
+access levels (`full`, `read_only`, `locked`). UI guards and badges explain the
+result; database functions, triggers, Edge Functions, and Storage policies
+enforce writes, seats, Pro-only capabilities, and AI access.
 
 ## Security
 

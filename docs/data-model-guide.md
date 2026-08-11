@@ -25,6 +25,7 @@ specific compatibility exception.
 | --- | --- |
 | Platform and tenant foundation | `platform_admins`, `companies`, `organizations`, settings, domains, profiles, users profile |
 | Access control | `modules`, `permissions`, `roles`, `role_permissions`, `user_roles` |
+| SaaS subscriptions | `subscription_plans`, `subscription_plan_entitlements`, `subscription_plan_capabilities`, `company_subscriptions`, webhook/notification state, `subscription_invoices` |
 | CRM | `customers`, `leads`, `lead_followups` |
 | Field operations | `site_surveys`, `projects` |
 | B2B sales | `b2b_sales`, `b2b_sale_items` |
@@ -33,8 +34,21 @@ specific compatibility exception.
 | Inventory and procurement | `inventory_items`, `inventory_transactions`, `inventory_reservations`, `inventory_batches`, vendors, purchase orders, purchase order items |
 | Finance | `payments`, `project_payment_summary`, proforma invoices, invoices, invoice items |
 | Documents and storage metadata | `documents`, generated PDF support for quotations, proforma invoices, invoices, and purchase orders, organization document storage |
-| Reporting and system support | dashboard/report foundations, activity logs, notifications, system settings |
+| Reporting and system support | dashboard/report foundations, activity logs, in-app notification receipts, tenant notification events/deliveries/preferences/opt-outs, system settings |
 | Catalog library | Shared admin-managed catalog defaults for categories, product types, and brands |
+| Native mobile | `mobile_devices`, `mobile_push_deliveries` |
+| WhatsApp | tenant phone numbers, conversations/messages, outreach contacts/templates/campaigns, reply-alert queue state |
+
+Subscription plans store explicit monthly and yearly prices plus an optional seat
+limit. Module entitlements and cross-module capabilities carry `full`,
+`read_only`, or `locked` access. Effective access is resolved server-side from
+the company subscription; Core seat occupancy counts active and invited user
+profiles.
+
+Tenant notification and native mobile rows use `company_id`. Composite foreign
+keys keep notification events, recipients, receipts, devices, and deliveries
+inside the same company. Mobile push deliveries are derived from in-app receipts
+and active device registrations.
 
 Proforma invoices are separate pre-payment finance records. They use
 `proforma_invoices` and `proforma_invoice_items`, carry both `company_id` and
@@ -129,6 +143,8 @@ requires both `documents:create` and purchase pricing visibility.
 - Enable RLS on tenant-accessible tables.
 - Policies must compare the row's tenant owner to the current user's tenant.
 - Permission checks should use approved helper functions and module/action keys.
+- Effective writes must satisfy both RBAC and subscription module/capability
+  access. Plan-specific rules must be enforced in database code, not only UI.
 - DELETE policies must require delete permission.
 - Views, RPCs, and storage policies require the same tenant isolation review as
   tables.

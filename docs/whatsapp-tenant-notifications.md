@@ -18,6 +18,7 @@ Implemented notification types:
 - Requested daily AI workspace summary
 - New sign-in and account-change notices
 - Product tips, plan offers, and product announcements
+- Customer reply alerts to eligible tenant administrators
 - Signup OTP remains handled by the existing Supabase Auth Send SMS Hook
 
 ## Delivery Flow
@@ -31,6 +32,17 @@ Implemented notification types:
    callbacks to `notification_deliveries`.
 6. Retryable provider failures use bounded exponential backoff. Permanent
    failures are cancelled after at most five attempts.
+
+Customer replies are persisted by the signed webhook and queued separately from
+ordinary tenant lifecycle events. The notification worker claims reply alerts,
+sends the approved `bizlee_customer_reply_alert` template with a bounded preview,
+and records delivery updates idempotently. Administrators can open the WhatsApp
+workspace to review the full tenant-scoped conversation; notification text must
+not become a substitute for authorization-scoped message access.
+
+Tenant workflow events also publish user-scoped in-app notification receipts.
+Active native device registrations can turn those receipts into optional Expo
+push deliveries through `process-mobile-push`.
 
 `NOTIFICATION_TEST_MODE` defaults to enabled. In test mode the database settles
 any recipient outside `NOTIFICATION_TEST_RECIPIENTS` as skipped before a Meta
@@ -75,6 +87,7 @@ NOTIFICATION_WORKER_SECRET=
 NOTIFICATION_TEST_MODE=true
 NOTIFICATION_TEST_RECIPIENTS=
 DAILY_SUMMARY_WORKER_SECRET=
+MOBILE_PUSH_WORKER_SECRET=
 OPENAI_API_KEY=
 ASSISTANT_MODEL=
 ```
@@ -85,6 +98,8 @@ ASSISTANT_MODEL=
 notification_worker_project_url
 notification_worker_secret
 daily_summary_worker_secret
+mobile_push_worker_project_url
+mobile_push_worker_secret
 ```
 
 The migration schedules no jobs when these entries are absent. The Vault

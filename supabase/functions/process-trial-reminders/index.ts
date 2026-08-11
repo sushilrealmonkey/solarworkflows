@@ -163,7 +163,7 @@ async function sendReminderEmail(input: {
       html: `<p>Hi ${escapeHtml(input.name)},</p><p>${escapeHtml(input.company)} ${
         expired
           ? "is now in read-only mode."
-          : `has ${input.days} day${input.days === 1 ? "" : "s"} remaining in its Premium trial.`
+          : `has ${input.days} day${input.days === 1 ? "" : "s"} remaining in its full-feature trial.`
       }</p><p><a href="${requiredEnv("APP_BASE_URL")}/billing/plans">Choose a Bizlee plan</a> to continue using the workspace.</p>`,
     }),
     signal: AbortSignal.timeout(8_000),

@@ -80,7 +80,7 @@ type StatusAction = "sent" | "cancelled";
 
 export function InvoiceDetailPage() {
   const { id } = useParams();
-  const { profile, permissions, organization } = useAuth();
+  const { profile, permissions, organization, subscription } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [invoice, setInvoice] = useState<InvoiceWithRelations | null>(null);
@@ -129,7 +129,8 @@ export function InvoiceDetailPage() {
     "payments",
     "create",
   );
-  const canCreateDocuments = hasPermission(
+  const canCreateDocuments =
+    subscription?.capability_access?.["documents.pro_sources"] === "full" && hasPermission(
     profile,
     permissions,
     "documents",

@@ -74,7 +74,7 @@ export function BillingInvoicesSection() {
               <div>
                 <p className="font-semibold text-slate-950">{invoice.invoice_number}</p>
                 <p className="mt-1 text-sm text-slate-600">
-                  {label(invoice.plan_key)} · {label(invoice.billing_period)} ·{" "}
+                  {invoice.plan_key === "starter" ? "Core" : "Pro"} · {label(invoice.billing_period)} ·{" "}
                   {new Intl.DateTimeFormat("en-IN", { dateStyle: "medium" })
                     .format(new Date(invoice.paid_at))}
                 </p>

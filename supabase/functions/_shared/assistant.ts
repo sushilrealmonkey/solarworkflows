@@ -120,6 +120,18 @@ export async function resolveCallerProfile(
   return { profile: data as AssistantProfile, error: null };
 }
 
+export async function requireAssistantAccess(
+  client: SupabaseClient,
+): Promise<string | null> {
+  const { data, error } = await client.rpc("subscription_can_write_module", {
+    requested_module: "assistant",
+  });
+
+  if (error) return error.message;
+  if (data !== true) return "Bizlee AI requires an active Bizlee Pro plan";
+  return null;
+}
+
 // Accepts the user's local calendar date from the client so "today" follows
 // the user's timezone, with a UTC fallback when it is missing or malformed.
 export function resolveLocalDate(value: unknown): string {

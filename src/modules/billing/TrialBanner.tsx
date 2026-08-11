@@ -28,7 +28,7 @@ export function TrialBanner() {
           <p className="text-sm font-semibold">
             {subscription.days_remaining}{" "}
             {subscription.days_remaining === 1 ? "day" : "days"} left in your
-            Premium trial
+            Full-feature trial
           </p>
           <p className="mt-1 text-xs opacity-75">
             {expiry

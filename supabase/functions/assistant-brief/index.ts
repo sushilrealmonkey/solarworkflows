@@ -1,6 +1,7 @@
 import {
   createCallerClient,
   jsonResponse,
+  requireAssistantAccess,
   requireEnv,
   resolveCallerProfile,
   resolveCorsOrigin,
@@ -127,6 +128,11 @@ async function handleBriefRequest(request: Request): Promise<Response> {
         { error: "The assistant is available to tenant workspace users only" },
         403,
       );
+    }
+
+    const assistantAccessError = await requireAssistantAccess(callerClient);
+    if (assistantAccessError) {
+      return jsonResponse({ error: assistantAccessError }, 403);
     }
 
     const body = (await request.json().catch(() => ({}))) as BriefRequestBody;

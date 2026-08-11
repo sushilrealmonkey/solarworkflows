@@ -90,7 +90,7 @@ type PurchaseVendorOption = Pick<
 >;
 
 export function PurchasesPage() {
-  const { profile, permissions, roleNames, organization } = useAuth();
+  const { profile, permissions, roleNames, organization, subscription } = useAuth();
   const { showToast } = useToast();
   const [orders, setOrders] = useState<PurchaseOrderWithRelations[]>([]);
   const [purchasePdfUrls, setPurchasePdfUrls] = useState<Record<string, string>>({});
@@ -152,7 +152,8 @@ export function PurchasesPage() {
   const canReceive =
     hasPermission(profile, permissions, "inventory", "create") &&
     hasPermission(profile, permissions, "inventory", "update");
-  const canCreateDocuments = hasPermission(
+  const canCreateDocuments =
+    subscription?.capability_access?.["documents.pro_sources"] === "full" && hasPermission(
     profile,
     permissions,
     "documents",

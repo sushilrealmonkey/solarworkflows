@@ -1,3 +1,4 @@
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../../services/supabaseClient";
 import type {
   BillingPeriod,
@@ -20,14 +21,28 @@ export async function fetchSubscriptionAccess() {
     "get_current_subscription_access",
   );
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(await getFunctionErrorMessage(error));
   return data as SubscriptionAccess;
+}
+
+async function getFunctionErrorMessage(error: unknown) {
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = (await error.context.json()) as { error?: unknown };
+      if (typeof body.error === "string" && body.error.trim()) return body.error;
+    } catch {
+      // Fall through to the client error below.
+    }
+  }
+  return error instanceof Error ? error.message : "Action failed.";
 }
 
 export async function fetchBillingPlans() {
   const { data, error } = await requireClient()
     .from("subscription_plans")
-    .select("plan_key, display_name, price_paise, currency, billing_period")
+    .select(
+      "plan_key, display_name, price_paise, yearly_price_paise, currency, billing_period",
+    )
     .eq("is_active", true)
     .order("price_paise");
 
@@ -44,7 +59,7 @@ export async function createRazorpayCheckout(
     { body: { planKey, billingPeriod } },
   );
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(await getFunctionErrorMessage(error));
   if ((!data?.subscriptionId && !data?.upgradeCompleted) || !data?.keyId) {
     throw new Error("The payment session could not be created.");
   }

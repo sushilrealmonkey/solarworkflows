@@ -38,7 +38,7 @@ import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 
 export function PaymentDetailPage() {
   const { id } = useParams();
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, subscription } = useAuth();
   const { showToast } = useToast();
   const [payment, setPayment] = useState<PaymentWithRelations | null>(null);
   const [projects, setProjects] = useState<PaymentProjectOption[]>([]);
@@ -51,7 +51,15 @@ export function PaymentDetailPage() {
   const [cancelReason, setCancelReason] = useState<string | null>(null);
 
   const canView = hasPermission(profile, permissions, "payments", "view");
-  const canUpdate = hasPermission(profile, permissions, "payments", "update");
+  const commercialPayment = Boolean(
+    payment?.invoice_id || payment?.proforma_invoice_id || payment?.b2b_sale_id,
+  );
+  const commercialWriteAllowed =
+    !commercialPayment ||
+    !subscription ||
+    subscription.capability_access?.["payments.commercial"] === "full";
+  const canUpdate =
+    commercialWriteAllowed && hasPermission(profile, permissions, "payments", "update");
 
   async function loadPayment() {
     if (!canView || !id) {

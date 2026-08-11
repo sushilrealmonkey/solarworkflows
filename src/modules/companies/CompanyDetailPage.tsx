@@ -39,6 +39,7 @@ import {
 import type {
   PlatformCompany,
   PlatformCompanyActionResult,
+  PlatformTenantUser,
   UpdatePlatformCompanyFormValues,
 } from "./types";
 
@@ -385,6 +386,8 @@ export function CompanyDetailPage() {
         <DetailItem label="Invite Events" value={formatDateTime(company.admin?.invited_at ?? null)} />
       </DetailSection>
 
+      <TenantUsersSection users={company.tenant_users ?? []} />
+
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <DetailSection title="Activity Snapshot">
           <Metric label="Customers" value={summary?.total_customers ?? 0} />
@@ -589,6 +592,118 @@ function StatusBadge({ value }: { value: string | null | undefined }) {
   const tone = value === "active" ? "green" : value === "inactive" ? "red" : "amber";
 
   return <Badge tone={tone}>{labelize(value)}</Badge>;
+}
+
+function TenantUsersSection({ users }: { users: PlatformTenantUser[] }) {
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-slate-950">Tenant Users</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            All user profiles linked to this workspace, including their roles and
+            signup status.
+          </p>
+        </div>
+        <Badge tone="blue">
+          {users.length} {users.length === 1 ? "user" : "users"}
+        </Badge>
+      </div>
+
+      {users.length === 0 ? (
+        <p className="mt-4 rounded-lg border border-dashed border-stone-200 bg-stone-50 p-4 text-sm text-slate-600">
+          No tenant users are linked to this workspace.
+        </p>
+      ) : (
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {users.map((user) => (
+            <TenantUserCard key={user.id} user={user} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TenantUserCard({ user }: { user: PlatformTenantUser }) {
+  return (
+    <article className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="break-words font-semibold text-slate-950">
+            {user.full_name?.trim() || "Unnamed user"}
+          </p>
+          <div className="mt-1 space-y-1 text-sm text-slate-600">
+            <UserContactLink
+              href={user.email ? `mailto:${user.email}` : null}
+              value={user.email}
+              fallback="No email"
+            />
+            <UserContactLink
+              href={user.phone ? `tel:${user.phone}` : null}
+              value={user.phone}
+              fallback="No phone"
+            />
+          </div>
+        </div>
+        <StatusBadge value={user.status} />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {user.roles.length > 0 ? (
+          user.roles.map((role) => (
+            <Badge key={role.id} tone="blue">
+              {role.role_name ?? labelize(role.role_key)}
+            </Badge>
+          ))
+        ) : (
+          <Badge tone="amber">No role assigned</Badge>
+        )}
+        <Badge tone={user.auth_user_id ? "green" : "amber"}>
+          {user.auth_user_id ? "Auth linked" : "Auth not linked"}
+        </Badge>
+      </div>
+
+      <dl className="mt-4 grid gap-3 border-t border-stone-200 pt-4 sm:grid-cols-3">
+        <UserTimelineItem label="Invited" value={user.invited_at} />
+        <UserTimelineItem label="Onboarded" value={user.onboarded_at} />
+        <UserTimelineItem label="Last login" value={user.last_login_at} />
+      </dl>
+    </article>
+  );
+}
+
+function UserContactLink({
+  fallback,
+  href,
+  value,
+}: {
+  fallback: string;
+  href: string | null;
+  value: string | null;
+}) {
+  if (!href || !value) {
+    return <p className="break-all text-slate-500">{fallback}</p>;
+  }
+
+  return (
+    <p className="break-all">
+      <a className="font-medium text-[#06173f] hover:underline" href={href}>
+        {value}
+      </a>
+    </p>
+  );
+}
+
+function UserTimelineItem({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm text-slate-800">{formatDateTime(value)}</dd>
+    </div>
+  );
 }
 
 function hasSetupLink(

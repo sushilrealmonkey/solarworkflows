@@ -109,6 +109,47 @@ export type SiteSurveyWithRelations = SiteSurvey & {
   project_id?: string | null;
 };
 
+export type FieldSurvey = {
+  id: string;
+  company_id: string;
+  organization_id: string;
+  survey_code: string | null;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  survey_status: SiteSurveyStatus;
+  completed_at: string | null;
+  assigned_to: string;
+  contact_name: string | null;
+  contact_phone: string | null;
+  site_address: string | null;
+  roof_type: string | null;
+  roof_area_sqft: number | null;
+  shadow_free_area_sqft: number | null;
+  recommended_capacity_kw: number | null;
+  sanctioned_load_kw: number | null;
+  phase_type: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  address_notes: string | null;
+  remarks: string | null;
+  site_photos: SiteSurveyFile[];
+  electricity_bill_url: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ScopedSurveySummary = {
+  id: string;
+  organization_id: string;
+  survey_code: string | null;
+  scheduled_date: string | null;
+  scheduled_time: string | null;
+  survey_status: SiteSurveyStatus;
+  completed_at: string | null;
+  contact_name: string | null;
+  updated_at: string | null;
+};
+
 export type SiteSurveyFormValues = {
   lead_id: string;
   customer_id: string;

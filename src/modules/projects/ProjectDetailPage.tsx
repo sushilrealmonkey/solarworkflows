@@ -121,6 +121,7 @@ import { fetchInvoicePdfPreviewUrl } from "../invoices/invoicePdfWorkflow";
 import { isActiveInvoice } from "../invoices/invoiceUtils";
 import type { InvoiceWithRelations } from "../invoices/types";
 import { formatMoney } from "../quotations/quotationUtils";
+import { ProjectFieldAssignments } from "./ProjectFieldAssignments";
 
 type MaterialIssueFormValues = {
   item_id: string;
@@ -181,6 +182,7 @@ export function ProjectDetailPage() {
 
   const canView = hasPermission(profile, permissions, "projects", "view");
   const canUpdate = hasPermission(profile, permissions, "projects", "update");
+  const canAssign = hasPermission(profile, permissions, "projects", "assign");
   const canDelete = hasPermission(profile, permissions, "projects", "delete");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canViewInvoices = hasPermission(profile, permissions, "invoices", "view");
@@ -644,6 +646,10 @@ export function ProjectDetailPage() {
               </div>
             </header>
           </div>
+
+          {canAssign && !project.archived_at ? (
+            <ProjectFieldAssignments projectId={project.id} />
+          ) : null}
 
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
             <div className="space-y-6">

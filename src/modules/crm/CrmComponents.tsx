@@ -68,6 +68,7 @@ export function TextInput({
   error,
   type = "text",
   required = false,
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -75,6 +76,7 @@ export function TextInput({
   error?: string;
   type?: string;
   required?: boolean;
+  disabled?: boolean;
 }) {
   function openTimePicker(input: HTMLInputElement) {
     if (type !== "time") {
@@ -99,6 +101,7 @@ export function TextInput({
           error ? "border-rose-300" : "border-stone-200"
         }`}
         type={type}
+        disabled={disabled}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onClick={(event) => openTimePicker(event.currentTarget)}
@@ -143,11 +146,13 @@ export function TextArea({
   value,
   onChange,
   className = "block md:col-span-2",
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className={className}>
@@ -155,6 +160,7 @@ export function TextArea({
       <textarea
         className="mt-1 min-h-28 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       />
     </label>

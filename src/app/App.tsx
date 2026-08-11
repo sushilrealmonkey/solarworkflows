@@ -14,23 +14,21 @@ import { SignupPage } from "../modules/auth/SignupPage";
 import { AuthCallbackPage } from "../modules/auth/AuthCallbackPage";
 import { WorkspaceOnboardingPage } from "../modules/auth/WorkspaceOnboardingPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
-import { DashboardPage } from "../modules/dashboard/DashboardPage";
 import { TodayPage } from "../modules/assistant/TodayPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
 import { CustomerDetailPage } from "../modules/crm/CustomerDetailPage";
 import { LeadsPage } from "../modules/crm/LeadsPage";
 import { LeadDetailPage } from "../modules/crm/LeadDetailPage";
-import { SiteSurveysPage } from "../modules/site-surveys/SiteSurveysPage";
-import { SiteSurveyDetailPage } from "../modules/site-surveys/SiteSurveyDetailPage";
 import { QuotationsPage } from "../modules/quotations/QuotationsPage";
 import { QuotationDetailPage } from "../modules/quotations/QuotationDetailPage";
 import { NewQuotationPage } from "../modules/quotations/NewQuotationPage";
-import { ProjectsPage } from "../modules/projects/ProjectsPage";
-import { ProjectDetailPage } from "../modules/projects/ProjectDetailPage";
+import { RoleScopedDashboardPage, RoleScopedProjectsPage, RoleScopedSurveysPage } from "./RoleScopedModulePages";
 import { PaymentsPage } from "../modules/payments/PaymentsPage";
 import { PaymentDetailPage } from "../modules/payments/PaymentDetailPage";
 import { B2BSalesPage } from "../modules/b2b-sales/B2BSalesPage";
 import { B2BSaleDetailPage } from "../modules/b2b-sales/B2BSaleDetailPage";
+import { BomTemplatesPage } from "../modules/bom-templates/BomTemplatesPage";
+import { BomTemplateDetailPage } from "../modules/bom-templates/BomTemplateDetailPage";
 import { CategoryMasterPage } from "../modules/product-master/CategoryMasterPage";
 import { ProductMasterPage } from "../modules/product-master/ProductMasterPage";
 import { ProductDetailPage } from "../modules/product-master/ProductDetailPage";
@@ -82,7 +80,7 @@ export default function App() {
             path="/whatsapp-messaging"
             element={<WhatsAppMessagingPage />}
           />
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/dashboard" element={<RoleScopedDashboardPage />} />
           <Route
             path="/today"
             element={
@@ -101,19 +99,19 @@ export default function App() {
           />
           <Route
             path="/customers/b2b-direct"
-            element={<CustomersPage segment="b2b_direct" />}
+            element={<SubscriptionRoute moduleKey="b2b_sales"><CustomersPage segment="b2b_direct" /></SubscriptionRoute>}
           />
           <Route path="/customers/:id" element={<CustomerDetailPage />} />
           <Route path="/leads" element={<LeadsPage />} />
           <Route path="/leads/:id" element={<LeadDetailPage />} />
-          <Route path="/site-surveys" element={<SiteSurveysPage />} />
-          <Route path="/site-surveys/:id" element={<SiteSurveyDetailPage />} />
+          <Route path="/site-surveys" element={<RoleScopedSurveysPage />} />
+          <Route path="/site-surveys/:id" element={<RoleScopedSurveysPage detail />} />
           <Route path="/quotations" element={<QuotationsPage />} />
           <Route path="/quotations/new" element={<NewQuotationPage />} />
           <Route path="/quotations/:id/edit" element={<NewQuotationPage />} />
           <Route path="/quotations/:id" element={<QuotationDetailPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/projects/:id" element={<ProjectDetailPage />} />
+          <Route path="/projects" element={<RoleScopedProjectsPage />} />
+          <Route path="/projects/:id" element={<RoleScopedProjectsPage detail />} />
           <Route path="/payments" element={<SubscriptionRoute moduleKey="payments"><PaymentsPage /></SubscriptionRoute>} />
           <Route path="/payments/:id" element={<SubscriptionRoute moduleKey="payments"><PaymentDetailPage /></SubscriptionRoute>} />
           <Route path="/b2b-sales" element={<SubscriptionRoute moduleKey="b2b_sales"><B2BSalesPage /></SubscriptionRoute>} />
@@ -147,6 +145,8 @@ export default function App() {
             element={<SubscriptionRoute moduleKey="product_master"><ProductDetailPage /></SubscriptionRoute>}
           />
           <Route path="/products-materials/:id" element={<SubscriptionRoute moduleKey="product_master"><ProductDetailPage /></SubscriptionRoute>} />
+          <Route path="/setup/bom-templates" element={<SubscriptionRoute moduleKey="product_master"><BomTemplatesPage /></SubscriptionRoute>} />
+          <Route path="/setup/bom-templates/:id" element={<SubscriptionRoute moduleKey="product_master"><BomTemplateDetailPage /></SubscriptionRoute>} />
           <Route path="/inventory" element={<SubscriptionRoute moduleKey="inventory"><InventoryPage /></SubscriptionRoute>} />
           <Route
             path="/inventory/opening-stock"

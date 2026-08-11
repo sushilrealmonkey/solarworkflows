@@ -76,3 +76,57 @@ dummy workflow data for default testing.
 | Quotation PDF storage | Open a quotation detail page with `documents:create` access and no existing stored PDF. | A quotation PDF is generated, stored as a `quotation_pdf` document, and exposed as a download/preview action. |
 | Quotation PDF reuse | Reopen the same quotation detail page after a PDF exists. | The stored PDF preview URL is reused rather than creating a duplicate document. |
 | Quotation discount totals | Enter a turnkey discount on a quotation. | Taxable amount, GST, total, detail view, and PDF summary use the discounted turnkey calculation consistently. |
+
+## Subscription And Plan Validation
+
+| Scenario | Action | Expected result |
+| --- | --- | --- |
+| Trial access | Use a tenant with an unexpired trial. | All configured modules and Bizlee AI are available, subject to role permissions. |
+| Core catalogue | Open Billing & Plans. | Core shows ₹999 monthly, ₹10,989 yearly, and three total seats; Pro shows ₹1,499 monthly, ₹16,489 yearly, and unlimited seats. |
+| Core full modules | As a Core user, create/update a project-based customer, enquiry, survey, BOM template, quotation, project, or project payment. | The action succeeds only when the user's role also grants it. |
+| Core read-only history | Open B2B sales, inventory, vendors, purchases, proformas, or invoices. | A read-only upgrade dialog appears; choosing history shows records with write, delete, export, PDF, dispatch, and receive actions disabled. |
+| Core capability guard | Attempt a direct API/database write for a B2B customer, commercial payment, commercial document, or inventory operation. | Database enforcement rejects the write even if the UI is bypassed. |
+| Core quotation acceptance | Accept a quotation on Core. | The quotation and project progress, but no Pro-only inventory reservation is created. |
+| Pro access | Repeat the commercial flows on Pro with suitable RBAC. | Full module and capability actions succeed. |
+| AI plan guard | Call both assistant Edge Functions on Core and Pro. | Core receives `403`; Pro succeeds when tenant/profile permissions are valid. |
+| Core seat limit | Reach three active/invited profiles, then invite or reactivate another. | The database rejects the fourth occupied seat. Deactivating another user frees a seat and revokes that user's sessions. |
+| Core checkout guard | Try selecting Core while more than three seats are occupied. | Checkout/activation is blocked until seats are reduced. |
+| Expired subscription | Expire a test subscription. | Known modules remain read-only, writes fail server-side, and AI stays locked. |
+| Storage bypass | Request a Pro-source invoice/proforma/PO object directly as Core. | Storage policy denies the download. |
+
+## Mobile Application Validation
+
+| Scenario | Action | Expected result |
+| --- | --- | --- |
+| Auth and enrollment | Sign in with an existing tenant user and with a verified unassigned user. | Tenant users enter the app; unassigned users can create one workspace through enrollment. |
+| Session context | Load the app as users with different roles/plans. | Branding, tenant, roles, action permissions, module/capability access, and seat usage match the web session. |
+| Resource reads | Search and open each supported resource. | Lists are tenant/permission scoped and detail routes return only accessible records. |
+| Mobile creates | Create a project-based customer and an enquiry. | Valid input creates a tenant-owned row; missing permission, duplicates, and invalid fields return stable request-ID errors. |
+| Unsupported create | POST to another resource. | API returns a method/permission error and creates nothing. |
+| Notifications | Open notifications and mark one/all read. | Receipt state and unread count update only for the current user. |
+| Push registration | Register and revoke a real device, then publish an in-app notification. | An active device queues push delivery; a revoked device does not. |
+| Deep links | Open a configured production `/mobile` link. | The correct installed environment opens without crossing dev/staging/production package IDs. |
+
+## Notifications And Integration Validation
+
+| Scenario | Action | Expected result |
+| --- | --- | --- |
+| WhatsApp reply alert | Receive a customer reply mapped to a tenant conversation. | The reply is persisted once and eligible tenant administrators receive the configured reply alert; webhook retries do not duplicate it. |
+| Notification privacy | Generate a requested daily summary. | Only bounded aggregate counts reach OpenAI/WhatsApp; customer names, phone numbers, raw notes, and amounts are absent. |
+| Subsidy pricing | Create or recalculate quotation/project payment records with subsidy. | Subsidy remains informational and pricing totals stay consistent across quotation, project, and payment views. |
+# Record-scoped role acceptance
+
+- Test all five standard roles in two companies and on Core and Pro.
+- Verify Sales ownership loss immediately after reassignment.
+- Verify Backend has operational queues but cannot mutate finance.
+- Verify Accounts can manage finance but cannot mutate operations or stock.
+- Verify Field Staff sees only assigned surveys and assigned/released projects.
+- Verify only the two allowed forward transitions appear and succeed.
+- Attempt protected-column updates through REST; all must fail.
+- Verify another assignee's survey evidence cannot be read, changed, or deleted.
+- Verify Field project details generate no finance, invoice, document, inventory,
+  quotation, export, archive, restore, or delete requests.
+- Verify inactive profiles, removed assignments, archived rows, simultaneous
+  transitions, and cross-company assignment attempts.
+- Run `record_scoped_roles_test.sql`, Supabase Security Advisor, Performance
+  Advisor, and representative `EXPLAIN (ANALYZE, BUFFERS)` checks before release.

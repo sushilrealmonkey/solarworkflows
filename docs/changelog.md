@@ -3,6 +3,90 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-08-11 (current worktree)
+
+- Replaced Starter/Premium presentation with Bizlee Core (₹999 monthly / ₹10,989
+  yearly, three occupied seats) and Bizlee Pro (₹1,499 monthly / ₹16,489 yearly,
+  unlimited seats), using explicit yearly catalogue prices.
+- Added `full`, `read_only`, and `locked` module/capability entitlements,
+  database-enforced plan writes, Core read-only commercial history, Pro-only AI,
+  capability-aware actions/Storage reads, and safe quotation acceptance without
+  Core inventory reservations.
+- Added database seat enforcement, admin staff deactivation/session revocation,
+  Core checkout/activation validation, and plan access/seats in web/mobile
+  session contracts.
+- Updated web navigation and module screens with Core/Pro badges, upgrade
+  dialogs, read-only notices, and write-action suppression; exposed BOM Template
+  list/detail routes under Product & Materials.
+- Expanded the Expo application with branded Home/Dashboard/Inventory tabs,
+  record detail routes, reusable module forms, customer/enquiry creation, theme,
+  icons, splash assets, and environment-specific app configuration.
+- Refreshed the complete documentation set and added dedicated subscription and
+  mobile architecture guides plus an expanded OpenAPI contract.
+
+## 2026-08-10
+
+- Kept subsidy informational in quotation/project pricing so payment totals stay
+  consistent across workflows.
+- Added tenant-administrator WhatsApp alerts for inbound customer replies and
+  scheduled the reply-alert worker.
+- Displayed the customer mobile number in the super-admin WhatsApp inbox.
+
+## 2026-08-07
+
+- Added the `@bizlee/mobile` Expo Router application, shared contracts/domain
+  workspaces, and the versioned `/api/mobile/v1` Node API.
+- Added mobile authentication/enrollment, tenant session context, dashboard,
+  assistant proxy, permission-scoped resource lists/details, customer/enquiry
+  creation, in-app notifications, and stable request-ID error responses.
+- Added tenant-owned mobile device registrations, queued Expo push delivery, the
+  `process-mobile-push` worker, scheduled Vault integration, API tests, and the
+  initial OpenAPI contract.
+
+## 2026-08-04
+
+- Prevented duplicate email/phone signups with server-side availability checks.
+- Added a downloadable sample CSV for WhatsApp outreach contacts.
+- Excluded cancelled campaigns from daily limits and allowed manually started
+  campaigns to proceed through the worker.
+
+## 2026-08-03
+
+- Added platform staff management and trusted invitation flows, with support for
+  platform staff to create WhatsApp campaigns.
+- Added tenant in-app notifications, unread/read APIs, workflow event publishers,
+  a notification bell/feed, and staff notification preferences.
+- Added subscription GST invoices, billing invoice settings UI, and Razorpay
+  post-checkout verification.
+- Added WhatsApp login to the active login experience and hardened staff invite
+  origin handling and Railway production startup.
+
+## 2026-07-30
+
+- Added full-feature workspace trials, monthly/yearly Razorpay subscription
+  plans, billing UI, cancellation, webhook reconciliation, trial reminders, and
+  database write enforcement.
+- Added the tenant notification foundation for lifecycle, billing, security,
+  requested daily summaries, and optional marketing WhatsApp delivery, including
+  consent, opt-outs, retries, workers, schedules, and SQL tests.
+
+## 2026-07-29
+
+- Added the super-admin WhatsApp outreach workspace with phone/template/message
+  APIs, contact lists, campaigns, scheduled sending, pre-live limits, delivery
+  results, free-form inbox replies, and paginated lists.
+
+## 2026-07-27
+
+- Sent signup phone OTPs through the Supabase Auth Send SMS Hook and an approved
+  Meta WhatsApp authentication template.
+- Retried profile synchronization when newly issued JWTs encounter clock skew.
+
+## 2026-07-26
+
+- Processed signed WhatsApp sent, delivered, read, failed, and deleted callbacks
+  idempotently for stored outbound messages.
+
 ## 2026-07-25
 
 - Secured Meta WhatsApp webhook POST requests with raw-body
@@ -164,3 +248,14 @@ Keep entries short and factual.
 - Documented current multi-tenant guardrails, Supabase usage, module structure,
   and the `company_id` / `organization_id` / `tenant_id` ownership naming
   reality.
+# 2026-08-11 — Record-scoped CRM/ERP roles
+
+- Added locked Field Staff role and re-seeded Admin, Sales, Backend, and Accounts.
+- Added role/module scopes, quotation and Sales Order ownership, normalized
+  installation assignments, project release timestamps, and tenant company IDs.
+- Added assignment-aware RLS, safe projections, narrow field-work RPCs, and
+  survey evidence storage restrictions.
+- Replaced fixed permission polling with one scoped permission response and a
+  central direct-route guard.
+- Added dedicated Field Staff and restricted Sales/Accounts project/survey views.
+- Made mobile tabs and shortcuts permission-driven and added Field work APIs.

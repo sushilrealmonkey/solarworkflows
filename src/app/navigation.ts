@@ -1,9 +1,12 @@
 import { routes } from "./routes";
+import type { PlanAccessLevel } from "../modules/billing/types";
 
 export type NavigationItem = {
   label: string;
   path: string;
   moduleKey?: string;
+  planModuleKey?: string;
+  planAccess?: PlanAccessLevel;
   superAdminOnly?: boolean;
   children?: NavigationItem[];
 };
@@ -21,8 +24,24 @@ function navigationRoute(path: string): NavigationItem {
     label: route.label,
     path: route.path,
     moduleKey: route.moduleKey,
+    planModuleKey: planModuleKey(path, route.moduleKey),
     superAdminOnly: route.superAdminOnly,
   };
+}
+
+function planModuleKey(path: string, fallback: string) {
+  const overrides: Record<string, string> = {
+    "/today": "assistant",
+    "/customers/b2b-direct": "b2b_sales",
+    "/b2b-sales": "b2b_sales",
+    "/inventory": "inventory",
+    "/vendors": "vendors",
+    "/purchases": "purchases",
+    "/proforma-invoices": "invoices",
+    "/invoices": "invoices",
+  };
+
+  return overrides[path] ?? fallback;
 }
 
 export const navigationItems: NavigationItem[] = [
@@ -72,6 +91,7 @@ export const navigationItems: NavigationItem[] = [
     children: [
       navigationRoute("/products-materials/products"),
       navigationRoute("/products-materials/categories"),
+      navigationRoute("/setup/bom-templates"),
     ],
   },
   navigationRoute("/settings"),

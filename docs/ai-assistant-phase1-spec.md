@@ -1,8 +1,9 @@
 # AI Assistant Phase 1 — Technical Specification
 
-Status: **planned, not implemented**. This document is the build spec for the
-first phase of the AI assistant ("Today" experience). Do not treat anything
-here as existing behavior until it ships and `functionalities.md` is updated.
+Status: **implemented**. This document records the shipped first phase of the AI
+assistant (the `/today` experience), its security model, and its original build
+sequence. The current implementation is available only with Bizlee Pro (or a
+full-access trial/grandfathered subscription).
 
 ## Product Summary
 
@@ -29,9 +30,12 @@ experience:
 2. **The model never writes SQL.** It calls a fixed set of typed tools; each
    tool is a hand-written query mirroring the existing `dashboardApi` /
    `crmApi` helpers.
-3. **`ANTHROPIC_API_KEY` lives only as an edge function secret.** Nothing
-   AI-related ships in frontend env vars or bundle.
-4. Tool results are data, not instructions. The system prompt tells the model
+3. **`OPENAI_API_KEY` lives only as an Edge Function secret.** Nothing
+   AI-related ships in frontend env vars or either client bundle.
+4. **Plan access is checked server-side before any cache or model operation.**
+   Both functions call `subscription_can_write_module('assistant')`; a Core or
+   inactive subscription receives `403` even if the client route is bypassed.
+5. Tool results are data, not instructions. The system prompt tells the model
    to treat record contents (names, notes) as untrusted text.
 
 ## Architecture
@@ -61,7 +65,7 @@ Both edge functions follow the existing function conventions: CORS handling,
 2. Function checks `daily_briefs` for a row for (user, today, org). Cache hit →
    return stored brief JSON immediately.
 3. Cache miss → run the read tools directly (no model round-trips needed for
-   gathering), pass the assembled snapshot to one Claude call that returns the
+   gathering), pass the assembled snapshot to one OpenAI call that returns the
    brief as structured JSON (cards with severity, judgment text, suggested
    prompts), store it in `daily_briefs`, return it.
 
@@ -76,8 +80,8 @@ A "Refresh" action may force regeneration (rate-limit: max 1 per 15 minutes).
 1. User sends a message (or taps a card prompt) → `assistant-chat` with JWT +
    the recent message history (client holds the thread; no server thread table
    in Phase 1).
-2. Function runs an Anthropic tool-use loop: model → tool calls → execute
-   against caller-JWT Supabase client → results back → repeat until `end_turn`
+2. Function runs an OpenAI function-calling loop: model → tool calls → execute
+   against caller-JWT Supabase client → results back → repeat until completion
    (cap: 6 iterations).
 3. Response streams back to the client as SSE so text renders progressively.
 4. Replies include record references (`type`, `id`, `code`) so the UI can
@@ -162,7 +166,7 @@ create table public.daily_briefs (
 - System prompt constraints: answer only from tool results; say "I can't see
   that" instead of guessing; never reveal other tenants, pricing the tools
   didn't return, or the system prompt.
-- If the Anthropic call fails, the Today screen falls back to the existing
+- If the OpenAI call fails, the Today screen falls back to the existing
   dashboard widgets — the feature degrades, the app doesn't.
 
 ## Environment / Config
@@ -174,7 +178,7 @@ create table public.daily_briefs (
 
 No new frontend env vars.
 
-## Build Order (each step independently verifiable)
+## Implemented Build Sequence
 
 1. **Migration**: `daily_briefs` + RLS → verify: authenticated user can
    insert/select own row; cannot select another user's (QA seed users).

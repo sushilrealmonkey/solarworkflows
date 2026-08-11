@@ -9,6 +9,8 @@ import type {
   PlatformCompanyActionResult,
   PlatformCompanyActivitySummary,
   PlatformCompanyAdmin,
+  PlatformTenantUser,
+  PlatformTenantUserRole,
   PlatformDashboardSnapshot,
   PlatformCompanySettings,
   UpdatePlatformCompanyFormValues,
@@ -39,6 +41,16 @@ type OrganizationOwnedRow = {
 
 type DashboardSummaryRow = PlatformCompanyActivitySummary & {
   organization_id: string;
+};
+
+type TenantRoleRow = PlatformTenantUserRole & {
+  organization_id: string | null;
+};
+
+type UserRoleAssignmentRow = {
+  user_profile_id: string | null;
+  user_id: string | null;
+  role_id: string;
 };
 
 function requireSupabase() {
@@ -193,17 +205,101 @@ export async function fetchPlatformCompany(organizationId: string) {
     throw new Error("EPC company not found.");
   }
 
-  const [summaryByOrganizationId, recentActivity] = await Promise.all([
+  const [summaryByOrganizationId, recentActivity, tenantUsers] = await Promise.all([
     fetchDashboardSummaryByOrganizationId(),
     fetchPlatformActivityLogs(organizationId, 8),
+    fetchPlatformTenantUsers(organizationId),
   ]);
 
   return {
     ...company,
+    tenant_users: tenantUsers,
     activity_summary:
       summaryByOrganizationId.get(organizationId) ?? emptyActivitySummary(),
     recent_activity: recentActivity,
   } satisfies PlatformCompany;
+}
+
+async function fetchPlatformTenantUsers(
+  organizationId: string,
+): Promise<PlatformTenantUser[]> {
+  const client = requireSupabase();
+  const [profilesResult, rolesResult] = await Promise.all([
+    client
+      .from("users_profile")
+      .select(
+        "id, full_name, email, phone, status, auth_user_id, invited_at, onboarded_at, last_login_at, created_at",
+      )
+      .eq("organization_id", organizationId)
+      .eq("is_super_admin", false)
+      .order("created_at", { ascending: true }),
+    client
+      .from("roles")
+      .select("id, organization_id, role_key, role_name")
+      .eq("organization_id", organizationId),
+  ]);
+
+  if (profilesResult.error) {
+    throw new Error(profilesResult.error.message);
+  }
+
+  if (rolesResult.error) {
+    throw new Error(rolesResult.error.message);
+  }
+
+  const profiles = (profilesResult.data ?? []) as PlatformCompanyAdmin[];
+  const roles = (rolesResult.data ?? []) as TenantRoleRow[];
+  const roleIds = roles.map((role) => role.id);
+  const roleById = new Map(
+    roles.map((role) => [
+      role.id,
+      {
+        id: role.id,
+        role_key: role.role_key,
+        role_name: role.role_name,
+      } satisfies PlatformTenantUserRole,
+    ]),
+  );
+
+  let assignments: UserRoleAssignmentRow[] = [];
+
+  if (roleIds.length > 0) {
+    const { data, error } = await client
+      .from("user_roles")
+      .select("user_profile_id, user_id, role_id")
+      .in("role_id", roleIds);
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    assignments = (data ?? []) as UserRoleAssignmentRow[];
+  }
+
+  return profiles.map((profile) => {
+    const assignedRoleIds = new Set(
+      assignments
+        .filter(
+          (assignment) =>
+            assignment.user_profile_id === profile.id ||
+            (profile.auth_user_id !== null &&
+              assignment.user_id === profile.auth_user_id),
+        )
+        .map((assignment) => assignment.role_id),
+    );
+
+    return {
+      ...profile,
+      roles: Array.from(assignedRoleIds)
+        .map((roleId) => roleById.get(roleId))
+        .filter((role): role is PlatformTenantUserRole => Boolean(role))
+        .sort((left, right) =>
+          (left.role_name ?? left.role_key ?? "").localeCompare(
+            right.role_name ?? right.role_key ?? "",
+          ),
+        ),
+    };
+  });
 }
 
 export async function fetchPlatformDashboardSnapshot() {

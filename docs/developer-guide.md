@@ -39,6 +39,11 @@ npm run build
 npm run lint
 npm run preview
 npm run setup:super-admin
+npm run mobile:start
+npm run mobile:check
+npm run contracts:check
+npm run test:webhook
+npm run test:mobile-api
 ```
 
 For documentation-only changes, a build is usually unnecessary unless the docs
@@ -53,6 +58,8 @@ also change generated references or examples that need validation.
 - Keep runtime configuration in `src/config`.
 - Prefer small, focused utilities over broad shared abstractions.
 - Do not hardcode tenant or company-specific production values.
+- Keep shared mobile/API wire contracts in `packages/contracts` and avoid
+  duplicating them in either client.
 
 ## UI Conventions
 
@@ -93,6 +100,23 @@ also change generated references or examples that need validation.
   proforma invoice items.
 - Generated quotation PDFs should be stored through document metadata as
   `quotation_pdf` records and reused on detail pages when already present.
+- Treat role permission and plan access as separate, intersecting boundaries.
+  Never infer write permission from a visible/read-only route.
+- Plan changes must update catalogue data, module/capability entitlements,
+  database enforcement, checkout validation, shared contracts, SQL tests, docs,
+  and both clients together.
+
+## Mobile Development
+
+Copy `apps/mobile/.env.example` to `apps/mobile/.env.local`. Configure the mobile
+API root, public Supabase values, and EAS project ID, then run
+`npm run mobile:start`. Business data must go through `/api/mobile/v1`; direct
+Supabase access in the native app is reserved for authentication.
+
+Keep route screens thin, reusable UI in `apps/mobile/src/components`, and module
+metadata in `apps/mobile/src/modules`. All mobile endpoints must validate the
+caller JWT, resolve an active tenant profile, apply permissions and plan access,
+and return the stable request-ID error envelope.
 
 ## Super Admin Setup
 

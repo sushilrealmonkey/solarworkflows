@@ -12,6 +12,8 @@ import type {
   ProjectFormValues,
   ProjectStatus,
   ProjectWithRelations,
+  FieldProject,
+  ScopedProjectSummary,
 } from "./types";
 import { parseTeamInput } from "./projectUtils";
 
@@ -234,6 +236,69 @@ export async function updateProjectStatus(
   }
 
   return data as Project;
+}
+
+export async function fetchFieldProjects() {
+  const { data, error } = await requireSupabase().rpc("get_field_projects", {
+    target_project_id: null,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as FieldProject[];
+}
+
+export async function fetchFieldProject(id: string) {
+  const { data, error } = await requireSupabase().rpc("get_field_projects", {
+    target_project_id: id,
+  });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as FieldProject[])[0] ?? null;
+}
+
+export async function updateFieldProjectStatus(
+  id: string,
+  status: "installation_in_progress" | "installation_completed",
+) {
+  const { data, error } = await requireSupabase().rpc(
+    "update_field_project_status",
+    { target_project_id: id, new_status: status },
+  );
+  if (error) throw new Error(error.message);
+  return data as Pick<FieldProject, "id" | "project_status" | "updated_at">;
+}
+
+export async function fetchScopedProjectSummaries(id?: string) {
+  const { data, error } = await requireSupabase().rpc(
+    "get_scoped_project_summaries",
+    { target_project_id: id ?? null },
+  );
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ScopedProjectSummary[];
+}
+
+export type FieldStaffAssignmentOption = {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  is_assigned: boolean;
+};
+
+export async function fetchFieldStaffAssignmentOptions(projectId: string) {
+  const { data, error } = await requireSupabase().rpc("get_field_staff_options", {
+    target_project_id: projectId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as FieldStaffAssignmentOption[];
+}
+
+export async function saveProjectFieldAssignments(
+  projectId: string,
+  userProfileIds: string[],
+) {
+  const { error } = await requireSupabase().rpc("set_project_field_assignments", {
+    target_project_id: projectId,
+    target_user_profile_ids: userProfileIds,
+  });
+  if (error) throw new Error(error.message);
 }
 
 export async function createProjectFromQuotation(quotationId: string) {

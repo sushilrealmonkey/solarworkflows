@@ -6,6 +6,37 @@ export type AppRoute = {
   superAdminOnly?: boolean;
 };
 
+const routeModulePrefixes: Array<[string, string]> = [
+  ["/site-surveys", "site_surveys"],
+  ["/products-materials", "product_master"],
+  ["/product-master", "product_master"],
+  ["/setup/bom-templates", "product_master"],
+  ["/proforma-invoices", "invoices"],
+  ["/b2b-sales", "b2b_sales"],
+  ["/material-receive", "purchases"],
+  ["/customers", "customers"],
+  ["/quotations", "quotations"],
+  ["/projects", "projects"],
+  ["/payments", "payments"],
+  ["/inventory", "inventory"],
+  ["/purchases", "purchases"],
+  ["/vendors", "vendors"],
+  ["/invoices", "invoices"],
+  ["/documents", "documents"],
+  ["/leads", "leads"],
+  ["/today", "assistant"],
+  ["/dashboard", "dashboard"],
+  ["/reports", "reports"],
+  ["/settings", "settings"],
+  ["/billing/plans", "settings"],
+];
+
+export function moduleKeyForPath(pathname: string) {
+  return routeModulePrefixes.find(
+    ([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  )?.[1] ?? null;
+}
+
 export const routes: AppRoute[] = [
   {
     path: "/companies",
@@ -123,7 +154,7 @@ export const routes: AppRoute[] = [
   {
     path: "/purchases",
     label: "Purchase Orders",
-    moduleKey: "inventory",
+    moduleKey: "purchases",
     description: "Purchase orders and stock receiving workflows will live here.",
   },
   {
@@ -149,6 +180,12 @@ export const routes: AppRoute[] = [
     label: "Settings",
     moduleKey: "settings",
     description: "Organization preferences, branding, and access settings will live here.",
+  },
+  {
+    path: "/setup/bom-templates",
+    label: "BOM Templates",
+    moduleKey: "product_master",
+    description: "Reusable product and quantity rules for quotation BOM generation.",
   },
   {
     path: "/billing/plans",

@@ -19,6 +19,8 @@ This guide is for AI agents working in the SolarWorkflows repository.
 - Read `AGENTS.md`.
 - Check `docs/README.md` and the relevant docs for the area being changed.
 - Inspect the current module, route, API helper, migration, and type patterns.
+- For native work, inspect `apps/mobile`, `/api/mobile/v1`, and shared
+  `packages/contracts` together.
 - Preserve user changes and unrelated work.
 
 ## Supabase Safety
@@ -28,6 +30,8 @@ This guide is for AI agents working in the SolarWorkflows repository.
 - Review policies when touching tables, views, RPCs, functions, or storage.
 - Do not place privileged secrets in frontend code.
 - Treat QA seed data as local/staging-only.
+- Keep RBAC and subscription access separate. UI guards never replace database
+  module/capability enforcement.
 
 ## Tenant Ownership
 

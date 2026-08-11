@@ -72,7 +72,7 @@ import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 export function B2BSaleDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { profile, permissions, roleNames, organization } = useAuth();
+  const { profile, permissions, roleNames, organization, subscription } = useAuth();
   const { showToast } = useToast();
   const [sale, setSale] = useState<B2BSaleWithRelations | null>(null);
   const [items, setItems] = useState<B2BSaleItem[]>([]);
@@ -103,7 +103,8 @@ export function B2BSaleDetailPage() {
   const canDelete = hasPermission(profile, permissions, "b2b_sales", "delete");
   const canCreateInvoice = hasPermission(profile, permissions, "invoices", "create");
   const canViewInvoices = hasPermission(profile, permissions, "invoices", "view");
-  const canCreateDocuments = hasPermission(
+  const canCreateDocuments =
+    subscription?.capability_access?.["documents.pro_sources"] === "full" && hasPermission(
     profile,
     permissions,
     "documents",

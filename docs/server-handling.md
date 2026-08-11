@@ -70,6 +70,23 @@ changing data. Messages for an unmapped or inactive Meta phone number are
 acknowledged and logged without being stored, so the mapping must be configured
 before subscribing production traffic.
 
+Inbound customer replies also feed the tenant reply-alert queue. The notification
+worker sends approved `bizlee_customer_reply_alert` templates to eligible tenant
+administrators and records delivery status through the same signed webhook path.
+
+## Mobile API
+
+The Node server exposes `https://app.getbizlee.com/api/mobile/v1`. The contract is
+documented in `docs/mobile-api.openapi.yaml` and includes session context,
+dashboard, assistant proxy, resource list/detail/create, notifications, device
+registration, and enrollment endpoints.
+
+Every protected request requires a Supabase Bearer token. The server resolves an
+active `users_profile` and uses the caller JWT for business data, preserving RLS,
+RBAC, and Core/Pro access. Stable errors include a code, message, and request ID.
+Configure `EXPO_PUBLIC_API_URL` in each EAS environment to point to this root;
+never add the service-role key to the Expo application.
+
 ## Super-admin WhatsApp API
 
 The production server exposes authenticated, same-origin endpoints for the
@@ -103,6 +120,10 @@ npm run dev
 npm run build
 npm run lint
 npm run preview
+npm run mobile:check
+npm run contracts:check
+npm run test:webhook
+npm run test:mobile-api
 ```
 
 Use `.env.example` as the template for local environment variables. Do not
@@ -230,4 +251,10 @@ Before releasing server-affecting changes:
   access.
 - Confirm storage policies match document workflows.
 - Confirm frontend environment variables point to the intended Supabase project.
+- Confirm mobile builds point to the intended API/Supabase environment and the
+  mobile API smoke tests pass.
+- Confirm subscription catalogue prices, entitlements, seat limits, and
+  Razorpay plan IDs match the target environment.
+- Confirm notification, daily-summary, WhatsApp campaign/reply-alert, and mobile
+  push workers have matching Edge Function and Vault secrets.
 - Update the changelog and relevant docs.

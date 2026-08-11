@@ -89,7 +89,7 @@ type InvoiceItemPrefill = {
 };
 
 export function InvoicesPage() {
-  const { profile, permissions, organization } = useAuth();
+  const { profile, permissions, organization, subscription } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -135,7 +135,8 @@ export function InvoicesPage() {
     "payments",
     "create",
   );
-  const canCreateDocuments = hasPermission(
+  const canCreateDocuments =
+    subscription?.capability_access?.["documents.pro_sources"] === "full" && hasPermission(
     profile,
     permissions,
     "documents",

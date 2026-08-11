@@ -232,9 +232,55 @@ async function handleSignupAvailabilityApi(
 }
 
 async function handleMobileApi(request: IncomingMessage, response: ServerResponse, requestUrl: URL): Promise<void> {
+  const origin = getAllowedMobileOrigin(request, requestUrl);
+
+  if (request.headers.origin && !origin) {
+    sendJson(response, 403, { error: "Origin not allowed" });
+    return;
+  }
+
+  if (origin) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Access-Control-Allow-Credentials", "true");
+    response.setHeader("Access-Control-Expose-Headers", "x-request-id");
+    response.setHeader("Vary", "Origin");
+  }
+
+  if (request.method === "OPTIONS") {
+    response.writeHead(204, {
+      "Access-Control-Allow-Headers": "authorization, content-type, x-request-id",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Max-Age": "86400",
+    });
+    response.end();
+    return;
+  }
+
   const requestInit: RequestInit = { method: request.method, headers: toFetchHeaders(request.headers) };
   if (request.method !== "GET" && request.method !== "HEAD") requestInit.body = await readRequestBody(request);
   await sendFetchResponse(await handleMobileApiRequest(new Request(requestUrl, requestInit)), response);
+}
+
+function getAllowedMobileOrigin(request: IncomingMessage, requestUrl: URL): string | null {
+  const origin = request.headers.origin;
+  if (!origin) return null;
+
+  const configuredOrigins = (process.env.MOBILE_CORS_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (configuredOrigins.includes(origin)) return origin;
+
+  try {
+    const parsedOrigin = new URL(origin);
+    if (parsedOrigin.origin === requestUrl.origin) return origin;
+    const isLocalDevelopment = process.env.NODE_ENV !== "production" &&
+      (parsedOrigin.hostname === "localhost" || parsedOrigin.hostname === "127.0.0.1");
+    return isLocalDevelopment ? origin : null;
+  } catch {
+    return null;
+  }
 }
 
 function isPathInsideDist(filePath: string): boolean {

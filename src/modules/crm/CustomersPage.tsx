@@ -71,7 +71,7 @@ type CustomerFilters = {
 };
 
 export function CustomersPage({ segment }: { segment: CustomerSegment }) {
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, subscription } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -99,8 +99,14 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
   const [saving, setSaving] = useState(false);
 
   const canView = hasPermission(profile, permissions, "customers", "view");
-  const canCreate = hasPermission(profile, permissions, "customers", "create");
-  const canUpdate = hasPermission(profile, permissions, "customers", "update");
+  const b2bWriteAllowed =
+    segment !== "b2b_direct" ||
+    !subscription ||
+    subscription.capability_access?.["customers.b2b_direct"] === "full";
+  const canCreate =
+    b2bWriteAllowed && hasPermission(profile, permissions, "customers", "create");
+  const canUpdate =
+    b2bWriteAllowed && hasPermission(profile, permissions, "customers", "update");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateB2BSale = hasPermission(profile, permissions, "b2b_sales", "create");
   const canCreateDirectly = segment === "b2b_direct" && canCreate;

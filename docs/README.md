@@ -22,8 +22,11 @@ business logic that has not been approved for implementation.
 | [AI Agent Guide](ai-agent-guide.md) | Repo-specific instructions for AI agents working on the project. |
 | [Data Model Guide](data-model-guide.md) | Summarizes current table families, tenant ownership conventions, and RLS expectations. |
 | [RLS Permission System](rls-permission-system.md) | Documents Supabase RLS and permission enforcement. |
+| [Subscription Access and Billing](subscription-access.md) | Documents Core/Pro pricing, entitlements, read-only history, seats, and Razorpay enforcement. |
+| [Mobile Application and API](mobile-app.md) | Documents the Expo client, versioned mobile API, push pipeline, setup, and release boundary. |
+| [Mobile API OpenAPI](mobile-api.openapi.yaml) | Machine-readable contract for `/api/mobile/v1`. |
 | [QA Testing Plan](QA_TESTING_PLAN.md) | Provides local/staging QA data and role-based test scenarios. |
-| [AI Assistant Phase 1 Spec](ai-assistant-phase1-spec.md) | Planned Today screen daily brief + chat: architecture, tool layer, schema, and build order. Not implemented yet. |
+| [AI Assistant Phase 1 Spec](ai-assistant-phase1-spec.md) | Implemented Today screen daily brief + chat architecture, security, tool layer, and operational notes. |
 | [WhatsApp Tenant Notifications](whatsapp-tenant-notifications.md) | Tenant notification queue, approved templates, preferences, AI summaries, consent, delivery tracking, and rollout controls. |
 | [Change Log](changelog.md) | Tracks notable project documentation and implementation changes. |
 

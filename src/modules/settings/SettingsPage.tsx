@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
@@ -21,6 +21,7 @@ import {
 import { formatDateTime, hasPermission, labelize } from "../crm/crmUtils";
 import {
   createStaff,
+  deactivateStaffForSeatLimit,
   fetchOrganizationSettings,
   fetchSettingsRoles,
   fetchSettingsStaff,
@@ -54,20 +55,35 @@ type StaffFormState = {
 };
 
 export function SettingsPage() {
-  const { profile, permissions } = useAuth();
+  const { profile, permissions, subscription } = useAuth();
 
   if (profile?.is_super_admin) {
     return <PlatformSettingsPage />;
   }
 
   const canManageSettings = hasPermission(profile, permissions, "settings", "update");
+  const canReduceSeats = Boolean(
+    subscription?.is_admin && !subscription.write_allowed,
+  );
 
-  if (!canManageSettings) {
+  if (!canManageSettings && !canReduceSeats) {
     return (
       <AccessDenied
         title="Settings are not available"
         description="Your role needs settings:update access to manage organization and staff."
       />
+    );
+  }
+
+  if (!canManageSettings && canReduceSeats) {
+    return (
+      <div className="space-y-4">
+        <PageHeader
+          title="Prepare for Bizlee Core"
+          description="Deactivate active or invited staff until only three total users remain, then return to Billing & Plans."
+        />
+        <StaffManagementPage reductionOnly />
+      </div>
     );
   }
 
@@ -361,7 +377,7 @@ function withEnrollmentDefaults(
   };
 }
 
-export function StaffManagementPage() {
+export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?: boolean }) {
   const { showToast } = useToast();
   const [staff, setStaff] = useState<SettingsStaff[]>([]);
   const [roles, setRoles] = useState<SettingsRole[]>([]);
@@ -375,13 +391,13 @@ export function StaffManagementPage() {
   const [statusSaving, setStatusSaving] = useState(false);
   const [openStaffMenuId, setOpenStaffMenuId] = useState<string | null>(null);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const [nextStaff, nextRoles] = await Promise.all([
         fetchSettingsStaff(),
-        fetchSettingsRoles(),
+        reductionOnly ? Promise.resolve([]) : fetchSettingsRoles(),
       ]);
       setStaff(nextStaff);
       setRoles(nextRoles);
@@ -392,11 +408,11 @@ export function StaffManagementPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [reductionOnly]);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   const filteredStaff = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -471,7 +487,11 @@ export function StaffManagementPage() {
   async function setMemberStatus(member: SettingsStaff, status: StaffStatus) {
     try {
       setStatusSaving(true);
-      await updateStaff(member.id, { ...staffToForm(member), status });
+      if (reductionOnly && status === "inactive") {
+        await deactivateStaffForSeatLimit(member.id);
+      } else {
+        await updateStaff(member.id, { ...staffToForm(member), status });
+      }
       showToast(
         status === "active" ? "Staff activated." : "Staff deactivated.",
         "success",
@@ -492,7 +512,7 @@ export function StaffManagementPage() {
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SectionTitle title="Staff Management" />
-        <Button onClick={openCreateForm}>Add Staff</Button>
+        {!reductionOnly ? <Button onClick={openCreateForm}>Add Staff</Button> : null}
       </div>
 
       <Toolbar>
@@ -509,7 +529,7 @@ export function StaffManagementPage() {
         <EmptyState
           title="No staff found"
           description="Create staff profiles before team members sign in."
-          action={<Button onClick={openCreateForm}>Add Staff</Button>}
+          action={!reductionOnly ? <Button onClick={openCreateForm}>Add Staff</Button> : undefined}
         />
       ) : null}
 
@@ -544,12 +564,17 @@ export function StaffManagementPage() {
                         isMenuOpen={openStaffMenuId === member.id}
                         lastLogin={formatDateTime(member.last_login_at)}
                         member={member}
+                        reductionOnly={reductionOnly}
                         onEdit={() => openEditForm(member)}
                         onMenuOpenChange={(isOpen) =>
                           setOpenStaffMenuId(isOpen ? member.id : null)
                         }
                         onStatusAction={() => {
                           setOpenStaffMenuId(null);
+                          if (reductionOnly) {
+                            setStatusTarget(member);
+                            return;
+                          }
                           if (member.status === "active") {
                             setStatusTarget(member);
                             return;
@@ -591,12 +616,17 @@ export function StaffManagementPage() {
                     isMenuOpen={openStaffMenuId === member.id}
                     lastLogin={formatDateTime(member.last_login_at)}
                     member={member}
+                    reductionOnly={reductionOnly}
                     onEdit={() => openEditForm(member)}
                     onMenuOpenChange={(isOpen) =>
                       setOpenStaffMenuId(isOpen ? member.id : null)
                     }
                     onStatusAction={() => {
                       setOpenStaffMenuId(null);
+                      if (reductionOnly) {
+                        setStatusTarget(member);
+                        return;
+                      }
                       if (member.status === "active") {
                         setStatusTarget(member);
                         return;
@@ -814,6 +844,7 @@ function StaffRowActions({
   isMenuOpen,
   lastLogin,
   member,
+  reductionOnly,
   onEdit,
   onMenuOpenChange,
   onStatusAction,
@@ -821,12 +852,15 @@ function StaffRowActions({
   isMenuOpen: boolean;
   lastLogin: string;
   member: SettingsStaff;
+  reductionOnly: boolean;
   onEdit: () => void;
   onMenuOpenChange: (isOpen: boolean) => void;
   onStatusAction: () => void;
 }) {
   const statusActionLabel =
-    member.status === "active" ? "Deactivate" : "Activate";
+    reductionOnly
+      ? "Deactivate for Core"
+      : member.status === "active" ? "Deactivate" : "Activate";
 
   return (
     <div
@@ -837,14 +871,16 @@ function StaffRowActions({
         }
       }}
     >
-      <button
-        aria-label={`Edit ${member.full_name ?? "staff member"}`}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition hover:bg-orange-50 hover:text-[#06173f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-        onClick={onEdit}
-        type="button"
-      >
-        <PencilIcon />
-      </button>
+      {!reductionOnly ? (
+        <button
+          aria-label={`Edit ${member.full_name ?? "staff member"}`}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition hover:bg-orange-50 hover:text-[#06173f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
+          onClick={onEdit}
+          type="button"
+        >
+          <PencilIcon />
+        </button>
+      ) : null}
       <button
         aria-expanded={isMenuOpen}
         aria-haspopup="menu"
@@ -870,7 +906,7 @@ function StaffRowActions({
               {lastLogin}
             </p>
           </div>
-          <button
+          {!(reductionOnly && member.status === "inactive") ? <button
             className={`mt-1 flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 ${
               member.status === "active" ? "text-rose-700" : "text-[#06173f]"
             }`}
@@ -879,7 +915,7 @@ function StaffRowActions({
             type="button"
           >
             {statusActionLabel}
-          </button>
+          </button> : null}
         </div>
       ) : null}
     </div>
