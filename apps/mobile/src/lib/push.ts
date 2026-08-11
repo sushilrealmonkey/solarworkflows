@@ -21,7 +21,7 @@ export async function registerForPushNotifications() {
   if (Platform.OS === "android") await Notifications.setNotificationChannelAsync("default", { name: "Bizlee updates", importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 250, 250, 250], lightColor: "#f97316" });
   const current = await Notifications.getPermissionsAsync(); const permission = current.status === "granted" ? current : await Notifications.requestPermissionsAsync();
   if (permission.status !== "granted") return null;
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId; if (!projectId) return null;
+  const projectId = Constants.expoConfig?.extra?.push?.projectId; if (!projectId) return null;
   const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data; const deviceId = await installationId();
   await mobileApi.registerDevice({ expoPushToken: token, platform: Platform.OS as "android" | "ios", deviceId, appVersion: Constants.expoConfig?.version ?? "unknown", locale: Intl.DateTimeFormat().resolvedOptions().locale || "en-IN" });
   return { token, deviceId };

@@ -28,7 +28,7 @@ VITE_SUPABASE_ANON_KEY=
 Never expose service-role keys or private secrets in frontend code.
 
 The Expo client reads `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`,
-`EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_EAS_PROJECT_ID`. These are
+`EXPO_PUBLIC_SUPABASE_ANON_KEY`, and `EXPO_PUBLIC_EXPO_PROJECT_ID`. These are
 public bundle values; Razorpay secrets, Meta credentials, worker secrets, OpenAI
 keys, and the Supabase service role remain server-side.
 

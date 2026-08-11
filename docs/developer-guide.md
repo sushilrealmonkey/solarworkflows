@@ -109,7 +109,7 @@ also change generated references or examples that need validation.
 ## Mobile Development
 
 Copy `apps/mobile/.env.example` to `apps/mobile/.env.local`. Configure the mobile
-API root, public Supabase values, and EAS project ID, then run
+API root, public Supabase values, and Expo push project ID, then run
 `npm run mobile:start`. Business data must go through `/api/mobile/v1`; direct
 Supabase access in the native app is reserved for authentication.
 

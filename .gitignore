@@ -11,3 +11,8 @@ yarn-error.log*
 pnpm-debug.log*
 .DS_Store
 .codex-tmp/
+
+# Expo native projects are generated during Codemagic builds.
+/apps/mobile/android/
+/apps/mobile/ios/
+/apps/mobile/google-services.json

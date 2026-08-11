@@ -1,9 +1,9 @@
 # Mobile Application and API
 
 Status: implemented in the repository as the `@bizlee/mobile` Expo workspace
-and the `/api/mobile/v1` Node API. Native signing, EAS environment values, worker
-secrets, and deep-link association files remain environment-specific release
-work.
+and the `/api/mobile/v1` Node API. Native signing, Codemagic environment values,
+worker secrets, and deep-link association files remain environment-specific
+release work.
 
 ## Application
 
@@ -66,8 +66,22 @@ Copy `apps/mobile/.env.example` to `apps/mobile/.env.local` and configure:
 EXPO_PUBLIC_API_URL=http://127.0.0.1:3000/api/mobile/v1
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
-EXPO_PUBLIC_EAS_PROJECT_ID=
+EXPO_PUBLIC_EXPO_PROJECT_ID=
 ```
+
+## Distribution
+
+Codemagic is the exclusive build and store distribution system. The repository-root
+`codemagic.yaml` performs a clean Expo prebuild, validates the production
+environment, runs the mobile/contracts/API checks, applies platform signing,
+and produces store artifacts. Android publishes to the Google Play internal
+track after the first manual Play upload; iOS uploads to App Store Connect for
+TestFlight processing.
+
+Release workflows are manual or tag-triggered with `mobile-v*`. Ordinary pushes
+do not distribute an app. Credentials and signing files live only in Codemagic,
+never in Git. See [Codemagic Mobile Distribution](./codemagic-distribution.md)
+for the exact variable groups and signing identity names.
 
 Then run `npm run mobile:start`, `npm run mobile:check`, and
 `npm run test:mobile-api` from the repository root. Use a reachable host instead
@@ -75,13 +89,15 @@ of `127.0.0.1` when testing on a physical device.
 
 ## Release Configuration
 
-`apps/mobile/eas.json` defines development, staging, and production profiles.
-`app.config.ts` assigns environment-specific bundle/package IDs, universal/app
-links under `https://app.getbizlee.com/mobile`, notification configuration, and
-the branded icon/splash assets. Configure the EAS project, signing credentials,
-platform association files, production API URL, and Supabase redirect URLs
-before distributing a build.
-# Field Staff access
+`codemagic.yaml` defines the Android internal-track and iOS TestFlight workflows.
+`app.config.ts` assigns environment-specific bundle/package IDs, store build
+numbers, universal/app links under `https://app.getbizlee.com/mobile`,
+notification configuration, and branded assets. Configure Codemagic signing,
+store credentials, platform association files, production API URL, and Supabase
+redirect URLs before distributing a build. EAS Build and EAS Submit are not
+used.
+
+## Field Staff access
 
 Tabs, shortcuts, and module tiles are permission-driven. Field Staff receives
 assigned Site Surveys and released Projects. The mobile API uses the caller JWT

@@ -84,8 +84,8 @@ registration, and enrollment endpoints.
 Every protected request requires a Supabase Bearer token. The server resolves an
 active `users_profile` and uses the caller JWT for business data, preserving RLS,
 RBAC, and Core/Pro access. Stable errors include a code, message, and request ID.
-Configure `EXPO_PUBLIC_API_URL` in each EAS environment to point to this root;
-never add the service-role key to the Expo application.
+Configure `EXPO_PUBLIC_API_URL` in the Codemagic `bizlee_mobile` variable group
+to point to this root; never add the service-role key to the mobile application.
 
 ## Super-admin WhatsApp API
 

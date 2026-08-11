@@ -5,6 +5,12 @@ Keep entries short and factual.
 
 ## 2026-08-11 (current worktree)
 
+- Added Codemagic-only Android and iOS build/distribution workflows, release
+  signing, automatic store build numbering, Play internal publishing,
+  TestFlight upload, and secure Firebase configuration restoration; removed the
+  EAS build configuration.
+- Added a manual Codemagic test workflow that produces a downloadable,
+  debug-signed Android APK without store publishing credentials.
 - Replaced Starter/Premium presentation with Bizlee Core (₹999 monthly / ₹10,989
   yearly, three occupied seats) and Bizlee Pro (₹1,499 monthly / ₹16,489 yearly,
   unlimited seats), using explicit yearly catalogue prices.

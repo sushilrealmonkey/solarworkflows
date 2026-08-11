@@ -1,0 +1,213 @@
+workflows:
+  bizlee-android-test-apk:
+    name: Bizlee Android - Downloadable Test APK
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - bizlee_mobile
+      vars:
+        APP_ENV: testing
+        APP_VERSION: "0.1.0"
+      node: 22.14.0
+      java: 17
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
+    scripts:
+      - name: Validate test configuration
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          : "${EXPO_PUBLIC_API_URL:?Add EXPO_PUBLIC_API_URL to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_SUPABASE_URL:?Add EXPO_PUBLIC_SUPABASE_URL to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_SUPABASE_ANON_KEY:?Add EXPO_PUBLIC_SUPABASE_ANON_KEY to the bizlee_mobile group}"
+          case "$EXPO_PUBLIC_API_URL" in
+            https://*) ;;
+            *) echo "EXPO_PUBLIC_API_URL must use HTTPS on a physical test device" >&2; exit 1 ;;
+          esac
+      - name: Install workspace dependencies
+        script: npm ci --prefer-offline
+      - name: Verify mobile workspace
+        script: |
+          npm run mobile:check
+          npm run contracts:check
+          npm run test:mobile-api
+      - name: Generate Android test project
+        script: |
+          cd apps/mobile
+          npx expo prebuild --platform android --clean --no-install
+      - name: Build installable debug APK
+        script: |
+          cd apps/mobile/android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+    artifacts:
+      - apps/mobile/android/app/build/outputs/apk/debug/*.apk
+
+  bizlee-android-internal:
+    name: Bizlee Android - Play Internal
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      groups:
+        - bizlee_mobile
+        - google_play
+      android_signing:
+        - bizlee_android_keystore
+      vars:
+        APP_ENV: production
+        APP_VERSION: "0.1.0"
+        PACKAGE_NAME: com.bizlee.mobile
+        GOOGLE_SERVICES_JSON_PATH: ./google-services.json
+      node: 22.14.0
+      java: 17
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/.gradle/caches
+        - $HOME/.gradle/wrapper
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "mobile-v*"
+          include: true
+      cancel_previous_builds: true
+    scripts:
+      - name: Validate production configuration
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          : "${EXPO_PUBLIC_API_URL:?Add EXPO_PUBLIC_API_URL to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_SUPABASE_URL:?Add EXPO_PUBLIC_SUPABASE_URL to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_SUPABASE_ANON_KEY:?Add EXPO_PUBLIC_SUPABASE_ANON_KEY to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_EXPO_PROJECT_ID:?Add EXPO_PUBLIC_EXPO_PROJECT_ID to the bizlee_mobile group}"
+          : "${ANDROID_GOOGLE_SERVICES_JSON_BASE64:?Add the base64 Firebase Android config to the bizlee_mobile group}"
+          : "${GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS:?Add Google Play credentials to the google_play group}"
+          : "${CM_KEYSTORE_PATH:?Upload the bizlee_android_keystore signing identity}"
+          case "$EXPO_PUBLIC_API_URL" in
+            https://*) ;;
+            *) echo "EXPO_PUBLIC_API_URL must use HTTPS for production" >&2; exit 1 ;;
+          esac
+      - name: Install workspace dependencies
+        script: npm ci --prefer-offline
+      - name: Verify mobile workspace
+        script: |
+          npm run mobile:check
+          npm run contracts:check
+          npm run test:mobile-api
+      - name: Restore Android Firebase configuration
+        script: |
+          printf '%s' "$ANDROID_GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > apps/mobile/google-services.json
+      - name: Generate Android project
+        script: |
+          cd apps/mobile
+          npx expo prebuild --platform android --clean --no-install
+      - name: Configure Android release signing
+        script: |
+          cd apps/mobile
+          node scripts/configure-codemagic-android-signing.mjs
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
+          chmod +x android/gradlew
+      - name: Build signed Android bundle and installer
+        script: |
+          cd apps/mobile/android
+          ./gradlew bundleRelease assembleRelease
+    artifacts:
+      - apps/mobile/android/app/build/outputs/**/*.aab
+      - apps/mobile/android/app/build/outputs/**/*.apk
+      - apps/mobile/android/app/build/outputs/**/mapping.txt
+    publishing:
+      google_play:
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+        in_app_update_priority: 0
+
+  bizlee-ios-testflight:
+    name: Bizlee iOS - TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      groups:
+        - bizlee_mobile
+        - app_store_credentials
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.bizlee.mobile
+      vars:
+        APP_ENV: production
+        APP_VERSION: "0.1.0"
+        BUNDLE_ID: com.bizlee.mobile
+        XCODE_SCHEME: Bizlee
+      node: 22.14.0
+      xcode: 26.4
+      cocoapods: default
+    cache:
+      cache_paths:
+        - $HOME/.npm
+        - $HOME/Library/Caches/CocoaPods
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "mobile-v*"
+          include: true
+      cancel_previous_builds: true
+    scripts:
+      - name: Validate production configuration
+        script: |
+          #!/bin/bash
+          set -euo pipefail
+          : "${EXPO_PUBLIC_API_URL:?Add EXPO_PUBLIC_API_URL to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_SUPABASE_URL:?Add EXPO_PUBLIC_SUPABASE_URL to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_SUPABASE_ANON_KEY:?Add EXPO_PUBLIC_SUPABASE_ANON_KEY to the bizlee_mobile group}"
+          : "${EXPO_PUBLIC_EXPO_PROJECT_ID:?Add EXPO_PUBLIC_EXPO_PROJECT_ID to the bizlee_mobile group}"
+          : "${APP_STORE_CONNECT_PRIVATE_KEY:?Add the App Store API key to app_store_credentials}"
+          : "${APP_STORE_CONNECT_KEY_IDENTIFIER:?Add the App Store key identifier to app_store_credentials}"
+          : "${APP_STORE_CONNECT_ISSUER_ID:?Add the App Store issuer ID to app_store_credentials}"
+          case "$EXPO_PUBLIC_API_URL" in
+            https://*) ;;
+            *) echo "EXPO_PUBLIC_API_URL must use HTTPS for production" >&2; exit 1 ;;
+          esac
+      - name: Install workspace dependencies
+        script: npm ci --prefer-offline
+      - name: Verify mobile workspace
+        script: |
+          npm run mobile:check
+          npm run contracts:check
+          npm run test:mobile-api
+      - name: Generate iOS project
+        script: |
+          cd apps/mobile
+          npx expo prebuild --platform ios --clean --no-install
+      - name: Install CocoaPods dependencies
+        script: |
+          cd apps/mobile/ios
+          pod install
+      - name: Apply App Store signing profiles
+        script: |
+          cd apps/mobile
+          xcode-project use-profiles
+      - name: Build signed IPA
+        script: |
+          cd apps/mobile
+          XCODE_WORKSPACE=$(find "$PWD/ios" -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          if [ -z "$XCODE_WORKSPACE" ]; then
+            echo "No generated Xcode workspace found" >&2
+            exit 1
+          fi
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - apps/mobile/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
