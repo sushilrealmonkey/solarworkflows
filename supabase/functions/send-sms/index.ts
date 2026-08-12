@@ -1,9 +1,8 @@
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
-
-type SendSmsHookPayload = {
-  user?: { phone?: string | null };
-  sms?: { otp?: string | number | null };
-};
+import {
+  parseWhatsAppOtp,
+  type SendSmsHookPayload,
+} from "./payload.ts";
 
 type MetaSendMessageResponse = {
   messages?: Array<{ id?: string }>;
@@ -21,14 +20,16 @@ Deno.serve(async (request) => {
   try {
     const rawPayload = await request.text();
     const payload = verifySupabaseHook(rawPayload, request.headers);
-    const mobile = normalizeIndianMobile(payload.user?.phone);
-    const otp = String(payload.sms?.otp ?? "").trim();
+    const whatsappOtp = parseWhatsAppOtp(payload);
 
-    if (!mobile || !otp || !/^\d{6}$/.test(otp)) {
+    if (!whatsappOtp) {
       return jsonResponse({ error: "Invalid Send SMS hook payload" }, 400);
     }
 
-    await sendWhatsAppAuthenticationTemplate(mobile, otp);
+    await sendWhatsAppAuthenticationTemplate(
+      whatsappOtp.mobile,
+      whatsappOtp.otp,
+    );
 
     return jsonResponse({}, 200);
   } catch (error) {
@@ -117,11 +118,6 @@ async function parseMetaResponse(response: Response) {
   } catch {
     return {} satisfies MetaSendMessageResponse;
   }
-}
-
-function normalizeIndianMobile(phone: string | null | undefined) {
-  const digits = phone?.replace(/\D/g, "") ?? "";
-  return /^91[6-9]\d{9}$/.test(digits) ? digits : null;
 }
 
 function requireDigitsEnv(name: string) {

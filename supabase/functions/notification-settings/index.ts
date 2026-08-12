@@ -7,18 +7,7 @@ import {
 } from "../_shared/assistant.ts";
 import { normalizePhone } from "../_shared/meta-whatsapp.ts";
 
-const allowedTypes = new Set([
-  "trial_ending",
-  "trial_expired",
-  "subscription_action_required",
-  "subscription_payment_received",
-  "requested_daily_summary",
-  "new_signin_alert",
-  "account_change_notice",
-  "product_tip",
-  "plan_offer",
-  "product_announcement",
-]);
+const tenantManagedTypes = new Set(["requested_daily_summary"]);
 
 type PreferenceInput = {
   notification_type?: unknown;
@@ -161,7 +150,7 @@ async function savePreference(
   const notificationType = typeof input.notification_type === "string"
     ? input.notification_type
     : "";
-  if (!allowedTypes.has(notificationType)) {
+  if (!tenantManagedTypes.has(notificationType)) {
     throw new Error("Unsupported notification preference");
   }
   const enabled = input.is_enabled === true;
@@ -235,33 +224,21 @@ async function loadSettings(
       recent_deliveries: [],
     };
   }
-  const [{ data: preferences, error: preferenceError }, {
-    data: deliveries,
-    error: deliveryError,
-  }] = await Promise.all([
-    service.from("notification_preferences")
-      .select(
-        "notification_type,is_enabled,delivery_time,timezone,consent_status",
-      )
-      .eq("company_id", companyId)
-      .eq("recipient_id", recipient.id),
-    service.from("notification_deliveries")
-      .select(
-        "id,status,created_at,sent_at,delivered_at,read_at,failure_message,notification_events(event_type)",
-      )
-      .eq("company_id", companyId)
-      .eq("recipient_id", recipient.id)
-      .order("created_at", { ascending: false })
-      .limit(10),
-  ]);
+  const { data: preferences, error: preferenceError } = await service
+    .from("notification_preferences")
+    .select(
+      "notification_type,is_enabled,delivery_time,timezone,consent_status",
+    )
+    .eq("company_id", companyId)
+    .eq("recipient_id", recipient.id)
+    .eq("notification_type", "requested_daily_summary");
   if (preferenceError) throw new Error(preferenceError.message);
-  if (deliveryError) throw new Error(deliveryError.message);
   return {
     recipient,
     profile_phone: profile.phone,
     profile_phone_verified: Boolean(profile.phone_verified),
     preferences: preferences ?? [],
-    recent_deliveries: deliveries ?? [],
+    recent_deliveries: [],
   };
 }
 
