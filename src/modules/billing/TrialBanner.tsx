@@ -28,12 +28,12 @@ export function TrialBanner() {
           <p className="text-sm font-semibold">
             {subscription.days_remaining}{" "}
             {subscription.days_remaining === 1 ? "day" : "days"} left in your
-            Full-feature trial
+            Bizlee Pro trial
           </p>
           <p className="mt-1 text-xs opacity-75">
             {expiry
-              ? `Your trial ends on ${expiry}. Choose a plan to keep editing your workspace.`
-              : "Choose a monthly plan to keep editing your workspace."}
+              ? `Every feature is unlocked until ${expiry}. Choose a plan to keep editing your workspace.`
+              : "Every feature is unlocked during your trial. Choose a plan to keep editing your workspace."}
           </p>
         </div>
         {subscription.is_admin ? (

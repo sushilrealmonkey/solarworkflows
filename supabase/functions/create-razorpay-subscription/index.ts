@@ -88,6 +88,48 @@ Deno.serve(async (request) => {
       .eq("company_id", access.company_id)
       .single();
 
+    // A tenant remains on Pro for the whole free trial. If it already started
+    // checkout, update that provider subscription without changing the trial's
+    // effective plan; the webhook applies the paid plan after activation.
+    if (
+      currentSubscription?.razorpay_subscription_id &&
+      currentSubscription.status === "trialing"
+    ) {
+      await razorpayRequest(
+        `/v1/subscriptions/${currentSubscription.razorpay_subscription_id}`,
+        {
+          plan_id: planId(planKey, billingPeriod),
+          schedule_change_at: "now",
+          customer_notify: 1,
+          notes: {
+            company_id: access.company_id,
+            plan_key: planKey,
+            billing_period: billingPeriod,
+            created_by: authData.user.id,
+          },
+        },
+        "PATCH",
+      );
+      const { error: trialCheckoutError } = await service
+        .from("company_subscriptions")
+        .update({ billing_period: billingPeriod })
+        .eq("company_id", access.company_id)
+        .eq(
+          "razorpay_subscription_id",
+          currentSubscription.razorpay_subscription_id,
+        );
+      if (trialCheckoutError) throw new Error(trialCheckoutError.message);
+
+      return json({
+        keyId: requiredEnv("RAZORPAY_KEY_ID"),
+        subscriptionId: currentSubscription.razorpay_subscription_id,
+        planName: displayPlanName(planKey),
+        customerName: profile?.full_name ?? null,
+        customerEmail: profile?.email ?? authData.user.email ?? null,
+        customerPhone: profile?.phone ?? authData.user.phone ?? null,
+      });
+    }
+
     if (
       currentSubscription?.razorpay_subscription_id &&
       currentSubscription.status === "active" &&
@@ -162,13 +204,19 @@ Deno.serve(async (request) => {
       throw new Error("Razorpay did not return a subscription id");
     }
 
-    const { error: saveError } = await service
-      .from("company_subscriptions")
-      .update({
+    const subscriptionPatch = currentSubscription?.status === "trialing"
+      ? {
+        billing_period: billingPeriod,
+        razorpay_subscription_id: razorpaySubscription.id,
+      }
+      : {
         plan_key: planKey,
         billing_period: billingPeriod,
         razorpay_subscription_id: razorpaySubscription.id,
-      })
+      };
+    const { error: saveError } = await service
+      .from("company_subscriptions")
+      .update(subscriptionPatch)
       .eq("company_id", access.company_id);
     if (saveError) throw new Error(saveError.message);
 

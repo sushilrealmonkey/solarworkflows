@@ -1,6 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { useToast } from "../../components/ui/ToastProvider";
+import {
+  requestCurrentUserPhoneVerification,
+  resendCurrentUserPhoneVerification,
+  verifyCurrentUserPhone,
+} from "../../services/authAccess";
 import { formatDateTime, labelize } from "../crm/crmUtils";
 import {
   fetchNotificationSettings,
@@ -80,7 +85,7 @@ const definitions: Array<{
 ];
 
 export function NotificationPreferencesSection() {
-  const { organization } = useAuth();
+  const { organization, refresh } = useAuth();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
   const [enabled, setEnabled] = useState<Record<string, boolean>>({});
@@ -88,17 +93,20 @@ export function NotificationPreferencesSection() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [phone, setPhone] = useState("");
+  const [pendingPhone, setPendingPhone] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [requestingCode, setRequestingCode] = useState(false);
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [resendingCode, setResendingCode] = useState(false);
 
-  useEffect(() => {
-    void load();
-  }, []);
-
-  async function load() {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const next = await fetchNotificationSettings();
       setSettings(next);
+      setPhone((current) => current || next.profile_phone || "");
       setEnabled(Object.fromEntries(
         next.preferences.map((item) => [
           item.notification_type,
@@ -113,6 +121,60 @@ export function NotificationPreferencesSection() {
       setError(nextError instanceof Error ? nextError.message : "Unable to load notifications.");
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function requestVerificationCode() {
+    try {
+      setRequestingCode(true);
+      setError(null);
+      const normalizedPhone = await requestCurrentUserPhoneVerification(phone);
+      setPendingPhone(normalizedPhone);
+      setPhone(normalizedPhone);
+      setVerificationCode("");
+      showToast("Verification code sent to your mobile number.", "success");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to send the verification code.");
+    } finally {
+      setRequestingCode(false);
+    }
+  }
+
+  async function verifyPhone() {
+    if (!pendingPhone) return;
+
+    try {
+      setVerifyingCode(true);
+      setError(null);
+      await verifyCurrentUserPhone(pendingPhone, verificationCode);
+      await refresh();
+      setPendingPhone(null);
+      setVerificationCode("");
+      await load();
+      showToast("Phone number verified for WhatsApp notifications.", "success");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to verify the phone number.");
+    } finally {
+      setVerifyingCode(false);
+    }
+  }
+
+  async function resendVerificationCode() {
+    if (!pendingPhone) return;
+
+    try {
+      setResendingCode(true);
+      setError(null);
+      await resendCurrentUserPhoneVerification(pendingPhone);
+      showToast("A new verification code was sent.", "success");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Unable to resend the verification code.");
+    } finally {
+      setResendingCode(false);
     }
   }
 
@@ -177,6 +239,85 @@ export function NotificationPreferencesSection() {
               ? "Verify the phone number on your Bizlee account before enabling WhatsApp notifications."
               : "Add and verify a phone number on your Bizlee account first."}
           </p>
+          {!pendingPhone ? (
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <label className="block min-w-0 flex-1 text-sm font-medium text-amber-950">
+                Mobile number
+                <input
+                  autoComplete="tel"
+                  className="mt-1 h-11 w-full rounded-lg border border-amber-300 bg-white px-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                  disabled={requestingCode}
+                  inputMode="tel"
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="+91 98765 43210"
+                  type="tel"
+                  value={phone}
+                />
+                <span className="mt-1.5 block text-xs font-normal leading-5 text-amber-800">
+                  Include the country code. We will send a one-time verification code.
+                </span>
+              </label>
+              <button
+                className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg bg-orange-600 px-5 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={requestingCode || !phone.trim()}
+                onClick={() => void requestVerificationCode()}
+                type="button"
+              >
+                {requestingCode ? "Sending…" : "Send verification code"}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-amber-200 bg-white p-3 sm:p-4">
+              <p className="text-sm font-medium text-slate-900">
+                Enter the code sent to {pendingPhone}
+              </p>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="block min-w-0 flex-1 text-sm font-medium text-slate-700">
+                  6-digit verification code
+                  <input
+                    autoComplete="one-time-code"
+                    className="mt-1 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-900 outline-none placeholder:text-slate-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    disabled={verifyingCode}
+                    inputMode="numeric"
+                    maxLength={6}
+                    onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="123456"
+                    type="text"
+                    value={verificationCode}
+                  />
+                </label>
+                <button
+                  className="inline-flex h-11 shrink-0 items-center justify-center rounded-lg bg-orange-600 px-5 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={verifyingCode || verificationCode.length !== 6}
+                  onClick={() => void verifyPhone()}
+                  type="button"
+                >
+                  {verifyingCode ? "Verifying…" : "Verify number"}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                <button
+                  className="text-sm font-semibold text-orange-700 hover:text-orange-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={resendingCode || verifyingCode}
+                  onClick={() => void resendVerificationCode()}
+                  type="button"
+                >
+                  {resendingCode ? "Resending…" : "Resend code"}
+                </button>
+                <button
+                  className="text-sm font-semibold text-slate-600 hover:text-slate-900 disabled:opacity-60"
+                  disabled={verifyingCode}
+                  onClick={() => {
+                    setPendingPhone(null);
+                    setVerificationCode("");
+                  }}
+                  type="button"
+                >
+                  Use a different number
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 

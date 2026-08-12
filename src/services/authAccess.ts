@@ -380,6 +380,87 @@ export async function requestPhoneLoginOtp(phone: string) {
   }
 }
 
+export async function requestCurrentUserPhoneVerification(phone: string) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedPhone = normalizeSmsPhone(phone);
+
+  if (!isValidSmsPhone(normalizedPhone)) {
+    throw new Error("Enter a mobile number with its country code.");
+  }
+
+  const { error } = await supabase.auth.updateUser({
+    phone: normalizedPhone,
+  });
+
+  if (error) {
+    throw new Error(mapPhoneVerificationError(error.message));
+  }
+
+  return normalizedPhone;
+}
+
+export async function resendCurrentUserPhoneVerification(phone: string) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedPhone = normalizeSmsPhone(phone);
+
+  if (!isValidSmsPhone(normalizedPhone)) {
+    throw new Error("Enter a mobile number with its country code.");
+  }
+
+  const { error } = await supabase.auth.resend({
+    phone: normalizedPhone,
+    type: "phone_change",
+  });
+
+  if (error) {
+    throw new Error(mapPhoneVerificationError(error.message));
+  }
+}
+
+export async function verifyCurrentUserPhone(
+  phone: string,
+  token: string,
+) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedPhone = normalizeSmsPhone(phone);
+  const normalizedToken = token.trim();
+
+  if (!isValidSmsPhone(normalizedPhone)) {
+    throw new Error("Enter a mobile number with its country code.");
+  }
+
+  if (!/^\d{6}$/.test(normalizedToken)) {
+    throw new Error("Enter the 6-digit verification code.");
+  }
+
+  const { error: verificationError } = await supabase.auth.verifyOtp({
+    phone: normalizedPhone,
+    token: normalizedToken,
+    type: "phone_change",
+  });
+
+  if (verificationError) {
+    throw new Error(mapPhoneVerificationError(verificationError.message));
+  }
+
+  const { error: syncError } = await supabase.rpc(
+    "sync_verified_phone_to_profile",
+  );
+
+  if (syncError) {
+    throw new Error(syncError.message);
+  }
+}
+
 async function assertSignupIdentifierAvailable(
   type: "email" | "phone",
   value: string,
@@ -608,6 +689,47 @@ function mapPhoneAuthError(message: string) {
     message ||
     "WhatsApp verification could not be completed. Please try again."
   );
+}
+
+function mapPhoneVerificationError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("already registered") ||
+    normalizedMessage.includes("already been registered") ||
+    normalizedMessage.includes("already exists")
+  ) {
+    return "This mobile number is already linked to another account.";
+  }
+
+  if (
+    normalizedMessage.includes("provider is not enabled") ||
+    normalizedMessage.includes("unsupported provider") ||
+    normalizedMessage.includes("sms provider")
+  ) {
+    return "Phone verification is not enabled for this Supabase project yet.";
+  }
+
+  if (normalizedMessage.includes("rate limit")) {
+    return "Please wait before requesting another verification code.";
+  }
+
+  if (
+    normalizedMessage.includes("invalid phone") ||
+    normalizedMessage.includes("phone number")
+  ) {
+    return "Enter a valid mobile number with its country code.";
+  }
+
+  if (
+    normalizedMessage.includes("token") ||
+    normalizedMessage.includes("otp") ||
+    normalizedMessage.includes("expired")
+  ) {
+    return "That verification code is invalid or expired. Request a new code.";
+  }
+
+  return message || "Phone verification could not be completed. Please try again.";
 }
 
 function mapWorkspaceOnboardingError(message: string) {

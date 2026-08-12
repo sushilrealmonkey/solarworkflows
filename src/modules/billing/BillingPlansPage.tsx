@@ -73,7 +73,7 @@ export function BillingPlansPage() {
   const statusText = useMemo(() => {
     if (!subscription) return null;
     if (subscription.status === "trialing") {
-      return `${subscription.days_remaining} days remaining in your full-feature trial`;
+      return `Bizlee Pro trial · ${subscription.days_remaining} days remaining · every feature unlocked`;
     }
     if (subscription.status === "grandfathered") return "Bizlee Pro access";
     return `${subscription.plan_name ?? "No active plan"} · ${subscription.status.replace("_", " ")}`;
@@ -248,14 +248,6 @@ export function BillingPlansPage() {
             </span>
           </button>
         </div>
-      </section>
-
-      <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950">
-        <p className="font-semibold">UPI AutoPay available</p>
-        <p>
-          Choose UPI in the secure Razorpay checkout and approve the recurring
-          mandate in your UPI app. Future renewals are collected automatically.
-        </p>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

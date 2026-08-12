@@ -8,6 +8,7 @@ declare
   premium_yearly_price integer;
   starter_seat_limit integer;
   trial_trigger_exists boolean;
+  pro_trial_trigger_exists boolean;
   access_function regprocedure :=
     'public.get_current_subscription_access()'::regprocedure;
 begin
@@ -82,6 +83,24 @@ begin
     raise exception 'New company trial trigger is missing';
   end if;
 
+  select exists (
+    select 1 from pg_trigger
+    where tgname = 'assign_pro_plan_to_trial'
+      and not tgisinternal
+  ) into pro_trial_trigger_exists;
+  if not pro_trial_trigger_exists then
+    raise exception 'Trial subscriptions must be forced onto Pro';
+  end if;
+
+  if exists (
+    select 1
+    from public.company_subscriptions
+    where status = 'trialing'
+      and plan_key is distinct from 'premium'
+  ) then
+    raise exception 'Every trial tenant must have the Pro plan';
+  end if;
+
   if position(
     'app.onboarding_company_id'
     in pg_get_functiondef(
@@ -89,6 +108,15 @@ begin
     )
   ) = 0 then
     raise exception 'Trial creation must mark the onboarding transaction';
+  end if;
+
+  if position(
+    '''premium'''
+    in pg_get_functiondef(
+      'public.create_company_trial_subscription()'::regprocedure
+    )
+  ) = 0 then
+    raise exception 'New company trials must start on Pro';
   end if;
 
   if not has_function_privilege('authenticated', access_function, 'execute') then
