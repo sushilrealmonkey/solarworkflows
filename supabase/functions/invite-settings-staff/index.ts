@@ -1,6 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 type InviteStaffRequestBody = {
+  action?: "invite" | "update_invited" | "resend" | "delete";
+  staff_id?: string;
   full_name?: string;
   phone?: string | null;
   email?: string;
@@ -11,9 +13,17 @@ type InviteStaffRequestBody = {
 type StaffProfileRow = {
   id: string;
   organization_id: string | null;
+  auth_user_id: string | null;
   full_name: string | null;
+  phone: string | null;
   email: string | null;
   status: string | null;
+};
+
+type SettingsStaffRow = {
+  id: string;
+  role_id: string | null;
+  role_name: string | null;
 };
 
 type SettingsRow = {
@@ -60,7 +70,11 @@ async function handleInviteRequest(request: Request): Promise<Response> {
     }
 
     const body = (await request.json()) as InviteStaffRequestBody;
-    const payload = validateInviteBody(body);
+    const action = body.action ?? "invite";
+
+    if (!["invite", "update_invited", "resend", "delete"].includes(action)) {
+      return jsonResponse({ error: "Unsupported staff action" }, 400);
+    }
 
     const callerClient = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -74,10 +88,25 @@ async function handleInviteRequest(request: Request): Promise<Response> {
       },
     });
 
-    const inviteMetadata = await resolveInviteMetadata(
-      callerClient,
-      payload.role_id,
-    );
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    if (action !== "invite") {
+      return await handleExistingStaffAction({
+        action,
+        body,
+        callerClient,
+        serviceClient,
+        appBaseUrl,
+      });
+    }
+
+    const payload = validateInviteBody(body);
+    const inviteMetadata = await resolveInviteMetadata(callerClient, payload.role_id);
 
     if (inviteMetadata.error) {
       return jsonResponse({ error: inviteMetadata.error }, 400);
@@ -106,13 +135,6 @@ async function handleInviteRequest(request: Request): Promise<Response> {
     }
 
     const staff = staffData as StaffProfileRow;
-
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
 
     const { data: inviteData, error: inviteError } =
       await serviceClient.auth.admin.inviteUserByEmail(payload.email, {
@@ -162,6 +184,174 @@ async function handleInviteRequest(request: Request): Promise<Response> {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return jsonResponse({ error: message }, 400);
   }
+}
+
+async function handleExistingStaffAction({
+  action,
+  body,
+  callerClient,
+  serviceClient,
+  appBaseUrl,
+}: {
+  action: "update_invited" | "resend" | "delete";
+  body: InviteStaffRequestBody;
+  callerClient: ReturnType<typeof createClient>;
+  serviceClient: ReturnType<typeof createClient>;
+  appBaseUrl: string;
+}) {
+  const staffId = normalizeUuid(body.staff_id);
+  const { data: visibleStaffData, error: accessError } =
+    await callerClient.rpc("get_settings_staff");
+
+  if (accessError) {
+    return jsonResponse({ error: accessError.message }, 403);
+  }
+
+  const visibleStaff = ((visibleStaffData ?? []) as SettingsStaffRow[]).find(
+    (candidate) => candidate.id === staffId,
+  );
+
+  if (!visibleStaff) {
+    return jsonResponse({ error: "Staff profile was not found" }, 404);
+  }
+
+  const { data: profileData, error: profileError } = await serviceClient
+    .from("users_profile")
+    .select("id, organization_id, auth_user_id, full_name, phone, email, status")
+    .eq("id", staffId)
+    .maybeSingle();
+
+  if (profileError || !profileData) {
+    return jsonResponse(
+      { error: profileError?.message ?? "Staff profile was not found" },
+      profileError ? 400 : 404,
+    );
+  }
+
+  const profile = profileData as StaffProfileRow;
+
+  if (profile.status !== "invited") {
+    return jsonResponse(
+      { error: "This action is only available for invited staff" },
+      409,
+    );
+  }
+
+  if (action === "delete") {
+    if (profile.auth_user_id) {
+      const { error: authDeleteError } =
+        await serviceClient.auth.admin.deleteUser(profile.auth_user_id);
+
+      if (authDeleteError) {
+        return jsonResponse({ error: authDeleteError.message }, 400);
+      }
+    }
+
+    const { error: profileDeleteError } = await serviceClient
+      .from("users_profile")
+      .delete()
+      .eq("id", profile.id)
+      .eq("organization_id", profile.organization_id);
+
+    if (profileDeleteError) {
+      return jsonResponse({ error: profileDeleteError.message }, 400);
+    }
+
+    return jsonResponse({ deleted: true, staff_id: profile.id });
+  }
+
+  if (action === "resend") {
+    const email = normalizeEmail(profile.email ?? "");
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return jsonResponse({ error: "The invited staff email is invalid" }, 400);
+    }
+
+    const inviteMetadata = await resolveInviteMetadata(
+      callerClient,
+      visibleStaff.role_id,
+    );
+
+    if (inviteMetadata.error) {
+      return jsonResponse({ error: inviteMetadata.error }, 400);
+    }
+
+    const { data: inviteData, error: inviteError } =
+      await serviceClient.auth.admin.inviteUserByEmail(email, {
+        redirectTo: `${appBaseUrl}/create-password`,
+        data: {
+          full_name: profile.full_name,
+          company_name: inviteMetadata.company_name,
+          staff_role: inviteMetadata.staff_role,
+          staff_role_article: inviteMetadata.staff_role_article,
+        },
+      });
+
+    if (inviteError || !inviteData.user) {
+      return jsonResponse(
+        { error: inviteError?.message ?? "Unable to resend staff invite" },
+        400,
+      );
+    }
+
+    const { error: linkError } = await serviceClient
+      .from("users_profile")
+      .update({
+        auth_user_id: inviteData.user.id,
+        invited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", profile.id)
+      .eq("organization_id", profile.organization_id);
+
+    if (linkError) {
+      return jsonResponse({ error: linkError.message }, 400);
+    }
+
+    return jsonResponse({ invite_email_sent: true, staff_id: profile.id });
+  }
+
+  const payload = validateInviteBody({ ...body, status: "invited" });
+  const previousEmail = normalizeEmail(profile.email ?? "");
+  const emailChanged = payload.email !== previousEmail;
+
+  if (emailChanged && profile.auth_user_id) {
+    const { error: authUpdateError } =
+      await serviceClient.auth.admin.updateUserById(profile.auth_user_id, {
+        email: payload.email,
+      });
+
+    if (authUpdateError) {
+      return jsonResponse({ error: authUpdateError.message }, 400);
+    }
+  }
+
+  const { data: updatedStaff, error: updateError } = await callerClient.rpc(
+    "update_settings_staff",
+    {
+      target_profile_id: profile.id,
+      full_name: payload.full_name,
+      phone: payload.phone,
+      email: payload.email,
+      role_id: payload.role_id,
+      status: "invited",
+    },
+  );
+
+  if (updateError) {
+    if (emailChanged && profile.auth_user_id && previousEmail) {
+      await serviceClient.auth.admin.updateUserById(profile.auth_user_id, {
+        email: previousEmail,
+      });
+    }
+
+    return jsonResponse({ error: updateError.message }, 400);
+  }
+
+  return jsonResponse({
+    ...(updatedStaff as StaffProfileRow),
+    email_changed: emailChanged,
+  });
 }
 
 function validateInviteBody(body: InviteStaffRequestBody) {
@@ -261,6 +451,20 @@ function normalizeNullableText(value: string | null) {
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
+}
+
+function normalizeUuid(value: string | undefined) {
+  const normalized = normalizeText(value);
+
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      normalized,
+    )
+  ) {
+    throw new Error("Invalid staff selection");
+  }
+
+  return normalized;
 }
 
 function normalizeStatus(value: string | undefined, allowedValues: string[]) {

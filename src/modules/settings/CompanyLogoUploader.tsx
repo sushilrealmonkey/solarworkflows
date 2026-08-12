@@ -124,21 +124,28 @@ export function CompanyLogoUploader({
     : null;
 
   return (
-    <div className="h-full rounded-lg border border-stone-200 bg-stone-50 p-3">
-      <div className="flex h-full flex-col gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-stretch lg:justify-center">
-        <div className="flex h-20 w-full items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-white sm:w-36 lg:h-24 lg:w-full">
+    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
+        <div className="flex h-28 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-[linear-gradient(135deg,#fafaf9_25%,#ffffff_25%,#ffffff_50%,#fafaf9_50%,#fafaf9_75%,#ffffff_75%,#ffffff)] bg-[length:20px_20px] p-3 sm:w-52">
           {currentUrl ? (
             <img className="h-full w-full object-contain" src={currentUrl} alt="Current company logo" />
           ) : (
             <span className="text-sm text-slate-500">No logo uploaded</span>
           )}
         </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-slate-900">Upload company logo</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
-            PNG, JPG, SVG, and other image formats are supported. Empty borders are trimmed automatically. Maximum file size: 1 MB.
+        <div className="min-w-0 flex-1 sm:px-1">
+          <p className="text-sm font-semibold text-slate-950">
+            {currentUrl ? "Your current logo" : "Upload your company logo"}
           </p>
-          <label className="mt-2 inline-flex min-h-9 cursor-pointer items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50">
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+            Use PNG, JPG, or SVG up to 1 MB. Empty borders are trimmed automatically for a cleaner fit.
+          </p>
+          {!sourceUrl && error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
+        </div>
+        <div className="sm:shrink-0">
+          <label className={`inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700 sm:w-auto ${
+            disabled || preparing ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+          }`}>
             {preparing ? "Preparing logo..." : currentUrl ? "Replace logo" : "Choose logo"}
             <input
               ref={inputRef}
@@ -149,7 +156,6 @@ export function CompanyLogoUploader({
               onChange={(event) => void selectFile(event)}
             />
           </label>
-          {!sourceUrl && error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
         </div>
       </div>
 

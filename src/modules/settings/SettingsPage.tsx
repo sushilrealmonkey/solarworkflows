@@ -22,9 +22,11 @@ import { formatDateTime, hasPermission, labelize } from "../crm/crmUtils";
 import {
   createStaff,
   deactivateStaffForSeatLimit,
+  deleteInvitedStaff,
   fetchOrganizationSettings,
   fetchSettingsRoles,
   fetchSettingsStaff,
+  resendStaffInvite,
   uploadCompanyLogo,
   updateOrganizationSettings,
   updateStaff,
@@ -262,21 +264,46 @@ export function OrganizationSettingsPage() {
 
   return (
     <form
-      className="space-y-4 rounded-xl border border-stone-200 bg-white p-3 shadow-sm sm:p-4"
+      className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
       onSubmit={handleSubmit}
     >
-      <div className="flex flex-col gap-3 border-b border-stone-100 pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <SectionTitle title="Company Profile" />
-        </div>
-        <Button type="submit" disabled={saving}>
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
+      <div className="border-b border-stone-200 px-4 py-4 sm:px-6">
+        <SectionTitle
+          title="Company Profile"
+          description="Keep your business identity, contact information, and banking details up to date."
+        />
       </div>
 
-      <div className="grid gap-3 border-b border-stone-100 pb-4">
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="grid gap-3">
+      <div className="space-y-4 bg-stone-50/70 p-3 sm:p-5">
+        <section aria-labelledby="brand-identity-heading">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3
+                id="brand-identity-heading"
+                className="text-sm font-semibold text-slate-950"
+              >
+                Brand identity
+              </h3>
+              <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                This logo appears across your workspace and customer documents.
+              </p>
+            </div>
+            <span className="hidden rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700 sm:inline-flex">
+              Company logo
+            </span>
+          </div>
+          <CompanyLogoUploader
+            currentUrl={values.company_logo_url}
+            disabled={saving}
+            onUpload={handleLogoUpload}
+          />
+        </section>
+
+        <div className="grid items-start gap-4 xl:grid-cols-2">
+          <ProfileSettingsCard
+            title="Company information"
+            description="Business and primary contact details"
+          >
             <TextInput
               label="Company Name"
               value={values.company_name}
@@ -288,43 +315,37 @@ export function OrganizationSettingsPage() {
               value={values.address}
               onChange={(value) => update("address", value)}
             />
-          </div>
-          <CompanyLogoUploader
-            currentUrl={values.company_logo_url}
-            disabled={saving}
-            onUpload={handleLogoUpload}
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextInput
-            label="Contact Person"
-            value={values.contact_person}
-            onChange={(value) => update("contact_person", value)}
-          />
-          <TextInput
-            label="Contact Email"
-            type="email"
-            value={values.contact_email}
-            onChange={(value) => update("contact_email", value)}
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <TextInput
-            label="Contact Phone"
-            value={values.contact_phone}
-            onChange={(value) => update("contact_phone", value)}
-          />
-          <TextInput
-            label="GST Number"
-            value={values.gst_number}
-            onChange={(value) => update("gst_number", value)}
-          />
-        </div>
-      </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextInput
+                label="Contact Person"
+                value={values.contact_person}
+                onChange={(value) => update("contact_person", value)}
+              />
+              <TextInput
+                label="Contact Email"
+                type="email"
+                value={values.contact_email}
+                onChange={(value) => update("contact_email", value)}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextInput
+                label="Contact Phone"
+                value={values.contact_phone}
+                onChange={(value) => update("contact_phone", value)}
+              />
+              <TextInput
+                label="GST Number"
+                value={values.gst_number}
+                onChange={(value) => update("gst_number", value)}
+              />
+            </div>
+          </ProfileSettingsCard>
 
-      <SettingsSection title="Bank Details">
-        <div className="grid gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <ProfileSettingsCard
+            title="Bank details"
+            description="Account information used on financial documents"
+          >
             <TextInput
               label="Account Holder Name"
               value={values.bank_account_holder_name}
@@ -335,26 +356,31 @@ export function OrganizationSettingsPage() {
               value={values.bank_account_number}
               onChange={(value) => update("bank_account_number", value)}
             />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <TextInput
-              label="Bank Name"
-              value={values.bank_name}
-              onChange={(value) => update("bank_name", value)}
-            />
-            <TextInput
-              label="Account Type"
-              value={values.bank_account_type}
-              onChange={(value) => update("bank_account_type", value)}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextInput
+                label="Bank Name"
+                value={values.bank_name}
+                onChange={(value) => update("bank_name", value)}
+              />
+              <TextInput
+                label="Account Type"
+                value={values.bank_account_type}
+                onChange={(value) => update("bank_account_type", value)}
+              />
+            </div>
             <TextInput
               label="IFSC Code"
               value={values.bank_ifsc_code}
               onChange={(value) => update("bank_ifsc_code", value)}
             />
-          </div>
+            <div className="-mx-4 -mb-4 mt-1 flex justify-end border-t border-stone-100 bg-stone-50/70 p-4 [&>button]:w-full sm:[&>button]:w-auto">
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save Settings"}
+              </Button>
+            </div>
+          </ProfileSettingsCard>
         </div>
-      </SettingsSection>
+      </div>
     </form>
   );
 }
@@ -389,6 +415,9 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
   const [saving, setSaving] = useState(false);
   const [statusTarget, setStatusTarget] = useState<SettingsStaff | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
+  const [resendingStaffId, setResendingStaffId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SettingsStaff | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [openStaffMenuId, setOpenStaffMenuId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
@@ -469,7 +498,11 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
         await createStaff(formState.values);
         showToast("Staff invite email sent.", "success");
       } else if (formState.staff) {
-        await updateStaff(formState.staff.id, formState.values);
+        await updateStaff(
+          formState.staff.id,
+          formState.values,
+          formState.staff.status,
+        );
         showToast("Staff profile updated.", "success");
       }
       setFormState(null);
@@ -481,6 +514,44 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleResendInvite(member: SettingsStaff) {
+    try {
+      setOpenStaffMenuId(null);
+      setResendingStaffId(member.id);
+      await resendStaffInvite(member.id);
+      showToast("A fresh staff invite email was sent.", "success");
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Invite resend failed.",
+        "error",
+      );
+    } finally {
+      setResendingStaffId(null);
+    }
+  }
+
+  async function handleDeleteInvitedStaff() {
+    if (!deleteTarget) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await deleteInvitedStaff(deleteTarget.id);
+      showToast("Invited staff member deleted.", "success");
+      setDeleteTarget(null);
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Staff delete failed.",
+        "error",
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -565,21 +636,19 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
                         lastLogin={formatDateTime(member.last_login_at)}
                         member={member}
                         reductionOnly={reductionOnly}
+                        resending={resendingStaffId === member.id}
                         onEdit={() => openEditForm(member)}
+                        onDelete={() => {
+                          setOpenStaffMenuId(null);
+                          setDeleteTarget(member);
+                        }}
                         onMenuOpenChange={(isOpen) =>
                           setOpenStaffMenuId(isOpen ? member.id : null)
                         }
+                        onResend={() => void handleResendInvite(member)}
                         onStatusAction={() => {
                           setOpenStaffMenuId(null);
-                          if (reductionOnly) {
-                            setStatusTarget(member);
-                            return;
-                          }
-                          if (member.status === "active") {
-                            setStatusTarget(member);
-                            return;
-                          }
-                          void setMemberStatus(member, "active");
+                          setStatusTarget(member);
                         }}
                       />
                     </td>
@@ -617,21 +686,19 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
                     lastLogin={formatDateTime(member.last_login_at)}
                     member={member}
                     reductionOnly={reductionOnly}
+                    resending={resendingStaffId === member.id}
                     onEdit={() => openEditForm(member)}
+                    onDelete={() => {
+                      setOpenStaffMenuId(null);
+                      setDeleteTarget(member);
+                    }}
                     onMenuOpenChange={(isOpen) =>
                       setOpenStaffMenuId(isOpen ? member.id : null)
                     }
+                    onResend={() => void handleResendInvite(member)}
                     onStatusAction={() => {
                       setOpenStaffMenuId(null);
-                      if (reductionOnly) {
-                        setStatusTarget(member);
-                        return;
-                      }
-                      if (member.status === "active") {
-                        setStatusTarget(member);
-                        return;
-                      }
-                      void setMemberStatus(member, "active");
+                      setStatusTarget(member);
                     }}
                   />
                 </div>
@@ -654,7 +721,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
           onClose={() => setFormState(null)}
           onSubmit={handleSubmit}
           saving={saving}
-          showStatus={formState.mode === "edit"}
+          memberStatus={formState.staff?.status ?? null}
           submitLabel={formState.mode === "create" ? "Send Invite" : "Save Staff"}
         />
       ) : null}
@@ -668,6 +735,18 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
           confirming={statusSaving}
           onCancel={() => setStatusTarget(null)}
           onConfirm={() => void setMemberStatus(statusTarget, "inactive")}
+        />
+      ) : null}
+
+      {deleteTarget ? (
+        <ConfirmDialog
+          title="Delete invited staff?"
+          description={`This permanently removes the pending invitation for ${deleteTarget.full_name ?? deleteTarget.email ?? "this staff member"}.`}
+          confirmLabel="Delete invitation"
+          confirmingLabel="Deleting..."
+          confirming={deleting}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={() => void handleDeleteInvitedStaff()}
         />
       ) : null}
     </div>
@@ -760,7 +839,7 @@ function StaffFormModal({
   onClose,
   onSubmit,
   saving,
-  showStatus,
+  memberStatus,
   submitLabel,
 }: {
   title: string;
@@ -771,7 +850,7 @@ function StaffFormModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
-  showStatus: boolean;
+  memberStatus: string | null;
   submitLabel: string;
 }) {
   const update = (key: keyof StaffFormValues, value: string) =>
@@ -804,6 +883,7 @@ function StaffFormModal({
         value={values.email}
         onChange={(value) => update("email", value)}
         error={errors.email}
+        disabled={memberStatus !== null && memberStatus !== "invited"}
         required
       />
       <SelectInput
@@ -818,15 +898,17 @@ function StaffFormModal({
           })),
         ]}
       />
-      {showStatus ? (
+      {memberStatus === "active" ? (
         <SelectInput
           label="Status"
           value={values.status}
           onChange={(value) => update("status", value)}
-          options={staffStatusOptions.map((status) => ({
-            value: status,
-            label: labelize(status),
-          }))}
+          options={staffStatusOptions
+            .filter((status) => status !== "invited")
+            .map((status) => ({
+              value: status,
+              label: labelize(status),
+            }))}
         />
       ) : null}
     </Modal>
@@ -845,22 +927,27 @@ function StaffRowActions({
   lastLogin,
   member,
   reductionOnly,
+  resending,
+  onDelete,
   onEdit,
   onMenuOpenChange,
+  onResend,
   onStatusAction,
 }: {
   isMenuOpen: boolean;
   lastLogin: string;
   member: SettingsStaff;
   reductionOnly: boolean;
+  resending: boolean;
+  onDelete: () => void;
   onEdit: () => void;
   onMenuOpenChange: (isOpen: boolean) => void;
+  onResend: () => void;
   onStatusAction: () => void;
 }) {
-  const statusActionLabel =
-    reductionOnly
-      ? "Deactivate for Core"
-      : member.status === "active" ? "Deactivate" : "Activate";
+  const showDeactivate = reductionOnly
+    ? member.status !== "inactive"
+    : member.status === "active";
 
   return (
     <div
@@ -906,16 +993,37 @@ function StaffRowActions({
               {lastLogin}
             </p>
           </div>
-          {!(reductionOnly && member.status === "inactive") ? <button
-            className={`mt-1 flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 ${
-              member.status === "active" ? "text-rose-700" : "text-[#06173f]"
-            }`}
-            onClick={onStatusAction}
-            role="menuitem"
-            type="button"
-          >
-            {statusActionLabel}
-          </button> : null}
+          {!reductionOnly && member.status === "invited" ? (
+            <>
+              <button
+                className="mt-1 flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-[#06173f] transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={resending}
+                onClick={onResend}
+                role="menuitem"
+                type="button"
+              >
+                {resending ? "Resending..." : "Resend invite"}
+              </button>
+              <button
+                className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-rose-500"
+                onClick={onDelete}
+                role="menuitem"
+                type="button"
+              >
+                Delete invitation
+              </button>
+            </>
+          ) : null}
+          {showDeactivate ? (
+            <button
+              className="mt-1 flex w-full items-center rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-700 transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500"
+              onClick={onStatusAction}
+              role="menuitem"
+              type="button"
+            >
+              {reductionOnly ? "Deactivate for Core" : "Deactivate"}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -997,6 +1105,26 @@ function SettingsSection({
     <section className="grid gap-3 border-b border-stone-100 pb-4 last:border-b-0 last:pb-0 lg:grid-cols-[11rem_minmax(0,1fr)]">
       <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
       <div className="min-w-0">{children}</div>
+    </section>
+  );
+}
+
+function ProfileSettingsCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+      <div className="border-b border-stone-100 px-4 py-3.5">
+        <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
+        <p className="mt-0.5 text-xs leading-5 text-slate-500">{description}</p>
+      </div>
+      <div className="grid gap-4 p-4">{children}</div>
     </section>
   );
 }

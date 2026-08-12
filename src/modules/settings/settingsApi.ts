@@ -163,28 +163,33 @@ export async function fetchSettingsStaff() {
 }
 
 export async function createStaff(values: StaffFormValues) {
-  const client = requireSupabase();
-  const { data, error } = await client.functions.invoke(
-    "invite-settings-staff",
-    {
-      body: {
-        full_name: values.full_name,
-        phone: nullable(values.phone),
-        email: values.email,
-        role_id: nullable(values.role_id),
-        status: "invited",
-      },
-    },
-  );
-
-  if (error) {
-    throw new Error(await getFunctionErrorMessage(error));
-  }
-
-  return data as SettingsStaff;
+  return invokeStaffManagement({
+    action: "invite",
+    full_name: values.full_name,
+    phone: nullable(values.phone),
+    email: values.email,
+    role_id: nullable(values.role_id),
+    status: "invited",
+  });
 }
 
-export async function updateStaff(id: string, values: StaffFormValues) {
+export async function updateStaff(
+  id: string,
+  values: StaffFormValues,
+  currentStatus?: string | null,
+) {
+  if (currentStatus === "invited") {
+    return invokeStaffManagement({
+      action: "update_invited",
+      staff_id: id,
+      full_name: values.full_name,
+      phone: nullable(values.phone),
+      email: values.email,
+      role_id: nullable(values.role_id),
+      status: "invited",
+    });
+  }
+
   const client = requireSupabase();
   const { data, error } = await client.rpc("update_settings_staff", {
     target_profile_id: id,
@@ -200,6 +205,14 @@ export async function updateStaff(id: string, values: StaffFormValues) {
   }
 
   return data as SettingsStaff;
+}
+
+export async function resendStaffInvite(id: string) {
+  return invokeStaffManagement({ action: "resend", staff_id: id });
+}
+
+export async function deleteInvitedStaff(id: string) {
+  return invokeStaffManagement({ action: "delete", staff_id: id });
 }
 
 export async function deactivateStaffForSeatLimit(id: string) {
@@ -226,6 +239,19 @@ async function getFunctionErrorMessage(error: unknown) {
   }
 
   return error instanceof Error ? error.message : "Action failed.";
+}
+
+async function invokeStaffManagement(body: Record<string, unknown>) {
+  const { data, error } = await requireSupabase().functions.invoke(
+    "invite-settings-staff",
+    { body },
+  );
+
+  if (error) {
+    throw new Error(await getFunctionErrorMessage(error));
+  }
+
+  return data as SettingsStaff;
 }
 
 function isErrorBody(value: unknown): value is { error: string } {
