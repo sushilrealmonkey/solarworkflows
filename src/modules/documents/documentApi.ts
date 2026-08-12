@@ -125,9 +125,7 @@ export async function uploadDocument(
     });
 
   if (uploadResult.error) {
-    throw new Error(
-      `${uploadResult.error.message}. Make sure the private Supabase Storage bucket "${documentBucketName}" exists.`,
-    );
+    throw new Error(`Document upload failed: ${uploadResult.error.message}`);
   }
 
   const publicUrl = client.storage.from(documentBucketName).getPublicUrl(filePath)
