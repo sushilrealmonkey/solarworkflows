@@ -11,9 +11,11 @@ The repository-root `codemagic.yaml` defines two production workflows:
   finishes processing it.
 
 It also defines `bizlee-android-test-apk`, a manual build-only workflow that
-creates a debug-signed APK for direct device testing. It does not require a
-Play service account, production keystore, or Firebase configuration and never
-publishes to a store.
+creates a standalone, release-mode APK for direct device testing. The generated
+Expo project signs this test artifact with its debug key, so it does not require
+a Play service account, production keystore, or Firebase configuration and never
+publishes to a store. Because it is a release-mode build, the app bundle is
+embedded and the installed app opens directly without an Expo development server.
 
 Neither production workflow runs for an ordinary branch push. Run one manually
 from Codemagic, or create a Git tag matching `mobile-v*` to trigger both
@@ -23,6 +25,8 @@ For the first device test, select **Bizlee Android - Downloadable Test APK** in
 Codemagic and start a manual build. After it completes, download the `.apk` from
 the build's **Artifacts** section and install it on an Android device. Android
 may ask you to allow installs from the browser or file manager used to open it.
+Do not reuse an older debug APK: a debug build that includes `expo-dev-client`
+opens Expo's development-server launcher instead of the bundled application.
 
 ## 1. Import the YAML configuration
 

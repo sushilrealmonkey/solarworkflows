@@ -5,6 +5,8 @@ Keep entries short and factual.
 
 ## 2026-08-11 (current worktree)
 
+- Changed the manual Android test artifact from an Expo development-client debug
+  build to a standalone release-mode APK that embeds and opens the app directly.
 - Added Codemagic-only Android and iOS build/distribution workflows, release
   signing, automatic store build numbering, Play internal publishing,
   TestFlight upload, and secure Firebase configuration restoration; removed the

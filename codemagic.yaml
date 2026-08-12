@@ -39,13 +39,13 @@ workflows:
         script: |
           cd apps/mobile
           npx expo prebuild --platform android --clean --no-install
-      - name: Build installable debug APK
+      - name: Build standalone test APK
         script: |
           cd apps/mobile/android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
     artifacts:
-      - apps/mobile/android/app/build/outputs/apk/debug/*.apk
+      - apps/mobile/android/app/build/outputs/apk/release/*.apk
 
   bizlee-android-internal:
     name: Bizlee Android - Play Internal
