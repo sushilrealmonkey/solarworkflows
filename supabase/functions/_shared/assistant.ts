@@ -123,12 +123,31 @@ export async function resolveCallerProfile(
 export async function requireAssistantAccess(
   client: SupabaseClient,
 ): Promise<string | null> {
-  const { data, error } = await client.rpc("subscription_can_write_module", {
-    requested_module: "assistant",
-  });
+  const { data: planAccess, error: planError } = await client.rpc(
+    "subscription_can_write_module",
+    {
+      requested_module: "assistant",
+    },
+  );
 
-  if (error) return error.message;
-  if (data !== true) return "Bizlee AI requires an active Bizlee Pro plan";
+  if (planError) return planError.message;
+  if (planAccess !== true) {
+    return "Bizlee AI requires an active Bizlee Pro plan";
+  }
+
+  const { data: roleAccess, error: roleError } = await client.rpc(
+    "user_has_role_permission",
+    {
+      module: "assistant",
+      action: "view",
+    },
+  );
+
+  if (roleError) return roleError.message;
+  if (roleAccess !== true) {
+    return "Your workspace role does not include Bizlee AI";
+  }
+
   return null;
 }
 

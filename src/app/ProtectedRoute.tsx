@@ -1,12 +1,42 @@
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import { moduleKeyForPath } from "./routes";
 
 export function ProtectedRoute() {
-  const { status, errorMessage, permissions, profile } = useAuth();
+  const { status, errorMessage, permissions, profile, refresh, session } =
+    useAuth();
   const location = useLocation();
+  const [isRefreshingAccess, setIsRefreshingAccess] = useState(false);
+  const lastAccessRefreshRef = useRef<string | null>(null);
+  const moduleKey = moduleKeyForPath(location.pathname);
+  const canViewModule =
+    !moduleKey ||
+    Boolean(profile?.is_super_admin) ||
+    permissions.some(
+      (permission) =>
+        permission.moduleKey === moduleKey && permission.actionKey === "view",
+    );
 
-  if (status === "loading") {
+  useEffect(() => {
+    if (status !== "ready" || canViewModule || !moduleKey) return;
+
+    const refreshKey = `${session?.user.id ?? "unknown"}:${location.pathname}`;
+    if (lastAccessRefreshRef.current === refreshKey) return;
+
+    lastAccessRefreshRef.current = refreshKey;
+    setIsRefreshingAccess(true);
+    void refresh().finally(() => setIsRefreshingAccess(false));
+  }, [
+    canViewModule,
+    location.pathname,
+    moduleKey,
+    refresh,
+    session?.user.id,
+    status,
+  ]);
+
+  if (status === "loading" || isRefreshingAccess) {
     return (
       <AccessStateScreen
         eyebrow="Loading workspace"
@@ -43,15 +73,6 @@ export function ProtectedRoute() {
       />
     );
   }
-
-  const moduleKey = moduleKeyForPath(location.pathname);
-  const canViewModule =
-    !moduleKey ||
-    Boolean(profile?.is_super_admin) ||
-    permissions.some(
-      (permission) =>
-        permission.moduleKey === moduleKey && permission.actionKey === "view",
-    );
 
   if (!canViewModule) {
     return (

@@ -68,7 +68,7 @@ export const routes: AppRoute[] = [
   {
     path: "/today",
     label: "Bizlee AI",
-    moduleKey: "dashboard",
+    moduleKey: "assistant",
     description:
       "AI daily brief and assistant chat over the organization's own data.",
   },

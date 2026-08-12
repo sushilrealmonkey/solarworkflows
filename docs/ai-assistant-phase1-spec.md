@@ -35,7 +35,12 @@ experience:
 4. **Plan access is checked server-side before any cache or model operation.**
    Both functions call `subscription_can_write_module('assistant')`; a Core or
    inactive subscription receives `403` even if the client route is bypassed.
-5. Tool results are data, not instructions. The system prompt tells the model
+5. **Role access is checked server-side before any tool operation.** Admin,
+   Sales, Backend, and Accounts require `assistant:view`; Field Staff is not
+   granted the assistant module. Every tool still runs with the caller JWT, so
+   Admin sees company-wide records while Sales, Backend, and Accounts receive
+   only the rows allowed by their configured record scopes.
+6. Tool results are data, not instructions. The system prompt tells the model
    to treat record contents (names, notes) as untrusted text.
 
 ## Architecture
