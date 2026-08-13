@@ -13,6 +13,7 @@ across tenants.
 
 Implemented notification types:
 
+- Consented one-time welcome after phone-verified workspace signup
 - Trial ending and trial expired
 - Subscription action required
 - Requested daily AI workspace summary
@@ -20,6 +21,11 @@ Implemented notification types:
 - Product tips, plan offers, and product announcements
 - Customer reply alerts to eligible tenant administrators
 - Signup OTP remains handled by the existing Supabase Auth Send SMS Hook
+
+The approved `account_welcome` English template is catalogued as `active`.
+Phone onboarding records consent and an idempotent tenant event, then queues a
+delivery for the verified signup number. The activation trigger also backfills
+any welcome events that were recorded while the template was pending.
 
 ## Delivery Flow
 

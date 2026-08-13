@@ -5,6 +5,8 @@ Keep entries short and factual.
 
 ## 2026-08-11 (current worktree)
 
+- Added consented, tenant-scoped WhatsApp welcome queuing for phone-verified
+  workspace signups, including pending-template activation backfill.
 - Changed the manual Android test artifact from an Expo development-client debug
   build to a standalone release-mode APK that embeds and opens the app directly.
 - Added Codemagic-only Android and iOS build/distribution workflows, release

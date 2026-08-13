@@ -18,6 +18,7 @@ export function WorkspaceOnboardingPage() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState(signupPhone);
+  const [welcomeWhatsAppConsent, setWelcomeWhatsAppConsent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -45,6 +46,7 @@ export function WorkspaceOnboardingPage() {
         workspaceName,
         fullName,
         phone,
+        welcomeWhatsAppConsent,
       });
       await refresh();
       navigate("/dashboard", { replace: true });
@@ -140,6 +142,25 @@ export function WorkspaceOnboardingPage() {
                 type="tel"
                 value={phone}
               />
+
+              {session?.user.phone ? (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3">
+                  <input
+                    checked={welcomeWhatsAppConsent}
+                    className="mt-1 h-4 w-4 shrink-0 rounded border-white/20 bg-white/10 text-orange-500 focus:ring-orange-400"
+                    disabled={isSubmitting}
+                    onChange={(event) =>
+                      setWelcomeWhatsAppConsent(event.target.checked)
+                    }
+                    type="checkbox"
+                  />
+                  <span className="text-sm leading-6 text-slate-300">
+                    I agree to receive a one-time welcome message for this
+                    workspace on my verified WhatsApp number. I can reply STOP
+                    at any time.
+                  </span>
+                </label>
+              ) : null}
 
               <FormError message={formError} />
 

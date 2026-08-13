@@ -34,6 +34,7 @@ export type WorkspaceOnboardingInput = {
   workspaceName: string;
   fullName: string;
   phone: string;
+  welcomeWhatsAppConsent: boolean;
 };
 
 export type WorkspaceOnboardingResult = {
@@ -536,6 +537,7 @@ export async function createEpcWorkspaceForCurrentUser(
     workspace_name: workspaceName,
     admin_full_name: fullName,
     admin_phone: phone || null,
+    welcome_whatsapp_consent: input.welcomeWhatsAppConsent,
   });
 
   if (error) {
