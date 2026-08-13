@@ -50,6 +50,14 @@ const features = {
 } satisfies Record<BillingPlan["plan_key"], string[]>;
 
 export function BillingPlansPage() {
+  return <BillingPlansContent showHeader />;
+}
+
+export function BillingPlansSection() {
+  return <BillingPlansContent showHeader={false} />;
+}
+
+function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
   const { profile, subscription, refresh } = useAuth();
   const isSuperAdmin = Boolean(profile?.is_super_admin);
   const [plans, setPlans] = useState<BillingPlan[]>([]);
@@ -157,14 +165,23 @@ export function BillingPlansPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Billing & Plans"
-        description={
-          isSuperAdmin
-            ? "Review the tenant subscription packages offered by Bizlee."
-            : "Choose the monthly Bizlee package that fits your business."
-        }
-      />
+      {showHeader ? (
+        <PageHeader
+          title="Billing & Plans"
+          description={
+            isSuperAdmin
+              ? "Review the tenant subscription packages offered by Bizlee."
+              : "Choose the Bizlee package that fits your business."
+          }
+        />
+      ) : (
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Billing &amp; Plans</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Review your current subscription, select Core or Pro, and complete payment securely.
+          </p>
+        </div>
+      )}
 
       {isSuperAdmin ? (
         <section className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-950">
