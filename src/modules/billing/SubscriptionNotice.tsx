@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import {
   dismissSubscriptionMilestone,
@@ -8,6 +8,7 @@ import {
 
 export function SubscriptionNotice() {
   const { subscription } = useAuth();
+  const location = useLocation();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
   const [continuedReadOnly, setContinuedReadOnly] = useState(false);
@@ -36,6 +37,7 @@ export function SubscriptionNotice() {
   if (
     !loaded ||
     !milestone ||
+    location.pathname === "/billing/plans" ||
     (milestone === "expired" && continuedReadOnly) ||
     (milestone !== "expired" && dismissed.has(milestone))
   ) {
