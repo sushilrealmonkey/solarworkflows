@@ -26,7 +26,7 @@ function validateField(config: ModuleConfig, field: FormField, value: string) {
   if (config.resource === "enquiries" && field.kind === "phone") {
     return /^\d{10}$/.test(normalizedValue)
       ? true
-      : `${field.label} must contain exactly 10 digits`;
+      : "Please enter 10 digit mobile number.";
   }
 
   if (
@@ -34,7 +34,7 @@ function validateField(config: ModuleConfig, field: FormField, value: string) {
     normalizedValue &&
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedValue)
   ) {
-    return "Enter a valid email address";
+    return "Please enter a valid email address.";
   }
 
   return true;

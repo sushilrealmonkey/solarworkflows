@@ -72,6 +72,7 @@ export function TextInput({
   inputMode,
   maxLength,
   pattern,
+  validationMessage,
 }: {
   label: string;
   value: string;
@@ -83,7 +84,12 @@ export function TextInput({
   inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search";
   maxLength?: number;
   pattern?: string;
+  validationMessage?: string;
 }) {
+  const formatValidationMessage =
+    validationMessage ??
+    (type === "email" ? "Please enter a valid email address." : undefined);
+
   function openTimePicker(input: HTMLInputElement) {
     if (type !== "time") {
       return;
@@ -113,7 +119,19 @@ export function TextInput({
         pattern={pattern}
         aria-invalid={Boolean(error)}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => {
+          event.currentTarget.setCustomValidity("");
+          onChange(event.target.value);
+        }}
+        onInvalid={(event) => {
+          if (
+            formatValidationMessage &&
+            (event.currentTarget.validity.patternMismatch ||
+              event.currentTarget.validity.typeMismatch)
+          ) {
+            event.currentTarget.setCustomValidity(formatValidationMessage);
+          }
+        }}
         onClick={(event) => openTimePicker(event.currentTarget)}
         onFocus={(event) => openTimePicker(event.currentTarget)}
       />

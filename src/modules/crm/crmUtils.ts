@@ -466,10 +466,10 @@ export function tenDigitPhoneError(value: string, label = "Phone") {
 
   return /^\d{10}$/.test(normalizedValue)
     ? ""
-    : `${label} must contain exactly 10 digits.`;
+    : "Please enter 10 digit mobile number.";
 }
 
-export function emailError(value: string, label = "Email") {
+export function emailError(value: string) {
   const normalizedValue = value.trim();
 
   if (!normalizedValue) {
@@ -478,5 +478,5 @@ export function emailError(value: string, label = "Email") {
 
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedValue)
     ? ""
-    : `Enter a valid ${label.toLowerCase()} address.`;
+    : "Please enter a valid email address.";
 }

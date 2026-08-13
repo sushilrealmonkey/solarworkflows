@@ -498,7 +498,7 @@ export function LeadFormModal({
       submitting={saving}
     >
       <TextInput label="Full Name" value={values.full_name} onChange={(value) => update("full_name", value)} error={errors.full_name} required />
-      <TextInput label="Phone" value={values.phone} onChange={(value) => update("phone", value)} error={errors.phone} inputMode="numeric" maxLength={10} pattern="[0-9]{10}" type="tel" required />
+      <TextInput label="Phone" value={values.phone} onChange={(value) => update("phone", value)} error={errors.phone} inputMode="numeric" maxLength={10} pattern="[0-9]{10}" type="tel" validationMessage="Please enter 10 digit mobile number." required />
       <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} error={errors.email} inputMode="email" type="email" />
       <TextInput label="Offered Price" value={values.offered_price} onChange={(value) => update("offered_price", value)} type="number" />
       <TextArea label="Full Address" value={values.address} onChange={(value) => update("address", value)} />
