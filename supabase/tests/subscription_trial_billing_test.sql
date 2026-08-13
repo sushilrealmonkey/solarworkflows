@@ -19,7 +19,7 @@ begin
   into premium_price, premium_yearly_price
   from public.subscription_plans where plan_key = 'premium';
 
-  if starter_price <> 99900 or starter_yearly_price <> 1098900 then
+  if starter_price <> 89900 or starter_yearly_price <> 988900 then
     raise exception 'Core pricing is incorrect';
   end if;
   if premium_price <> 149900 or premium_yearly_price <> 1648900 then

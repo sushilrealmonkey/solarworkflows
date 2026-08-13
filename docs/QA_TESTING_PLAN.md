@@ -82,7 +82,7 @@ dummy workflow data for default testing.
 | Scenario | Action | Expected result |
 | --- | --- | --- |
 | Trial access | Use a tenant with an unexpired trial. | All configured modules and Bizlee AI are available, subject to role permissions. |
-| Core catalogue | Open Billing & Plans. | Core shows ₹999 monthly, ₹10,989 yearly, and three total seats; Pro shows ₹1,499 monthly, ₹16,489 yearly, and unlimited seats. |
+| Core catalogue | Open Billing & Plans. | Core shows ₹899 monthly, ₹9,889 yearly, and three total seats; Pro shows ₹1,499 monthly, ₹16,489 yearly, and unlimited seats. |
 | Core full modules | As a Core user, create/update a project-based customer, enquiry, survey, BOM template, quotation, project, or project payment. | The action succeeds only when the user's role also grants it. |
 | Core read-only history | Open B2B sales, inventory, vendors, purchases, proformas, or invoices. | A read-only upgrade dialog appears; choosing history shows records with write, delete, export, PDF, dispatch, and receive actions disabled. |
 | Core capability guard | Attempt a direct API/database write for a B2B customer, commercial payment, commercial document, or inventory operation. | Database enforcement rejects the write even if the UI is bypassed. |

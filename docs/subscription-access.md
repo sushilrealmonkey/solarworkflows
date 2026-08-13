@@ -8,7 +8,7 @@ environment.
 
 | Plan | Monthly | Yearly | Seats | Access summary |
 | --- | ---: | ---: | ---: | --- |
-| Bizlee Core | ₹999 | ₹10,989 | 3 total active or invited users | Core solar workflows are writable; commercial modules remain visible as read-only history; Bizlee AI is locked. |
+| Bizlee Core | ₹899 | ₹9,889 | 3 total active or invited users | Core solar workflows are writable; commercial modules remain visible as read-only history; Bizlee AI is locked. |
 | Bizlee Pro | ₹1,499 | ₹16,489 | Unlimited | All configured modules and capabilities are writable, subject to role permissions. |
 
 The yearly prices are explicit catalogue values, not client-side monthly-price
