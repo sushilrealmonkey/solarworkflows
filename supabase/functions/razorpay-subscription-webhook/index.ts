@@ -4,6 +4,11 @@ import {
   StandardFonts,
   rgb,
 } from "https://esm.sh/pdf-lib@1.17.1";
+import {
+  isTerminalCheckoutEvent,
+  subscriptionWebhookAction,
+  type SubscriptionWebhookAction,
+} from "./subscription-state.ts";
 
 type RazorpayEntity = {
   id?: string;
@@ -76,17 +81,32 @@ Deno.serve(async (request) => {
       throw new Error("Webhook subscription metadata is incomplete");
     }
 
+    const { data: currentSubscription, error: subscriptionError } = await service
+      .from("company_subscriptions")
+      .select("id, status")
+      .eq("company_id", companyId)
+      .eq("razorpay_subscription_id", entity.id)
+      .maybeSingle();
+    if (subscriptionError) throw new Error(subscriptionError.message);
+    if (!currentSubscription) {
+      throw new Error("Webhook subscription did not match a company");
+    }
+
+    const webhookAction = subscriptionWebhookAction(
+      eventType,
+      currentSubscription.status,
+    );
     const patch = subscriptionPatch(
       eventType,
       entity,
       planKey!,
       billingPeriod,
+      webhookAction,
     );
     const { data: updated, error: updateError } = await service
       .from("company_subscriptions")
       .update(patch)
-      .eq("company_id", companyId)
-      .eq("razorpay_subscription_id", entity.id)
+      .eq("id", currentSubscription.id)
       .select("id")
       .maybeSingle();
     if (updateError) throw new Error(updateError.message);
@@ -106,7 +126,10 @@ Deno.serve(async (request) => {
       });
     }
 
-    if (["subscription.pending", "subscription.halted", "payment.failed"].includes(eventType)) {
+    if (
+      webhookAction !== "preserve_trial" &&
+      ["subscription.pending", "subscription.halted", "payment.failed"].includes(eventType)
+    ) {
       const payment = payload?.payload?.payment?.entity as
         | RazorpayPaymentEntity
         | undefined;
@@ -149,7 +172,17 @@ function subscriptionPatch(
   entity: RazorpayEntity,
   planKey: string,
   billingPeriod: string,
+  action: SubscriptionWebhookAction,
 ) {
+  if (action === "preserve_trial") {
+    return {
+      status: "trialing",
+      ...(isTerminalCheckoutEvent(eventType)
+        ? { razorpay_subscription_id: null }
+        : {}),
+    };
+  }
+
   const base: Record<string, unknown> = {
     plan_key: planKey,
     billing_period: billingPeriod,
@@ -157,14 +190,14 @@ function subscriptionPatch(
     current_period_ends_at: unixDate(entity.current_end),
   };
 
-  if (["subscription.authenticated", "subscription.activated", "subscription.charged"].includes(eventType)) {
+  if (action === "activate") {
     return { ...base, status: "active", cancel_at_period_end: false };
   }
-  if (["subscription.pending", "payment.failed"].includes(eventType)) {
+  if (action === "past_due") {
     return { ...base, status: "past_due" };
   }
-  if (eventType === "subscription.halted") return { ...base, status: "suspended" };
-  if (["subscription.cancelled", "subscription.completed"].includes(eventType)) {
+  if (action === "suspend") return { ...base, status: "suspended" };
+  if (action === "cancel") {
     return {
       ...base,
       status: "cancelled",
