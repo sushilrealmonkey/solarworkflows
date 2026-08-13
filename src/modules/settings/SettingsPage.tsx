@@ -606,7 +606,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
 
       {!loading && !error && filteredStaff.length > 0 ? (
         <>
-          <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
+          <div className="hidden overflow-visible rounded-xl border border-stone-200 bg-white shadow-sm xl:block">
             <table className="w-full border-collapse text-left text-sm">
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { trialCheckoutAction } from "./checkout-state.ts";
 
 type PlanKey = "starter" | "premium";
 type BillingPeriod = "monthly" | "yearly";
@@ -89,45 +90,75 @@ Deno.serve(async (request) => {
       .single();
 
     // A tenant remains on Pro for the whole free trial. If it already started
-    // checkout, update that provider subscription without changing the trial's
-    // effective plan; the webhook applies the paid plan after activation.
+    // checkout, reuse it when it already targets the selected plan. Razorpay
+    // does not allow a subscription in the `created` state to be updated, so a
+    // different selection must replace that unauthenticated checkout instead.
+    // The webhook applies the paid plan after activation.
     if (
       currentSubscription?.razorpay_subscription_id &&
       currentSubscription.status === "trialing"
     ) {
-      await razorpayRequest(
+      const providerSubscription = await razorpayRequest(
         `/v1/subscriptions/${currentSubscription.razorpay_subscription_id}`,
-        {
-          plan_id: planId(planKey, billingPeriod),
-          schedule_change_at: "now",
-          customer_notify: 1,
-          notes: {
-            company_id: access.company_id,
-            plan_key: planKey,
-            billing_period: billingPeriod,
-            created_by: authData.user.id,
-          },
-        },
-        "PATCH",
+        undefined,
+        "GET",
       );
-      const { error: trialCheckoutError } = await service
-        .from("company_subscriptions")
-        .update({ billing_period: billingPeriod })
-        .eq("company_id", access.company_id)
-        .eq(
-          "razorpay_subscription_id",
-          currentSubscription.razorpay_subscription_id,
-        );
-      if (trialCheckoutError) throw new Error(trialCheckoutError.message);
+      const targetPlanId = planId(planKey, billingPeriod);
+      const providerStatus = typeof providerSubscription.status === "string"
+        ? providerSubscription.status
+        : null;
+      const providerPlanId = typeof providerSubscription.plan_id === "string"
+        ? providerSubscription.plan_id
+        : null;
+      const checkoutAction = trialCheckoutAction(
+        providerStatus,
+        providerPlanId,
+        targetPlanId,
+      );
 
-      return json({
-        keyId: requiredEnv("RAZORPAY_KEY_ID"),
-        subscriptionId: currentSubscription.razorpay_subscription_id,
-        planName: displayPlanName(planKey),
-        customerName: profile?.full_name ?? null,
-        customerEmail: profile?.email ?? authData.user.email ?? null,
-        customerPhone: profile?.phone ?? authData.user.phone ?? null,
-      });
+      if (checkoutAction === "reuse") {
+        return checkoutResponse(
+          currentSubscription.razorpay_subscription_id,
+          planKey,
+          profile,
+          authData.user,
+        );
+      }
+
+      if (checkoutAction === "update") {
+        await razorpayRequest(
+          `/v1/subscriptions/${currentSubscription.razorpay_subscription_id}`,
+          {
+            plan_id: targetPlanId,
+            schedule_change_at: "now",
+            customer_notify: 1,
+          },
+          "PATCH",
+        );
+        const { error: trialCheckoutError } = await service
+          .from("company_subscriptions")
+          .update({ billing_period: billingPeriod })
+          .eq("company_id", access.company_id)
+          .eq(
+            "razorpay_subscription_id",
+            currentSubscription.razorpay_subscription_id,
+          );
+        if (trialCheckoutError) throw new Error(trialCheckoutError.message);
+
+        return checkoutResponse(
+          currentSubscription.razorpay_subscription_id,
+          planKey,
+          profile,
+          authData.user,
+        );
+      }
+
+      if (providerStatus === "created") {
+        await razorpayRequest(
+          `/v1/subscriptions/${currentSubscription.razorpay_subscription_id}/cancel`,
+          { cancel_at_cycle_end: false },
+        );
+      }
     }
 
     if (
@@ -175,7 +206,7 @@ Deno.serve(async (request) => {
       currentSubscription?.razorpay_subscription_id &&
       currentSubscription.plan_key === planKey &&
       currentSubscription.billing_period === billingPeriod &&
-      ["trialing", "past_due"].includes(currentSubscription.status)
+      currentSubscription.status === "past_due"
     ) {
       return json({
         keyId: requiredEnv("RAZORPAY_KEY_ID"),
@@ -244,9 +275,29 @@ function displayPlanName(planKey: PlanKey) {
   return planKey === "starter" ? "Bizlee Core" : "Bizlee Pro";
 }
 
+function checkoutResponse(
+  subscriptionId: string,
+  planKey: PlanKey,
+  profile: {
+    full_name?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  } | null,
+  user: { email?: string | null; phone?: string | null },
+) {
+  return json({
+    keyId: requiredEnv("RAZORPAY_KEY_ID"),
+    subscriptionId,
+    planName: displayPlanName(planKey),
+    customerName: profile?.full_name ?? null,
+    customerEmail: profile?.email ?? user.email ?? null,
+    customerPhone: profile?.phone ?? user.phone ?? null,
+  });
+}
+
 async function razorpayRequest(
   path: string,
-  body: Record<string, unknown>,
+  body?: Record<string, unknown>,
   method = "POST",
 ) {
   const credentials = btoa(
@@ -258,7 +309,7 @@ async function razorpayRequest(
       Authorization: `Basic ${credentials}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(8_000),
   });
   const payload = await response.json();
