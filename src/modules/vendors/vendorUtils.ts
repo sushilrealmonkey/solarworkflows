@@ -1,4 +1,4 @@
-import { requiredError } from "../crm/crmUtils";
+import { emailError, requiredError } from "../crm/crmUtils";
 import type { Vendor, VendorFormValues, VendorStatus, VendorType } from "./types";
 
 export const vendorTypeOptions: VendorType[] = [
@@ -61,6 +61,7 @@ export function vendorToForm(vendor: Vendor): VendorFormValues {
 export function validateVendorForm(values: VendorFormValues) {
   return {
     vendor_name: requiredError(values.vendor_name, "Supplier name"),
+    email: emailError(values.email),
   };
 }
 

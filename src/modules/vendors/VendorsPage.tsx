@@ -483,6 +483,9 @@ export function VendorFormModal({
         label="Email"
         value={values.email}
         onChange={(value) => update("email", value)}
+        error={errors.email}
+        inputMode="email"
+        type="email"
       />
       <TextInput
         label="GST Number"

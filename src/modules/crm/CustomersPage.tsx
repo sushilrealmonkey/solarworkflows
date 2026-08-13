@@ -26,6 +26,7 @@ import {
   customerSegmentLabel,
   customerToForm,
   customerTypeOptionsForSegment,
+  emailError,
   emptyCustomerForm,
   emptyCustomerFormForSegment,
   formatDate,
@@ -250,6 +251,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
           ? requiredError(formState.values.contact_person_name, "Contact person")
           : "",
       phone: requiredError(formState.values.phone, "Phone"),
+      email: emailError(formState.values.email),
     };
     setFormErrors(nextErrors);
 
@@ -661,6 +663,8 @@ export function CustomerFormModal({
         label="Email"
         value={values.email}
         onChange={(value) => update("email", value)}
+        error={errors.email}
+        inputMode="email"
         type="email"
       />
       <TextInput

@@ -14,6 +14,7 @@ import {
   customerStatusOptions,
   customerToForm,
   customerTypeOptionsForSegment,
+  emailError,
   formatDate,
   hasPermission,
   labelize,
@@ -187,6 +188,7 @@ export function CustomerDetailPage() {
           ? requiredError(editing.contact_person_name, "Contact person")
           : "",
       phone: requiredError(editing.phone, "Phone"),
+      email: emailError(editing.email),
     };
     setFormErrors(nextErrors);
 
@@ -536,7 +538,7 @@ function CustomerEditModal({
       ) : null}
       <TextInput label="Phone" value={values.phone} onChange={(value) => update("phone", value)} error={errors.phone} required />
       <TextInput label="Alternate Phone" value={values.alternate_phone} onChange={(value) => update("alternate_phone", value)} />
-      <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} type="email" />
+      <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} error={errors.email} inputMode="email" type="email" />
       <TextInput label="Address Line 1" value={values.address_line_1} onChange={(value) => update("address_line_1", value)} />
       <TextInput label="Address Line 2" value={values.address_line_2} onChange={(value) => update("address_line_2", value)} />
       <TextInput label="City" value={values.city} onChange={(value) => update("city", value)} />

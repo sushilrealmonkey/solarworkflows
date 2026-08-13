@@ -69,6 +69,9 @@ export function TextInput({
   type = "text",
   required = false,
   disabled = false,
+  inputMode,
+  maxLength,
+  pattern,
 }: {
   label: string;
   value: string;
@@ -77,6 +80,9 @@ export function TextInput({
   type?: string;
   required?: boolean;
   disabled?: boolean;
+  inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search";
+  maxLength?: number;
+  pattern?: string;
 }) {
   function openTimePicker(input: HTMLInputElement) {
     if (type !== "time") {
@@ -102,6 +108,10 @@ export function TextInput({
         }`}
         type={type}
         disabled={disabled}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        pattern={pattern}
+        aria-invalid={Boolean(error)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onClick={(event) => openTimePicker(event.currentTarget)}

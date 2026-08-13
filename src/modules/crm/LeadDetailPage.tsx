@@ -10,6 +10,7 @@ import {
   updateLead,
 } from "./crmApi";
 import {
+  emailError,
   formatCurrency,
   formatDate,
   formatDateTime,
@@ -18,6 +19,7 @@ import {
   labelize,
   leadToForm,
   requiredError,
+  tenDigitPhoneError,
   staffName,
 } from "./crmUtils";
 import type { Lead, LeadActionState, LeadFormValues, StaffOption } from "./types";
@@ -139,7 +141,8 @@ export function LeadDetailPage() {
 
     const nextErrors = {
       full_name: requiredError(editing.full_name, "Full name"),
-      phone: requiredError(editing.phone, "Phone"),
+      phone: tenDigitPhoneError(editing.phone),
+      email: emailError(editing.email),
     };
     setFormErrors(nextErrors);
 

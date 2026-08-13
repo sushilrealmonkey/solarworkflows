@@ -456,3 +456,27 @@ export function leadToForm(lead: Lead): LeadFormValues {
 export function requiredError(value: string, label: string) {
   return value.trim() ? "" : `${label} is required.`;
 }
+
+export function tenDigitPhoneError(value: string, label = "Phone") {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return `${label} is required.`;
+  }
+
+  return /^\d{10}$/.test(normalizedValue)
+    ? ""
+    : `${label} must contain exactly 10 digits.`;
+}
+
+export function emailError(value: string, label = "Email") {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return "";
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedValue)
+    ? ""
+    : `Enter a valid ${label.toLowerCase()} address.`;
+}
