@@ -63,43 +63,48 @@ export function SettingsPage() {
     return <PlatformSettingsPage />;
   }
 
+  const canViewSettings = hasPermission(profile, permissions, "settings", "view");
   const canManageSettings = hasPermission(profile, permissions, "settings", "update");
   const canReduceSeats = Boolean(
     subscription?.is_admin && !subscription.write_allowed,
   );
 
-  if (!canManageSettings && !canReduceSeats) {
+  if (!canViewSettings && !canReduceSeats) {
     return (
       <AccessDenied
         title="Settings are not available"
-        description="Your role needs settings:update access to manage organization and staff."
+        description="Your role needs settings:view access to review organization and staff information."
       />
     );
   }
 
-  if (!canManageSettings && canReduceSeats) {
-    return (
-      <div className="space-y-4">
-        <PageHeader
-          title="Prepare for Bizlee Core"
-          description="Deactivate active or invited staff until only three total users remain, then return to Billing & Plans."
-        />
-        <StaffManagementPage reductionOnly />
-      </div>
-    );
-  }
+  const readOnly = !canManageSettings;
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="Settings"
-        description="Manage organization branding and staff access."
+        description={
+          readOnly
+            ? "Review organization, billing, notification, and staff information. Editing is unavailable while this workspace is read-only."
+            : "Manage organization branding and staff access."
+        }
       />
 
-      <OrganizationSettingsPage />
+      {canReduceSeats ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
+          <p className="font-semibold">Prepare for Bizlee Core</p>
+          <p className="mt-1 leading-6">
+            Deactivate active or invited staff until only three total users remain,
+            then return to Billing &amp; Plans. All other settings remain read-only.
+          </p>
+        </section>
+      ) : null}
+
+      <OrganizationSettingsPage readOnly={readOnly} />
       <BillingInvoicesSection />
-      <NotificationPreferencesSection />
-      <StaffManagementPage />
+      <NotificationPreferencesSection readOnly={readOnly} />
+      <StaffManagementPage readOnly={readOnly} reductionOnly={canReduceSeats} />
     </div>
   );
 }
@@ -168,7 +173,7 @@ export function SettingsOverviewPage() {
   );
 }
 
-export function OrganizationSettingsPage() {
+export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: boolean }) {
   const { organization, profile, refresh, session } = useAuth();
   const { showToast } = useToast();
   const [values, setValues] = useState<OrganizationSettingsFormValues>(
@@ -217,6 +222,10 @@ export function OrganizationSettingsPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (readOnly) {
+      return;
+    }
 
     try {
       setSaving(true);
@@ -294,7 +303,8 @@ export function OrganizationSettingsPage() {
           </div>
           <CompanyLogoUploader
             currentUrl={values.company_logo_url}
-            disabled={saving}
+            disabled={saving || readOnly}
+            readOnly={readOnly}
             onUpload={handleLogoUpload}
           />
         </section>
@@ -308,24 +318,28 @@ export function OrganizationSettingsPage() {
               label="Company Name"
               value={values.company_name}
               onChange={(value) => update("company_name", value)}
+              disabled={saving || readOnly}
             />
             <TextArea
               className="block"
               label="Address"
               value={values.address}
               onChange={(value) => update("address", value)}
+              disabled={saving || readOnly}
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <TextInput
                 label="Contact Person"
                 value={values.contact_person}
                 onChange={(value) => update("contact_person", value)}
+                disabled={saving || readOnly}
               />
               <TextInput
                 label="Contact Email"
                 type="email"
                 value={values.contact_email}
                 onChange={(value) => update("contact_email", value)}
+                disabled={saving || readOnly}
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -333,11 +347,13 @@ export function OrganizationSettingsPage() {
                 label="Contact Phone"
                 value={values.contact_phone}
                 onChange={(value) => update("contact_phone", value)}
+                disabled={saving || readOnly}
               />
               <TextInput
                 label="GST Number"
                 value={values.gst_number}
                 onChange={(value) => update("gst_number", value)}
+                disabled={saving || readOnly}
               />
             </div>
           </ProfileSettingsCard>
@@ -350,34 +366,41 @@ export function OrganizationSettingsPage() {
               label="Account Holder Name"
               value={values.bank_account_holder_name}
               onChange={(value) => update("bank_account_holder_name", value)}
+              disabled={saving || readOnly}
             />
             <TextInput
               label="Account Number"
               value={values.bank_account_number}
               onChange={(value) => update("bank_account_number", value)}
+              disabled={saving || readOnly}
             />
             <div className="grid gap-3 sm:grid-cols-2">
               <TextInput
                 label="Bank Name"
                 value={values.bank_name}
                 onChange={(value) => update("bank_name", value)}
+                disabled={saving || readOnly}
               />
               <TextInput
                 label="Account Type"
                 value={values.bank_account_type}
                 onChange={(value) => update("bank_account_type", value)}
+                disabled={saving || readOnly}
               />
             </div>
             <TextInput
               label="IFSC Code"
               value={values.bank_ifsc_code}
               onChange={(value) => update("bank_ifsc_code", value)}
+              disabled={saving || readOnly}
             />
-            <div className="-mx-4 -mb-4 mt-1 flex justify-end border-t border-stone-100 bg-stone-50/70 p-4 [&>button]:w-full sm:[&>button]:w-auto">
-              <Button type="submit" disabled={saving}>
-                {saving ? "Saving..." : "Save Settings"}
-              </Button>
-            </div>
+            {!readOnly ? (
+              <div className="-mx-4 -mb-4 mt-1 flex justify-end border-t border-stone-100 bg-stone-50/70 p-4 [&>button]:w-full sm:[&>button]:w-auto">
+                <Button type="submit" disabled={saving}>
+                  {saving ? "Saving..." : "Save Settings"}
+                </Button>
+              </div>
+            ) : null}
           </ProfileSettingsCard>
         </div>
       </div>
@@ -403,7 +426,13 @@ function withEnrollmentDefaults(
   };
 }
 
-export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?: boolean }) {
+export function StaffManagementPage({
+  readOnly = false,
+  reductionOnly = false,
+}: {
+  readOnly?: boolean;
+  reductionOnly?: boolean;
+}) {
   const { showToast } = useToast();
   const [staff, setStaff] = useState<SettingsStaff[]>([]);
   const [roles, setRoles] = useState<SettingsRole[]>([]);
@@ -426,7 +455,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
       setError(null);
       const [nextStaff, nextRoles] = await Promise.all([
         fetchSettingsStaff(),
-        reductionOnly ? Promise.resolve([]) : fetchSettingsRoles(),
+        readOnly ? Promise.resolve([]) : fetchSettingsRoles(),
       ]);
       setStaff(nextStaff);
       setRoles(nextRoles);
@@ -437,7 +466,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
     } finally {
       setLoading(false);
     }
-  }, [reductionOnly]);
+  }, [readOnly]);
 
   useEffect(() => {
     void loadData();
@@ -583,7 +612,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
     <div className="space-y-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SectionTitle title="Staff Management" />
-        {!reductionOnly ? <Button onClick={openCreateForm}>Add Staff</Button> : null}
+        {!readOnly ? <Button onClick={openCreateForm}>Add Staff</Button> : null}
       </div>
 
       <Toolbar>
@@ -600,7 +629,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
         <EmptyState
           title="No staff found"
           description="Create staff profiles before team members sign in."
-          action={!reductionOnly ? <Button onClick={openCreateForm}>Add Staff</Button> : undefined}
+          action={!readOnly ? <Button onClick={openCreateForm}>Add Staff</Button> : undefined}
         />
       ) : null}
 
@@ -615,7 +644,9 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
                   <th className="px-3 py-2.5">Email</th>
                   <th className="px-3 py-2.5">Role</th>
                   <th className="px-3 py-2.5">Status</th>
-                  <th className="px-3 py-2.5 text-right">Actions</th>
+                  {!readOnly || reductionOnly ? (
+                    <th className="px-3 py-2.5 text-right">Actions</th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -630,7 +661,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
                     <td className="px-3 py-2.5">
                       <StaffStatusBadge value={member.status} />
                     </td>
-                    <td className="px-3 py-2.5">
+                    {!readOnly || reductionOnly ? <td className="px-3 py-2.5">
                       <StaffRowActions
                         isMenuOpen={openStaffMenuId === member.id}
                         lastLogin={formatDateTime(member.last_login_at)}
@@ -651,7 +682,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
                           setStatusTarget(member);
                         }}
                       />
-                    </td>
+                    </td> : null}
                   </tr>
                 ))}
               </tbody>
@@ -680,7 +711,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
                   <Detail label="Phone" value={member.phone ?? "-"} />
                   <Detail label="Email" value={member.email ?? "-"} />
                 </dl>
-                <div className="mt-3 flex justify-end">
+                {!readOnly || reductionOnly ? <div className="mt-3 flex justify-end">
                   <StaffRowActions
                     isMenuOpen={openStaffMenuId === member.id}
                     lastLogin={formatDateTime(member.last_login_at)}
@@ -701,7 +732,7 @@ export function StaffManagementPage({ reductionOnly = false }: { reductionOnly?:
                       setStatusTarget(member);
                     }}
                   />
-                </div>
+                </div> : null}
               </article>
             ))}
           </div>
@@ -1091,21 +1122,6 @@ function SectionTitle({
         <p className="mt-1 text-sm leading-5 text-slate-600">{description}</p>
       ) : null}
     </div>
-  );
-}
-
-function SettingsSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="grid gap-3 border-b border-stone-100 pb-4 last:border-b-0 last:pb-0 lg:grid-cols-[11rem_minmax(0,1fr)]">
-      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-      <div className="min-w-0">{children}</div>
-    </section>
   );
 }
 

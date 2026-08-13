@@ -17,10 +17,12 @@ type ImageSize = { width: number; height: number };
 export function CompanyLogoUploader({
   currentUrl,
   disabled,
+  readOnly = false,
   onUpload,
 }: {
   currentUrl: string;
   disabled: boolean;
+  readOnly?: boolean;
   onUpload: (logo: Blob) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -142,7 +144,7 @@ export function CompanyLogoUploader({
           </p>
           {!sourceUrl && error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
         </div>
-        <div className="sm:shrink-0">
+        {!readOnly ? <div className="sm:shrink-0">
           <label className={`inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700 sm:w-auto ${
             disabled || preparing ? "cursor-not-allowed opacity-60" : "cursor-pointer"
           }`}>
@@ -156,7 +158,7 @@ export function CompanyLogoUploader({
               onChange={(event) => void selectFile(event)}
             />
           </label>
-        </div>
+        </div> : null}
       </div>
 
       {sourceUrl ? (

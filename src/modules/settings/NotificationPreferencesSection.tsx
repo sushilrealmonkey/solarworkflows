@@ -17,7 +17,7 @@ import type {
 
 const dailySummaryKey: NotificationPreferenceKey = "requested_daily_summary";
 
-export function NotificationPreferencesSection() {
+export function NotificationPreferencesSection({ readOnly = false }: { readOnly?: boolean }) {
   const { organization, refresh } = useAuth();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
@@ -162,7 +162,7 @@ export function NotificationPreferencesSection() {
               ? "Verify the phone number on your Bizlee account before enabling the daily WhatsApp summary."
               : "Add and verify a phone number on your Bizlee account first."}
           </p>
-          {!pendingPhone ? (
+          {readOnly ? null : !pendingPhone ? (
             <div className="mt-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label className="block w-full text-sm font-medium text-amber-950 sm:max-w-sm">
@@ -262,6 +262,7 @@ export function NotificationPreferencesSection() {
                 aria-label="Enable daily AI workspace summary"
                 checked={Boolean(enabled[dailySummaryKey])}
                 className="h-5 w-5 shrink-0 accent-orange-600"
+                disabled={readOnly}
                 onChange={(event) => setEnabled({
                   ...enabled,
                   [dailySummaryKey]: event.target.checked,
@@ -273,7 +274,7 @@ export function NotificationPreferencesSection() {
               Delivery time
               <input
                 className="mt-1 h-11 w-full rounded-lg border border-stone-300 bg-white px-3 text-slate-900 outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                disabled={!enabled[dailySummaryKey]}
+                disabled={readOnly || !enabled[dailySummaryKey]}
                 onChange={(event) => setDailyTime(event.target.value)}
                 type="time"
                 value={dailyTime}
@@ -284,7 +285,7 @@ export function NotificationPreferencesSection() {
             </p>
           </div>
 
-          <div className="mt-5 flex justify-end border-t border-stone-100 pt-4">
+          {!readOnly ? <div className="mt-5 flex justify-end border-t border-stone-100 pt-4">
             <button
               className="inline-flex h-11 items-center justify-center rounded-lg bg-[#06173f] px-5 text-sm font-semibold text-white transition hover:bg-[#10275b] disabled:cursor-not-allowed disabled:opacity-60"
               disabled={saving}
@@ -293,7 +294,7 @@ export function NotificationPreferencesSection() {
             >
               {saving ? "Saving…" : "Save daily summary"}
             </button>
-          </div>
+          </div> : null}
         </>
       ) : null}
     </section>
