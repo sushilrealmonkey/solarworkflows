@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { authenticatedHomePath } from "../../app/redirects";
 import { AuthThemeCard, AuthThemeShell } from "./AuthTheme";
 import {
   completeInvitedPassword,
@@ -16,7 +15,7 @@ type InviteNotice = {
 };
 
 export function CreatePasswordPage() {
-  const { session, status, profile, refresh } = useAuth();
+  const { session, status, refresh } = useAuth();
   const navigate = useNavigate();
   const [inviteLink] = useState(readInviteLink);
   const [password, setPassword] = useState("");
@@ -47,7 +46,7 @@ export function CreatePasswordPage() {
     inviteLink.kind === "token" && inviteVerificationStatus === "complete";
 
   if (status === "ready" && !isCompletingInvitedPassword) {
-    return <Navigate to={authenticatedHomePath(profile)} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const hasInviteSession = Boolean(session) && !isVerifyingInvite;
@@ -139,7 +138,7 @@ export function CreatePasswordPage() {
       }
 
       await refresh();
-      navigate(authenticatedHomePath(result.profile), { replace: true });
+      navigate("/", { replace: true });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {

@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import { moduleKeyForPath } from "./routes";
 
 export function ProtectedRoute() {
-  const { status, errorMessage, permissions, profile, refresh, session } =
-    useAuth();
+  const { permissions, profile, refresh, session } = useAuth();
   const location = useLocation();
   const [isRefreshingAccess, setIsRefreshingAccess] = useState(false);
   const lastAccessRefreshRef = useRef<string | null>(null);
@@ -19,7 +18,7 @@ export function ProtectedRoute() {
     );
 
   useEffect(() => {
-    if (status !== "ready" || canViewModule || !moduleKey) return;
+    if (canViewModule || !moduleKey) return;
 
     const refreshKey = `${session?.user.id ?? "unknown"}:${location.pathname}`;
     if (lastAccessRefreshRef.current === refreshKey) return;
@@ -33,43 +32,14 @@ export function ProtectedRoute() {
     moduleKey,
     refresh,
     session?.user.id,
-    status,
   ]);
 
-  if (status === "loading" || isRefreshingAccess) {
+  if (isRefreshingAccess) {
     return (
       <AccessStateScreen
         eyebrow="Loading workspace"
         title="Preparing your dashboard"
         description="We are checking your account, organization, and permissions."
-      />
-    );
-  }
-
-  if (status === "unauthenticated") {
-    return <Navigate to="/login" replace state={{ from: location }} />;
-  }
-
-  if (status === "unassigned") {
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  if (status === "inactive") {
-    return (
-      <AccessStateScreen
-        eyebrow="Account inactive"
-        title="Account inactive"
-        description="This account is not active for the organization workspace."
-      />
-    );
-  }
-
-  if (status === "error") {
-    return (
-      <AccessStateScreen
-        eyebrow="Unable to load access"
-        title="Something blocked the workspace"
-        description={errorMessage ?? "Please try again after a moment."}
       />
     );
   }

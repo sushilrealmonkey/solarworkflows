@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { safeAuthenticatedRedirect } from "../../app/redirects";
 import {
   createEpcWorkspaceForCurrentUser,
   normalizePhone,
@@ -9,7 +8,7 @@ import {
 import { AuthThemeCard, AuthThemeShell } from "./AuthTheme";
 
 export function WorkspaceOnboardingPage() {
-  const { status, profile, session, errorMessage, refresh, signOut } = useAuth();
+  const { status, session, errorMessage, refresh, signOut } = useAuth();
   const navigate = useNavigate();
   const signupPhone = getSignupPhone(
     session?.user.phone,
@@ -29,7 +28,7 @@ export function WorkspaceOnboardingPage() {
   }, [phone, signupPhone]);
 
   if (status === "ready") {
-    return <Navigate to={safeAuthenticatedRedirect(profile, "/dashboard")} replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (status === "unauthenticated") {
@@ -49,7 +48,7 @@ export function WorkspaceOnboardingPage() {
         welcomeWhatsAppConsent,
       });
       await refresh();
-      navigate("/dashboard", { replace: true });
+      navigate("/", { replace: true });
     } catch (error) {
       setFormError(getErrorMessage(error));
     } finally {

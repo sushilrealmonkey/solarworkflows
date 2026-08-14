@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { safeAuthenticatedRedirect } from "../../app/redirects";
 import {
   isValidLoginEmail,
   isValidNewPassword,
@@ -27,7 +26,7 @@ type SignupNotice = {
 };
 
 export function SignupPage() {
-  const { status, profile, refresh } = useAuth();
+  const { status, refresh } = useAuth();
   const navigate = useNavigate();
   const [signupMethod, setSignupMethod] = useState<SignupMethod>("phone");
   const [email, setEmail] = useState("");
@@ -43,7 +42,7 @@ export function SignupPage() {
   const [notice, setNotice] = useState<SignupNotice | null>(null);
 
   if (status === "ready" && !isRedirecting) {
-    return <Navigate to={safeAuthenticatedRedirect(profile, "/dashboard")} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const isBusy = isSubmitting || isRedirecting;
@@ -169,13 +168,6 @@ export function SignupPage() {
   }
 
   async function continueAfterAuthenticatedSignup(result: LoginAccessResult) {
-    if (result.status === "unassigned") {
-      setIsRedirecting(true);
-      await refresh();
-      navigate("/onboarding", { replace: true });
-      return;
-    }
-
     if (result.status === "inactive") {
       await refresh();
       setNotice({
@@ -189,9 +181,7 @@ export function SignupPage() {
 
     setIsRedirecting(true);
     await refresh();
-    navigate(safeAuthenticatedRedirect(result.profile, "/dashboard"), {
-      replace: true,
-    });
+    navigate("/", { replace: true });
   }
 
   return (

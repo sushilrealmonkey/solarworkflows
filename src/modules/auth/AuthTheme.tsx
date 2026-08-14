@@ -5,6 +5,7 @@ type AuthThemeShellProps = {
   badge: string;
   title: string;
   mobileDescription: string;
+  desktopDescription?: string;
   children: ReactNode;
 };
 
@@ -12,6 +13,7 @@ export function AuthThemeShell({
   badge,
   title,
   mobileDescription,
+  desktopDescription,
   children,
 }: AuthThemeShellProps) {
   return (
@@ -30,6 +32,11 @@ export function AuthThemeShell({
             <h1 className="mt-8 max-w-lg text-4xl font-semibold leading-tight tracking-normal text-white">
               {title}
             </h1>
+            {desktopDescription ? (
+              <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">
+                {desktopDescription}
+              </p>
+            ) : null}
           </div>
         </section>
 

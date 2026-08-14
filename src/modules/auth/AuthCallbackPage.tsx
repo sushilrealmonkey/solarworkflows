@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { safeAuthenticatedRedirect } from "../../app/redirects";
 import {
   syncCurrentAuthUserProfile,
   verifySignupToken,
@@ -76,12 +75,6 @@ export function AuthCallbackPage() {
 
       const accessResult = await syncCurrentAuthUserProfile();
 
-      if (accessResult.status === "unassigned") {
-        await refresh();
-        navigate("/onboarding", { replace: true });
-        return;
-      }
-
       if (accessResult.status === "inactive") {
         await refresh();
         setCallbackState({
@@ -93,9 +86,7 @@ export function AuthCallbackPage() {
       }
 
       await refresh();
-      navigate(safeAuthenticatedRedirect(accessResult.profile, "/dashboard"), {
-        replace: true,
-      });
+      navigate("/", { replace: true });
     }
 
     void completeExistingSession().catch((error: unknown) => {
@@ -128,12 +119,6 @@ export function AuthCallbackPage() {
   async function finishAuthentication() {
     const accessResult = await syncCurrentAuthUserProfile();
 
-    if (accessResult.status === "unassigned") {
-      await refresh();
-      navigate("/onboarding", { replace: true });
-      return;
-    }
-
     if (accessResult.status === "inactive") {
       await refresh();
       setCallbackState({
@@ -145,9 +130,7 @@ export function AuthCallbackPage() {
     }
 
     await refresh();
-    navigate(safeAuthenticatedRedirect(accessResult.profile, "/dashboard"), {
-      replace: true,
-    });
+    navigate("/", { replace: true });
   }
 
   function showAuthenticationError(

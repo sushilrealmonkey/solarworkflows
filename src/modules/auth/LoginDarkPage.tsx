@@ -1,7 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
-import { safeAuthenticatedRedirect } from "../../app/redirects";
 import { PortalLogo } from "../../components/PortalBrand";
 import {
   isValidLoginEmail,
@@ -24,8 +23,7 @@ type AccessNotice = {
 };
 
 export function LoginDarkPage() {
-  const { status, profile, refresh } = useAuth();
-  const location = useLocation();
+  const { status, refresh } = useAuth();
   const navigate = useNavigate();
   const [loginMethod, setLoginMethod] = useState<LoginMethod>("phone");
   const [email, setEmail] = useState("");
@@ -39,13 +37,8 @@ export function LoginDarkPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [accessNotice, setAccessNotice] = useState<AccessNotice | null>(null);
 
-  const redirectTo = safeAuthenticatedRedirect(
-    profile,
-    getRedirectPath(location.state),
-  );
-
   if (status === "ready" && !isRedirecting) {
-    return <Navigate to={redirectTo} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const isBusy = isSigningIn || isRedirecting;
@@ -134,13 +127,6 @@ export function LoginDarkPage() {
   }
 
   async function continueAfterLogin(accessResult: LoginAccessResult) {
-    if (accessResult.status === "unassigned") {
-      setIsRedirecting(true);
-      await refresh();
-      navigate("/onboarding", { replace: true });
-      return;
-    }
-
     if (accessResult.status === "inactive") {
       await refresh();
       setAccessNotice({
@@ -154,9 +140,7 @@ export function LoginDarkPage() {
 
     setIsRedirecting(true);
     await refresh();
-    navigate(safeAuthenticatedRedirect(accessResult.profile, "/dashboard"), {
-      replace: true,
-    });
+    navigate("/", { replace: true });
   }
 
   return (
@@ -427,8 +411,7 @@ export function LoginDarkPage() {
 }
 
 export function LoginMobilePage() {
-  const { status, profile, refresh } = useAuth();
-  const location = useLocation();
+  const { status, refresh } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -438,13 +421,8 @@ export function LoginMobilePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [accessNotice, setAccessNotice] = useState<AccessNotice | null>(null);
 
-  const redirectTo = safeAuthenticatedRedirect(
-    profile,
-    getRedirectPath(location.state),
-  );
-
   if (status === "ready" && !isRedirecting) {
-    return <Navigate to={redirectTo} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const isBusy = isSigningIn || isRedirecting;
@@ -473,13 +451,6 @@ export function LoginMobilePage() {
         password,
       );
 
-      if (accessResult.status === "unassigned") {
-        setIsRedirecting(true);
-        await refresh();
-        navigate("/onboarding", { replace: true });
-        return;
-      }
-
       if (accessResult.status === "inactive") {
         await refresh();
         setAccessNotice({
@@ -493,9 +464,7 @@ export function LoginMobilePage() {
 
       setIsRedirecting(true);
       await refresh();
-      navigate(safeAuthenticatedRedirect(accessResult.profile, "/dashboard"), {
-        replace: true,
-      });
+      navigate("/", { replace: true });
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
     } finally {
@@ -955,22 +924,6 @@ function PasswordVisibilityIcon({ visible }: { visible: boolean }) {
       />
     </svg>
   );
-}
-
-function getRedirectPath(state: unknown) {
-  if (
-    typeof state === "object" &&
-    state !== null &&
-    "from" in state &&
-    typeof state.from === "object" &&
-    state.from !== null &&
-    "pathname" in state.from &&
-    typeof state.from.pathname === "string"
-  ) {
-    return state.from.pathname;
-  }
-
-  return "/dashboard";
 }
 
 function getErrorMessage(error: unknown) {

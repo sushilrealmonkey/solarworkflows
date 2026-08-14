@@ -13,6 +13,9 @@ import { ResetPasswordPage } from "../modules/auth/ResetPasswordPage";
 import { SignupPage } from "../modules/auth/SignupPage";
 import { AuthCallbackPage } from "../modules/auth/AuthCallbackPage";
 import { WorkspaceOnboardingPage } from "../modules/auth/WorkspaceOnboardingPage";
+import { OnboardingGate } from "../modules/onboarding/OnboardingGate";
+import { OnboardingWelcomePage } from "../modules/onboarding/OnboardingWelcomePage";
+import { OnboardingCompanyPlaceholderPage } from "../modules/onboarding/OnboardingCompanyPlaceholderPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
 import { TodayPage } from "../modules/assistant/TodayPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
@@ -68,9 +71,15 @@ export default function App() {
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
-      <Route path="/onboarding" element={<WorkspaceOnboardingPage />} />
-      <Route element={<ProtectedRoute />}>
-        <Route element={<DashboardLayout />}>
+      <Route element={<OnboardingGate />}>
+        <Route path="/workspace-setup" element={<WorkspaceOnboardingPage />} />
+        <Route path="/onboarding" element={<OnboardingWelcomePage />} />
+        <Route
+          path="/onboarding/company"
+          element={<OnboardingCompanyPlaceholderPage />}
+        />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<DashboardLayout />}>
           <Route path="/" element={<DefaultWorkspaceRedirect />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/companies" element={<CompaniesPage />} />
@@ -209,6 +218,7 @@ export default function App() {
               />
             ))}
         </Route>
+      </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
