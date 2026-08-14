@@ -1,9 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { renderTrialWelcomeEmail } from "../_shared/trial-welcome-email.ts";
 
 type ClaimedNotification = {
   id: string;
   company_id: string;
   subscription_id: string;
+  notification_type: "platform_alert" | "trial_welcome";
   attempt_count: number;
 };
 
@@ -31,6 +33,7 @@ Deno.serve(async (request) => {
   // outbox row pending and automatically recoverable once secrets are added.
   requiredEnv("RESEND_API_KEY");
   requiredEnv("TRIAL_REMINDER_FROM_EMAIL");
+  requiredEnv("APP_BASE_URL");
 
   const service = createClient(
     requiredEnv("SUPABASE_URL"),
@@ -44,16 +47,11 @@ Deno.serve(async (request) => {
   if (claimError) return json({ error: claimError.message }, 500);
 
   let sent = 0;
+  let skipped = 0;
   let failed = 0;
-  const recipients = await resolveRecipients(service);
+  let platformRecipients: string[] | null = null;
 
   for (const claim of (claims ?? []) as ClaimedNotification[]) {
-    if (recipients.length === 0) {
-      await releaseClaim(service, claim, "No trial signup notification recipient is configured");
-      failed += 1;
-      continue;
-    }
-
     const { data, error } = await service
       .from("company_subscriptions")
       .select(
@@ -75,7 +73,40 @@ Deno.serve(async (request) => {
     }
 
     try {
-      await sendTrialSignupEmail(recipients, data as unknown as TrialSubscription);
+      const subscription = data as unknown as TrialSubscription;
+
+      if (claim.notification_type === "trial_welcome") {
+        const recipient = normalizeEmail(subscription.companies?.owner_email);
+        if (!recipient) {
+          await completeClaim(
+            service,
+            claim,
+            "skipped",
+            "Workspace owner email is not available",
+          );
+          skipped += 1;
+          continue;
+        }
+
+        await sendTrialWelcomeEmail(recipient, subscription, claim.id);
+      } else {
+        platformRecipients ??= await resolveRecipients(service);
+        if (platformRecipients.length === 0) {
+          await releaseClaim(
+            service,
+            claim,
+            "No trial signup notification recipient is configured",
+          );
+          failed += 1;
+          continue;
+        }
+
+        await sendPlatformTrialSignupEmail(
+          platformRecipients,
+          subscription,
+          claim.id,
+        );
+      }
       const { error: updateError } = await service
         .from("trial_signup_notification_outbox")
         .update({
@@ -94,7 +125,7 @@ Deno.serve(async (request) => {
     }
   }
 
-  return json({ claimed: claims?.length ?? 0, sent, failed });
+  return json({ claimed: claims?.length ?? 0, sent, skipped, failed });
 });
 
 async function resolveRecipients(
@@ -125,9 +156,10 @@ async function resolveRecipients(
   )];
 }
 
-async function sendTrialSignupEmail(
+async function sendPlatformTrialSignupEmail(
   recipients: string[],
   subscription: TrialSubscription,
+  claimId: string,
 ) {
   const company = subscription.companies;
   const companyName = company?.company_name ?? "New workspace";
@@ -136,6 +168,7 @@ async function sendTrialSignupEmail(
     headers: {
       Authorization: `Bearer ${requiredEnv("RESEND_API_KEY")}`,
       "Content-Type": "application/json",
+      "Idempotency-Key": `trial-platform-alert/${claimId}`,
     },
     body: JSON.stringify({
       from: requiredEnv("TRIAL_REMINDER_FROM_EMAIL"),
@@ -157,6 +190,61 @@ async function sendTrialSignupEmail(
     const detail = await response.text();
     throw new Error(`Resend returned ${response.status}: ${detail.slice(0, 300)}`);
   }
+}
+
+async function sendTrialWelcomeEmail(
+  recipient: string,
+  subscription: TrialSubscription,
+  claimId: string,
+) {
+  const email = renderTrialWelcomeEmail({
+    userName: subscription.companies?.owner_name ?? null,
+    trialEndDate: formatDateOnly(subscription.trial_ends_at),
+    workspaceUrl: requiredEnv("APP_BASE_URL"),
+    supportEmail: Deno.env.get("BIZLEE_SUPPORT_EMAIL"),
+  });
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${requiredEnv("RESEND_API_KEY")}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": `trial-welcome/${claimId}`,
+    },
+    body: JSON.stringify({
+      from: requiredEnv("TRIAL_REMINDER_FROM_EMAIL"),
+      to: recipient,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
+      tags: [
+        { name: "email_type", value: "trial_welcome" },
+        { name: "company_id", value: subscription.company_id },
+      ],
+    }),
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Resend returned ${response.status}: ${detail.slice(0, 300)}`);
+  }
+}
+
+async function completeClaim(
+  service: ReturnType<typeof createClient>,
+  claim: ClaimedNotification,
+  status: "sent" | "skipped",
+  message: string | null,
+) {
+  const { error } = await service
+    .from("trial_signup_notification_outbox")
+    .update({
+      status,
+      sent_at: status === "sent" ? new Date().toISOString() : null,
+      last_error: message,
+    })
+    .eq("id", claim.id)
+    .eq("status", "processing");
+  if (error) throw error;
 }
 
 async function releaseClaim(
@@ -182,6 +270,19 @@ function formatDate(value: string | null) {
     timeStyle: "short",
     timeZone: "Asia/Kolkata",
   }).format(new Date(value));
+}
+
+function formatDateOnly(value: string | null) {
+  if (!value) return "the date shown in your workspace";
+  return new Intl.DateTimeFormat("en-IN", {
+    dateStyle: "long",
+    timeZone: "Asia/Kolkata",
+  }).format(new Date(value));
+}
+
+function normalizeEmail(value: string | null | undefined) {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) ? normalized : null;
 }
 
 function escapeHtml(value: string) {

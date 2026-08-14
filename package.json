@@ -17,6 +17,7 @@
     "start": "node --env-file-if-exists=.env server-dist/index.js",
     "test:webhook": "tsc -p tsconfig.server.json && node --test server-dist/modules/whatsapp/webhook.test.js",
     "test:mobile-api": "tsc -p tsconfig.server.json && node --test server-dist/modules/mobile-api/handler.test.js",
+    "test:emails": "node --experimental-strip-types --test supabase/functions/_shared/trial-welcome-email.test.ts",
     "setup:super-admin": "node scripts/setup-super-admin.mjs",
     "preview": "vite preview"
     ,"mobile:start": "npm run start --workspace=@bizlee/mobile"

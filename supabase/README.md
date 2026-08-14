@@ -8,10 +8,11 @@ Functions for SolarWorkflows.
 - `invite-epc-company-admin` sends Supabase Auth invite/setup emails for EPC
   company admins and handles super-admin workspace/admin status actions from a
   trusted service-role environment.
-- `templates/invite.html` and `templates/recovery.html` are the
-  source-controlled Supabase Auth emails for initial invitations and resent
-  password setup links. Publish them to the hosted Auth configuration whenever
-  either template changes.
+- `templates/signup-verification.html`,
+  `templates/workspace-signup-verification.html`, and `templates/recovery.html`
+  are the source-controlled Supabase Auth emails for invitations, self-signup
+  confirmation, and password recovery. Publish them to the matching hosted
+  Auth template slots whenever they change.
 - Subscription functions create, verify, cancel, and reconcile Razorpay
   subscriptions; the webhook also creates tenant-visible GST invoices.
 - `assistant-brief` and `assistant-chat` run the Pro-only, caller-JWT Bizlee AI
@@ -29,11 +30,12 @@ Resend directly. Configure the hosted Supabase project under **Authentication >
 SMTP Settings** with Resend's SMTP credentials and the verified sender email.
 The current production sender is `team@getbizlee.com`.
 
-The invite and recovery templates send `TokenHash` to the app's
-`/create-password` route, where the frontend exchanges it with Supabase Auth.
-Do not replace this with `ConfirmationURL`: email security scanners can prefetch
-that one-time URL and consume the setup token before the recipient clicks it.
-Keep link tracking disabled in the external email provider.
+The invite, signup-confirmation, and recovery templates send `TokenHash` to the
+app. The invite and recovery flows use `/create-password`; self-signup uses
+`/auth/callback`. Each screen waits for an explicit user click before exchanging
+the token with Supabase Auth. Do not replace these links with `ConfirmationURL`:
+email security scanners can prefetch that one-time URL and consume the token
+before the recipient acts. Keep link tracking disabled in the external provider.
 
 Use these Resend SMTP values:
 
@@ -89,12 +91,15 @@ Do not change Razorpay plan IDs or catalogue prices in only one layer.
 
 ## New trial signup email
 
-Every newly created trial subscription is placed in a tenant-scoped outbox and
-the `process-trial-signups` Edge Function delivers the notification through
-Resend. It uses the `TRIAL_SIGNUP_WORKER_SECRET`, `RESEND_API_KEY`, and
-`TRIAL_REMINDER_FROM_EMAIL` Function secrets. Set the optional
-`TRIAL_SIGNUP_NOTIFICATION_EMAIL` secret to one or more comma-separated inboxes;
-otherwise all active super-admin profiles with an email receive the message.
+Every newly created trial subscription places two independent deliveries in a
+tenant-scoped outbox. The `process-trial-signups` Edge Function sends the
+existing platform signup alert and a branded welcome to the workspace owner
+through Resend. Phone-only owners are marked skipped because no email address is
+available. The worker uses `TRIAL_SIGNUP_WORKER_SECRET`, `RESEND_API_KEY`,
+`TRIAL_REMINDER_FROM_EMAIL`, and `APP_BASE_URL`; `BIZLEE_SUPPORT_EMAIL` is
+optional. Set `TRIAL_SIGNUP_NOTIFICATION_EMAIL` to one or more comma-separated
+platform inboxes; otherwise all active super-admin profiles with an email
+receive the alert. Resend idempotency keys prevent retry duplicates.
 
 The scheduled job uses matching `trial_signup_notification_project_url` and
 `trial_signup_notification_worker_secret` Vault values and runs once per minute.

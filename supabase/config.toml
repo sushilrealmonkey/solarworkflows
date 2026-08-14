@@ -266,7 +266,12 @@ otp_expiry = 3600
 # Keep this template in sync with the hosted Supabase Auth invite template.
 [auth.email.template.invite]
 subject = "{{ if .Data.company_name }}You're Invited to Bizlee from {{ .Data.company_name }}{{ else }}You're Invited to Bizlee{{ end }}"
-content_path = "./supabase/templates/invite.html"
+content_path = "./supabase/templates/signup-verification.html"
+
+# Keep this template in sync with the hosted Supabase Auth confirmation template.
+[auth.email.template.confirmation]
+subject = "Verify your email to create your Bizlee workspace"
+content_path = "./supabase/templates/workspace-signup-verification.html"
 
 [auth.email.template.recovery]
 subject = "Reset your SolarWorkflows password"

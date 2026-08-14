@@ -134,6 +134,27 @@ export function verifyInviteToken(
   return promise;
 }
 
+export async function verifySignupToken(tokenHash: string) {
+  if (!supabase) {
+    throw new Error("Supabase environment variables are not configured.");
+  }
+
+  const normalizedTokenHash = tokenHash.trim();
+
+  if (!normalizedTokenHash) {
+    throw new Error("The email verification token is missing.");
+  }
+
+  const { error } = await supabase.auth.verifyOtp({
+    token_hash: normalizedTokenHash,
+    type: "signup",
+  });
+
+  if (error) {
+    throw new Error(mapSignupVerificationError(error.message));
+  }
+}
+
 export async function sendPasswordResetLink(
   email: string,
   redirectTo: string,
@@ -691,6 +712,20 @@ function mapPhoneAuthError(message: string) {
     message ||
     "WhatsApp verification could not be completed. Please try again."
   );
+}
+
+function mapSignupVerificationError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (
+    normalizedMessage.includes("expired") ||
+    normalizedMessage.includes("invalid") ||
+    normalizedMessage.includes("token")
+  ) {
+    return "This verification link is invalid, expired, or has already been used. Create your account again to request a new email.";
+  }
+
+  return message || "Your email could not be verified. Please request a new verification email.";
 }
 
 function mapPhoneVerificationError(message: string) {
