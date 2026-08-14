@@ -176,7 +176,7 @@ export function productsForQuotationBomRow(
     : products.filter((product) => matchingTypes.includes(product.category_type));
 
   if (!definition || definition.productKeywords.length === 0) {
-    return categoryPool;
+    return withSelectedProduct(categoryPool, item.product_id, products);
   }
 
   const keywordMatches = categoryPool.filter((product) =>
@@ -185,7 +185,29 @@ export function productsForQuotationBomRow(
     ),
   );
 
-  return keywordMatches.length > 0 ? keywordMatches : categoryPool;
+  return withSelectedProduct(
+    keywordMatches.length > 0 ? keywordMatches : categoryPool,
+    item.product_id,
+    products,
+  );
+}
+
+export function categoryForQuotationBomRow(
+  item: QuotationMaterialItem,
+  categories: ProductCategory[],
+) {
+  const selectedCategory = categories.find(
+    (category) => category.id === item.product_category_id,
+  );
+  if (item.product_id && selectedCategory) {
+    return selectedCategory;
+  }
+
+  const definition = quotationBomTemplateCategories.find(
+    (candidate) => candidate.key === item.bom_category_key,
+  );
+
+  return definition ? matchingCategory(definition, categories) : selectedCategory ?? null;
 }
 
 function matchingCategory(
@@ -261,6 +283,19 @@ function emptyTemplateItem(): QuotationMaterialItem {
     quantity: "",
     unit: "",
   };
+}
+
+function withSelectedProduct(
+  eligibleProducts: Product[],
+  selectedProductId: string | undefined,
+  allProducts: Product[],
+) {
+  if (!selectedProductId || eligibleProducts.some((product) => product.id === selectedProductId)) {
+    return eligibleProducts;
+  }
+
+  const selectedProduct = allProducts.find((product) => product.id === selectedProductId);
+  return selectedProduct ? [selectedProduct, ...eligibleProducts] : eligibleProducts;
 }
 
 function normalize(value: string | null | undefined) {

@@ -231,6 +231,7 @@ export function Modal({
   hideSubmit = false,
   noValidate = false,
   maxWidthClass = "sm:max-w-3xl",
+  closeButtonStyle = "text",
 }: {
   title: string;
   children: ReactNode;
@@ -242,6 +243,7 @@ export function Modal({
   hideSubmit?: boolean;
   noValidate?: boolean;
   maxWidthClass?: string;
+  closeButtonStyle?: "text" | "icon";
 }) {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.stopPropagation();
@@ -259,9 +261,20 @@ export function Modal({
           <h2 className="text-xl font-semibold tracking-normal text-slate-950">
             {title}
           </h2>
-          <Button onClick={onClose} variant="ghost">
-            Close
-          </Button>
+          {closeButtonStyle === "icon" ? (
+            <button
+              type="button"
+              aria-label="Close modal"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-500 transition hover:bg-stone-100 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
+              onClick={onClose}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          ) : (
+            <Button onClick={onClose} variant="ghost">
+              Close
+            </Button>
+          )}
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">{children}</div>
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

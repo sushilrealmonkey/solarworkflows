@@ -141,6 +141,9 @@ export function ProductFormModal({
   setValues,
   categories,
   brandOptions,
+  fixedCategoryId,
+  forceActive = false,
+  mode = "full",
   errors,
   onClose,
   onSubmit,
@@ -151,6 +154,9 @@ export function ProductFormModal({
   setValues: (values: ProductFormValues) => void;
   categories: ProductCategory[];
   brandOptions?: string[];
+  fixedCategoryId?: string;
+  forceActive?: boolean;
+  mode?: "full" | "quotation-quick";
   errors: Record<string, string>;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -159,6 +165,10 @@ export function ProductFormModal({
   const activeCategories = categories.filter(
     (category) => category.is_active !== false,
   );
+  const fixedCategory = fixedCategoryId
+    ? activeCategories.find((category) => category.id === fixedCategoryId) ?? null
+    : null;
+  const isQuotationQuickCreate = mode === "quotation-quick";
   const brandListId = useId();
   const nameSourceFields: Array<keyof ProductFormValues> = [
     "category_id",
@@ -186,57 +196,123 @@ export function ProductFormModal({
       onClose={onClose}
       onSubmit={onSubmit}
       noValidate
-      submitLabel="Save"
+      submitLabel={
+        isQuotationQuickCreate ? "Add & Select Product" : "Save"
+      }
       submitting={saving}
+      closeButtonStyle={isQuotationQuickCreate ? "icon" : "text"}
     >
-      <SelectInput
-        label="Category"
-        value={values.category_id}
-        onChange={(value) => update("category_id", value)}
-        options={[
-          { value: "", label: "Select category" },
-          ...activeCategories.map((category) => ({
-            value: category.id,
-            label: category.name,
-          })),
-        ]}
-      />
+      {fixedCategory ? (
+        isQuotationQuickCreate ? (
+          <div className="flex flex-wrap items-center gap-2 md:col-span-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Category
+            </span>
+            <span className="rounded-full bg-stone-100 px-2.5 py-1 text-sm font-semibold text-slate-700">
+              {fixedCategory.name}
+            </span>
+          </div>
+        ) : (
+          <div>
+            <span className="text-sm font-medium text-slate-700">Category</span>
+            <div className="mt-1 min-h-11 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-semibold text-slate-700">
+              {fixedCategory.name}
+            </div>
+          </div>
+        )
+      ) : (
+        <SelectInput
+          label="Category"
+          value={values.category_id}
+          onChange={(value) => update("category_id", value)}
+          options={[
+            { value: "", label: "Select category" },
+            ...activeCategories.map((category) => ({
+              value: category.id,
+              label: category.name,
+            })),
+          ]}
+        />
+      )}
       {errors.category_id ? (
         <p className="-mt-3 text-xs text-rose-700">{errors.category_id}</p>
       ) : null}
-      <TextInput
-        label="HSN Code"
-        value={values.hsn_code}
-        onChange={(value) => update("hsn_code", value)}
-      />
-      <BrandInput
-        label="Brand"
-        value={values.brand}
-        onChange={(value) => update("brand", value)}
-        options={brandOptions ?? []}
-        listId={brandListId}
-      />
-      <TextInput
-        label="Model Number"
-        value={values.model_number}
-        onChange={(value) => update("model_number", value)}
-      />
-      <TextInput
-        label="Specifications"
-        value={values.specifications}
-        onChange={(value) => update("specifications", value)}
-      />
-      <div className="md:col-span-2">
-        <span className="text-sm font-medium text-slate-700">
-          Auto Generated Display Name
-        </span>
-        <div className="mt-1 min-h-11 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-semibold text-slate-950">
-          {values.product_name || "Select category and enter product details"}
+      {!isQuotationQuickCreate ? (
+        <TextInput
+          label="HSN Code"
+          value={values.hsn_code}
+          onChange={(value) => update("hsn_code", value)}
+        />
+      ) : null}
+      {isQuotationQuickCreate ? (
+        <fieldset className="rounded-xl border border-stone-200 bg-stone-50/60 p-3 md:col-span-2">
+          <legend className="px-1 text-sm font-semibold text-slate-800">
+            Product identification
+          </legend>
+          <p className="text-xs text-slate-500">
+            Add at least one: brand, model or specification.
+          </p>
+          <div className="mt-3 grid gap-4 md:grid-cols-2">
+            <BrandInput
+              label="Brand"
+              value={values.brand}
+              onChange={(value) => update("brand", value)}
+              options={brandOptions ?? []}
+              listId={brandListId}
+            />
+            <TextInput
+              label="Model / Product Name"
+              value={values.model_number}
+              onChange={(value) => update("model_number", value)}
+            />
+            <div className="md:col-span-2">
+              <TextInput
+                label="Specifications"
+                value={values.specifications}
+                onChange={(value) => update("specifications", value)}
+              />
+            </div>
+          </div>
+          {errors.identifying_details ? (
+            <p className="mt-3 text-xs font-medium text-rose-700" role="alert">
+              {errors.identifying_details}
+            </p>
+          ) : null}
+        </fieldset>
+      ) : (
+        <>
+          <BrandInput
+            label="Brand"
+            value={values.brand}
+            onChange={(value) => update("brand", value)}
+            options={brandOptions ?? []}
+            listId={brandListId}
+          />
+          <TextInput
+            label="Model Number"
+            value={values.model_number}
+            onChange={(value) => update("model_number", value)}
+          />
+          <TextInput
+            label="Specifications"
+            value={values.specifications}
+            onChange={(value) => update("specifications", value)}
+          />
+        </>
+      )}
+      {!isQuotationQuickCreate ? (
+        <div className="md:col-span-2">
+          <span className="text-sm font-medium text-slate-700">
+            Auto Generated Display Name
+          </span>
+          <div className="mt-1 min-h-11 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-semibold text-slate-950">
+            {values.product_name || "Select category and enter product details"}
+          </div>
+          {errors.product_name ? (
+            <p className="mt-1 text-xs text-rose-700">{errors.product_name}</p>
+          ) : null}
         </div>
-        {errors.product_name ? (
-          <p className="mt-1 text-xs text-rose-700">{errors.product_name}</p>
-        ) : null}
-      </div>
+      ) : null}
       <SelectInput
         label="Unit"
         value={values.unit}
@@ -254,34 +330,80 @@ export function ProductFormModal({
       {errors.unit ? (
         <p className="-mt-3 text-xs text-rose-700">{errors.unit}</p>
       ) : null}
-      <TextInput
-        label="GST %"
-        type="number"
-        value={values.gst_percent}
-        onChange={(value) => update("gst_percent", value)}
-        error={errors.gst_percent}
-      />
-      <SelectInput
-        label="Status"
-        value={values.status}
-        onChange={(value) =>
-          update("status", value as ProductFormValues["status"])
-        }
-        options={productStatusOptions.map((status) => ({
-          value: status,
-          label: labelize(status),
-        }))}
-      />
-      <TextArea
-        label="Warranty"
-        value={values.warranty_description}
-        onChange={(value) => update("warranty_description", value)}
-      />
-      <TextArea
-        label="Notes"
-        value={values.notes}
-        onChange={(value) => update("notes", value)}
-      />
+      {isQuotationQuickCreate ? (
+        <TextInput
+          label="HSN Code"
+          value={values.hsn_code}
+          onChange={(value) => update("hsn_code", value)}
+        />
+      ) : null}
+      {!isQuotationQuickCreate && forceActive ? (
+        <div>
+          <span className="text-sm font-medium text-slate-700">Status</span>
+          <div className="mt-1 min-h-11 w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2.5 text-sm font-semibold text-slate-700">
+            Active
+          </div>
+        </div>
+      ) : !isQuotationQuickCreate ? (
+        <SelectInput
+          label="Status"
+          value={values.status}
+          onChange={(value) =>
+            update("status", value as ProductFormValues["status"])
+          }
+          options={productStatusOptions.map((status) => ({
+            value: status,
+            label: labelize(status),
+          }))}
+        />
+      ) : null}
+      {isQuotationQuickCreate ? (
+        <details className="rounded-lg border border-stone-200 bg-stone-50 md:col-span-2">
+          <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-slate-700 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-200">
+            More product details
+          </summary>
+          <div className="grid gap-4 border-t border-stone-200 p-3 md:grid-cols-2">
+            <TextInput
+              label="GST %"
+              type="number"
+              value={values.gst_percent}
+              onChange={(value) => update("gst_percent", value)}
+              error={errors.gst_percent}
+            />
+            <div aria-hidden="true" className="hidden md:block" />
+            <TextArea
+              label="Warranty"
+              value={values.warranty_description}
+              onChange={(value) => update("warranty_description", value)}
+            />
+            <TextArea
+              label="Notes"
+              value={values.notes}
+              onChange={(value) => update("notes", value)}
+            />
+          </div>
+        </details>
+      ) : (
+        <>
+          <TextInput
+            label="GST %"
+            type="number"
+            value={values.gst_percent}
+            onChange={(value) => update("gst_percent", value)}
+            error={errors.gst_percent}
+          />
+          <TextArea
+            label="Warranty"
+            value={values.warranty_description}
+            onChange={(value) => update("warranty_description", value)}
+          />
+          <TextArea
+            label="Notes"
+            value={values.notes}
+            onChange={(value) => update("notes", value)}
+          />
+        </>
+      )}
     </Modal>
   );
 }

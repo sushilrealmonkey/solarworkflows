@@ -37,10 +37,21 @@ import {
   updateQuotation,
 } from "./quotationApi";
 import {
+  createProduct,
   fetchProductCategories,
   fetchProducts,
 } from "../product-master/productMasterApi";
-import type { Product, ProductCategory } from "../product-master/types";
+import type {
+  Product,
+  ProductCategory,
+  ProductFormValues,
+} from "../product-master/types";
+import { ProductFormModal } from "../product-master/ProductMasterComponents";
+import {
+  buildGeneratedProductName,
+  emptyProductForm,
+  validateProductForm,
+} from "../product-master/productMasterUtils";
 import { fetchInventoryItems } from "../inventory/inventoryApi";
 import {
   inventoryBrandName,
@@ -82,9 +93,15 @@ import type {
 } from "./types";
 import { generateAndStoreQuotationPdf } from "./quotationPdfWorkflow";
 import {
+  categoryForQuotationBomRow,
   mergeQuotationBomTemplateRows,
   productsForQuotationBomRow,
 } from "./quotationBomTemplate";
+import { QuotationProductSelect } from "./QuotationProductSelect";
+import {
+  quotationMaterialItemWithProduct,
+  quotationQuickProductIdentificationError,
+} from "./quotationQuickProduct";
 
 const tabs = [
   "Project",
@@ -113,6 +130,24 @@ const standardPanelWattages = [
   "650",
 ];
 
+type QuickProductTarget =
+  | {
+      kind: "row";
+      index: number;
+      categoryId: string;
+      categoryName: string;
+    }
+  | {
+      kind: "draft";
+      categoryId: string;
+      categoryName: string;
+    };
+
+type QuickProductFormState = {
+  target: QuickProductTarget;
+  values: ProductFormValues;
+};
+
 export function NewQuotationPage() {
   const { profile, permissions, organization } = useAuth();
   const { showToast } = useToast();
@@ -133,6 +168,16 @@ export function NewQuotationPage() {
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [quickProductForm, setQuickProductForm] =
+    useState<QuickProductFormState | null>(null);
+  const [quickProductErrors, setQuickProductErrors] = useState<
+    Record<string, string>
+  >({});
+  const [quickProductSaving, setQuickProductSaving] = useState(false);
+  const [quickProductAlert, setQuickProductAlert] = useState<{
+    title: string;
+    description: string;
+  } | null>(null);
   const [creatingPanelWattage, setCreatingPanelWattage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,6 +192,12 @@ export function NewQuotationPage() {
     profile,
     permissions,
     "documents",
+    "create",
+  );
+  const canCreateProduct = hasPermission(
+    profile,
+    permissions,
+    "product_master",
     "create",
   );
   const canSave = isEditing ? canUpdate : canCreate;
@@ -300,6 +351,17 @@ export function NewQuotationPage() {
   const selectedLead = useMemo(
     () => leads.find((lead) => lead.id === values.lead_id) ?? null,
     [leads, values.lead_id],
+  );
+  const quickProductBrandOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          products
+            .map((product) => product.brand?.trim())
+            .filter((brand): brand is string => Boolean(brand)),
+        ),
+      ).sort((first, second) => first.localeCompare(second)),
+    [products],
   );
   const savedBomItems = useMemo(
     () => values.material_items.filter(hasSavedBomItem),
@@ -510,11 +572,135 @@ export function NewQuotationPage() {
   }
 
   function updateBomDraftProduct(productId: string) {
-    setBomDraft((current) => materialItemWithProduct(current, productId, products));
+    setBomDraft((current) =>
+      quotationMaterialItemWithProduct(current, productId, products),
+    );
   }
 
   function updateBomDraft(key: keyof QuotationMaterialItem, value: string) {
     setBomDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function openQuickProductCreate(target: QuickProductTarget) {
+    const initialValues = emptyProductForm();
+    setQuickProductErrors({});
+    setQuickProductAlert(null);
+    setQuickProductForm({
+      target,
+      values: {
+        ...initialValues,
+        category_id: target.categoryId,
+        status: "active",
+      },
+    });
+  }
+
+  function updateQuickProductValues(nextValues: ProductFormValues) {
+    if (!quickProductForm) {
+      return;
+    }
+
+    const enforcedValues = {
+      ...nextValues,
+      category_id:
+        quickProductForm.target.categoryId || nextValues.category_id,
+      status: "active" as const,
+    };
+    const baseErrors = validateProductForm(enforcedValues);
+
+    setQuickProductForm({
+      ...quickProductForm,
+      values: enforcedValues,
+    });
+    setQuickProductErrors((current) => ({
+      ...current,
+      category_id: baseErrors.category_id,
+      product_name: baseErrors.product_name,
+      unit: baseErrors.unit,
+      gst_percent: baseErrors.gst_percent,
+      identifying_details:
+        quotationQuickProductIdentificationError(enforcedValues),
+    }));
+  }
+
+  async function handleQuickProductSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!quickProductForm || !canCreateProduct) {
+      return;
+    }
+
+    const categoryId =
+      quickProductForm.target.categoryId || quickProductForm.values.category_id;
+    const preparedValues: ProductFormValues = {
+      ...quickProductForm.values,
+      category_id: categoryId,
+      status: "active",
+      product_name: buildGeneratedProductName(
+        { ...quickProductForm.values, category_id: categoryId, status: "active" },
+        productCategories,
+      ),
+    };
+    const nextErrors = {
+      ...validateProductForm(preparedValues),
+      identifying_details:
+        quotationQuickProductIdentificationError(preparedValues),
+    };
+    setQuickProductErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      return;
+    }
+
+    try {
+      setQuickProductSaving(true);
+      const createdProduct = await createProduct(profile, preparedValues);
+
+      setProducts((current) => [
+        ...current.filter((product) => product.id !== createdProduct.id),
+        createdProduct,
+      ]);
+
+      if (quickProductForm.target.kind === "row") {
+        const targetIndex = quickProductForm.target.index;
+        setValues((current) => ({
+          ...current,
+          material_items: current.material_items.map((item, index) =>
+            index === targetIndex
+              ? quotationMaterialItemWithProduct(
+                  item,
+                  createdProduct.id,
+                  [createdProduct],
+                )
+              : item,
+          ),
+        }));
+      } else {
+        setBomDraft((current) =>
+          quotationMaterialItemWithProduct(
+            current,
+            createdProduct.id,
+            [createdProduct],
+          ),
+        );
+      }
+
+      setQuickProductForm(null);
+      setQuickProductErrors({});
+      showToast("Product or material added and selected.", "success");
+    } catch (nextError) {
+      const description =
+        nextError instanceof Error
+          ? nextError.message
+          : "Product or material save failed.";
+      setQuickProductAlert({
+        title: "Product or material could not be saved",
+        description,
+      });
+      showToast(description, "error");
+    } finally {
+      setQuickProductSaving(false);
+    }
   }
 
   function updateBomRowProduct(index: number, productId: string) {
@@ -522,7 +708,7 @@ export function NewQuotationPage() {
       ...current,
       material_items: current.material_items.map((item, itemIndex) =>
         itemIndex === index
-          ? materialItemWithProduct(item, productId, products)
+          ? quotationMaterialItemWithProduct(item, productId, products)
           : item,
       ),
     }));
@@ -972,6 +1158,10 @@ export function NewQuotationPage() {
                   productCategories,
                 );
                 const categoryLabel = bomCategoryLabel(item, productCategories);
+                const productCategory = categoryForQuotationBomRow(
+                  item,
+                  productCategories,
+                );
 
                 return (
                   <article
@@ -993,17 +1183,22 @@ export function NewQuotationPage() {
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <SelectInput
+                      <QuotationProductSelect
+                        ariaLabel={`Product for ${categoryLabel}`}
+                        canCreateProduct={canCreateProduct}
+                        categoryName={categoryLabel}
                         label="Product"
-                        value={item.product_id ?? ""}
                         onChange={(value) => updateBomRowProduct(index, value)}
-                        options={[
-                          { value: "", label: "Select product" },
-                          ...rowProducts.map((product) => ({
-                            value: product.id,
-                            label: productOptionLabel(product),
-                          })),
-                        ]}
+                        onAddProduct={() =>
+                          openQuickProductCreate({
+                            kind: "row",
+                            index,
+                            categoryId: productCategory?.id ?? "",
+                            categoryName: categoryLabel,
+                          })
+                        }
+                        products={rowProducts}
+                        value={item.product_id ?? ""}
                       />
                       <TextInput
                         label="Quantity"
@@ -1044,6 +1239,11 @@ export function NewQuotationPage() {
                       products,
                       productCategories,
                     );
+                    const categoryLabel = bomCategoryLabel(item, productCategories);
+                    const productCategory = categoryForQuotationBomRow(
+                      item,
+                      productCategories,
+                    );
 
                     return (
                       <tr
@@ -1051,24 +1251,28 @@ export function NewQuotationPage() {
                       >
                         <td className="px-4 py-3">{index + 1}</td>
                         <td className="px-4 py-3 font-semibold text-slate-900">
-                          {bomCategoryLabel(item, productCategories)}
+                          {categoryLabel}
                         </td>
                         <td className="min-w-64 px-4 py-3">
-                          <select
-                            aria-label={`Product for ${bomCategoryLabel(item, productCategories)}`}
-                            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
-                            value={item.product_id ?? ""}
-                            onChange={(event) =>
-                              updateBomRowProduct(index, event.target.value)
+                          <QuotationProductSelect
+                            ariaLabel={`Product for ${categoryLabel}`}
+                            canCreateProduct={canCreateProduct}
+                            categoryName={categoryLabel}
+                            onAddProduct={() =>
+                              openQuickProductCreate({
+                                kind: "row",
+                                index,
+                                categoryId: productCategory?.id ?? "",
+                                categoryName: categoryLabel,
+                              })
                             }
-                          >
-                            <option value="">Select product</option>
-                            {rowProducts.map((product) => (
-                              <option key={product.id} value={product.id}>
-                                {productOptionLabel(product)}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(productId) =>
+                              updateBomRowProduct(index, productId)
+                            }
+                            products={rowProducts}
+                            showLabel={false}
+                            value={item.product_id ?? ""}
+                          />
                         </td>
                         <td className="px-4 py-3">{item.hsn_code || "-"}</td>
                         <td className="px-4 py-3">{item.brand || "-"}</td>
@@ -1120,22 +1324,39 @@ export function NewQuotationPage() {
                     })),
                   ]}
                 />
-                <SelectInput
+                <QuotationProductSelect
+                  canCreateProduct={canCreateProduct}
+                  categoryName={
+                    productCategories.find(
+                      (category) => category.id === bomDraft.product_category_id,
+                    )?.name ?? "product"
+                  }
+                  disabled={!bomDraft.product_category_id}
                   label="Product"
-                  value={bomDraft.product_id ?? ""}
                   onChange={updateBomDraftProduct}
-                  options={[
-                    { value: "", label: "Product" },
-                    ...products
-                      .filter(
-                        (product) =>
-                          product.category_id === (bomDraft.product_category_id ?? ""),
-                      )
-                      .map((product) => ({
-                        value: product.id,
-                        label: productOptionLabel(product),
-                      })),
-                  ]}
+                  onAddProduct={
+                    bomDraft.product_category_id
+                      ? () => {
+                          const category = productCategories.find(
+                            (candidate) =>
+                              candidate.id === bomDraft.product_category_id,
+                          );
+                          openQuickProductCreate({
+                            kind: "draft",
+                            categoryId: bomDraft.product_category_id ?? "",
+                            categoryName: category?.name ?? "product",
+                          });
+                        }
+                      : undefined
+                  }
+                  placeholder={
+                    bomDraft.product_category_id ? "Select product" : "Select category first"
+                  }
+                  products={products.filter(
+                    (product) =>
+                      product.category_id === (bomDraft.product_category_id ?? ""),
+                  )}
+                  value={bomDraft.product_id ?? ""}
                 />
                 <ReadonlyFormValue label="HSN Code" value={bomDraft.hsn_code ?? ""} />
                 <ReadonlyFormValue label="Brand" value={bomDraft.brand ?? ""} />
@@ -1418,6 +1639,36 @@ export function NewQuotationPage() {
           title="BOM details required"
           description="Please fill BOM details first before saving the quotation."
           onClose={() => setShowBomRequiredAlert(false)}
+        />
+      ) : null}
+
+      {quickProductForm ? (
+        <ProductFormModal
+          brandOptions={quickProductBrandOptions}
+          categories={productCategories}
+          errors={quickProductErrors}
+          fixedCategoryId={quickProductForm.target.categoryId || undefined}
+          forceActive
+          mode="quotation-quick"
+          onClose={() => {
+            if (!quickProductSaving) {
+              setQuickProductForm(null);
+              setQuickProductErrors({});
+            }
+          }}
+          onSubmit={handleQuickProductSubmit}
+          saving={quickProductSaving}
+          setValues={updateQuickProductValues}
+          title={`Add ${quickProductForm.target.categoryName}`}
+          values={quickProductForm.values}
+        />
+      ) : null}
+
+      {quickProductAlert ? (
+        <AlertDialog
+          description={quickProductAlert.description}
+          onClose={() => setQuickProductAlert(null)}
+          title={quickProductAlert.title}
         />
       ) : null}
     </form>
@@ -1976,45 +2227,6 @@ function applyLeadToCurrentQuotation(
   });
 }
 
-function materialItemWithProduct(
-  item: QuotationMaterialItem,
-  productId: string,
-  products: Product[],
-): QuotationMaterialItem {
-  const product = products.find((candidate) => candidate.id === productId);
-
-  if (!product) {
-    return {
-      ...item,
-      product_id: "",
-      inventory_item_id: "",
-      hsn_code: "",
-      description: "",
-      brand: "",
-      specification: "",
-      make_specification: "",
-      unit: "",
-    };
-  }
-
-  const specification = product.specifications ?? product.model_number ?? "";
-
-  return {
-    ...item,
-    product_category_id: product.category_id,
-    product_id: product.id,
-    inventory_item_id: "",
-    hsn_code: product.hsn_code ?? "",
-    description: product.product_name,
-    brand: product.brand ?? "",
-    specification,
-    make_specification:
-      [product.brand, specification].filter(Boolean).join(" / ") ||
-      item.make_specification,
-    unit: product.unit,
-  };
-}
-
 function syncBomProductUnits(
   items: QuotationMaterialItem[],
   products: Product[],
@@ -2072,16 +2284,6 @@ function bomCategoryLabel(
     item.bom_category_name ||
     productCategoryName(categories, item.product_category_id)
   );
-}
-
-function productOptionLabel(product: Product) {
-  const metadata = [
-    product.hsn_code ? `HSN: ${product.hsn_code}` : "",
-  ].filter(Boolean);
-
-  return metadata.length > 0
-    ? `${product.product_name} (${metadata.join(" / ")})`
-    : product.product_name;
 }
 
 function inventoryBrandOptions(items: InventoryItem[], placeholder: string) {
