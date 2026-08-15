@@ -1,5 +1,28 @@
 begin;
 
+insert into public.companies (id, company_name, company_slug, status)
+values (
+  '61000000-0000-0000-0000-000000000001',
+  'Record Scope Test Company',
+  'record-scope-test-company',
+  'active'
+);
+
+insert into public.organizations (id, name, slug, status, company_id)
+values (
+  '62000000-0000-0000-0000-000000000001',
+  'Record Scope Test Organization',
+  'record-scope-test-org',
+  'active',
+  '61000000-0000-0000-0000-000000000001'
+);
+
+select public.seed_epc_standard_roles('62000000-0000-0000-0000-000000000001');
+
+update public.roles
+set company_id = '61000000-0000-0000-0000-000000000001'
+where organization_id = '62000000-0000-0000-0000-000000000001';
+
 do $$
 begin
   if exists (

@@ -12,8 +12,18 @@ CREATE TEMP TABLE reservation_test_flags (
 );
 
 WITH inserted AS (
-  INSERT INTO public.organizations (name, slug, status)
-  VALUES ('Reservation Test Org', 'reservation-test-org', 'active')
+  INSERT INTO public.companies (company_name, company_slug, status)
+  VALUES ('Reservation Test Company', 'reservation-test-company', 'active')
+  RETURNING id
+)
+INSERT INTO reservation_test_ids (key, id)
+SELECT 'company', id FROM inserted;
+
+WITH inserted AS (
+  INSERT INTO public.organizations (name, slug, status, company_id)
+  SELECT 'Reservation Test Org', 'reservation-test-org', 'active', id
+  FROM reservation_test_ids
+  WHERE key = 'company'
   RETURNING id
 )
 INSERT INTO reservation_test_ids (key, id)
@@ -75,23 +85,22 @@ BEGIN
   RETURNING id INTO next_product_id;
 
   IF stock_qty IS NOT NULL THEN
-    INSERT INTO public.inventory_items (
-      organization_id,
-      catalog_product_id,
-      current_stock,
-      opening_stock,
-      minimum_stock,
-      status
-    )
-    VALUES (
-      target_org_id,
-      next_product_id,
-      stock_qty,
-      stock_qty,
-      0,
-      'active'
-    )
+    UPDATE public.inventory_items
+    SET
+      current_stock = stock_qty,
+      opening_stock = stock_qty,
+      minimum_stock = 0
+    WHERE organization_id = target_org_id
+      AND catalog_product_id = next_product_id
+      AND status = 'active'
     RETURNING id INTO next_item_id;
+  ELSE
+    UPDATE public.inventory_items
+    SET status = 'inactive'
+    WHERE organization_id = target_org_id
+      AND catalog_product_id = next_product_id
+      AND status = 'active';
+    next_item_id := null;
   END IF;
 
   RETURN QUERY SELECT next_product_id, next_item_id;

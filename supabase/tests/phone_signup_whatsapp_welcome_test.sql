@@ -58,6 +58,23 @@ $$;
 
 begin;
 
+insert into auth.users (
+  id, aud, role, phone, phone_confirmed_at, encrypted_password,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+)
+values (
+  '91000000-0000-0000-0000-000000000001',
+  'authenticated',
+  'authenticated',
+  '+919100000001',
+  now(),
+  '',
+  '{"provider":"phone","providers":["phone"]}'::jsonb,
+  '{}'::jsonb,
+  now(),
+  now()
+);
+
 do $$
 declare
   candidate_user_id uuid;

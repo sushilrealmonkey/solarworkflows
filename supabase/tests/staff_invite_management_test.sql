@@ -2,6 +2,117 @@
 -- the server-side staff lifecycle guards.
 begin;
 
+insert into public.companies (id, company_name, company_slug, status)
+values (
+  '81000000-0000-0000-0000-000000000001',
+  'Staff Invite Test Company',
+  'staff-invite-test-company',
+  'active'
+);
+
+insert into public.organizations (id, name, slug, status, company_id)
+values (
+  '82000000-0000-0000-0000-000000000001',
+  'Staff Invite Test Organization',
+  'staff-invite-test-org',
+  'active',
+  '81000000-0000-0000-0000-000000000001'
+);
+
+select public.seed_epc_standard_roles('82000000-0000-0000-0000-000000000001');
+
+update public.roles
+set company_id = '81000000-0000-0000-0000-000000000001'
+where organization_id = '82000000-0000-0000-0000-000000000001';
+
+insert into auth.users (
+  id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+)
+values
+  (
+    '83000000-0000-0000-0000-000000000001',
+    'authenticated',
+    'authenticated',
+    'staff-invite-admin@example.invalid',
+    '',
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now()
+  ),
+  (
+    '83000000-0000-0000-0000-000000000002',
+    'authenticated',
+    'authenticated',
+    'staff-invite-pending@example.invalid',
+    '',
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    now(),
+    now()
+  );
+
+insert into public.profiles (
+  id, organization_id, company_id, full_name, email, status, is_super_admin
+)
+values (
+  '83000000-0000-0000-0000-000000000001',
+  '82000000-0000-0000-0000-000000000001',
+  '81000000-0000-0000-0000-000000000001',
+  'Staff Invite Admin',
+  'staff-invite-admin@example.invalid',
+  'active',
+  false
+);
+
+insert into public.users_profile (
+  id, auth_user_id, organization_id, company_id, full_name, email,
+  status, email_verified, is_super_admin
+)
+values
+  (
+    '84000000-0000-0000-0000-000000000001',
+    '83000000-0000-0000-0000-000000000001',
+    '82000000-0000-0000-0000-000000000001',
+    '81000000-0000-0000-0000-000000000001',
+    'Staff Invite Admin',
+    'staff-invite-admin@example.invalid',
+    'active',
+    true,
+    false
+  ),
+  (
+    '84000000-0000-0000-0000-000000000002',
+    '83000000-0000-0000-0000-000000000002',
+    '82000000-0000-0000-0000-000000000001',
+    '81000000-0000-0000-0000-000000000001',
+    'Pending Staff Invite',
+    'staff-invite-pending@example.invalid',
+    'invited',
+    true,
+    false
+  );
+
+insert into public.user_roles (user_profile_id, user_id, role_id)
+select
+  '84000000-0000-0000-0000-000000000001',
+  '83000000-0000-0000-0000-000000000001',
+  roles.id
+from public.roles
+where roles.organization_id = '82000000-0000-0000-0000-000000000001'
+  and roles.role_key = 'admin';
+
+insert into public.user_roles (user_profile_id, role_id)
+select
+  '84000000-0000-0000-0000-000000000002',
+  roles.id
+from public.roles
+where roles.organization_id = '82000000-0000-0000-0000-000000000001'
+  and roles.role_key = 'sales_team';
+
 do $$
 declare
   target_staff public.users_profile%rowtype;

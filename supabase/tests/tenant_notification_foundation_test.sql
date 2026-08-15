@@ -2,10 +2,10 @@
 
 do $$
 declare
-  table_name text;
+  target_table_name text;
   template_count integer;
 begin
-  foreach table_name in array array[
+  foreach target_table_name in array array[
     'notification_events',
     'notification_recipients',
     'notification_preferences',
@@ -14,8 +14,8 @@ begin
     'notification_unsubscribes'
   ]
   loop
-    if to_regclass('public.' || table_name) is null then
-      raise exception 'Missing notification table: %', table_name;
+    if to_regclass('public.' || target_table_name) is null then
+      raise exception 'Missing notification table: %', target_table_name;
     end if;
 
     if not exists (
@@ -23,20 +23,20 @@ begin
       from pg_class
       join pg_namespace on pg_namespace.oid = pg_class.relnamespace
       where pg_namespace.nspname = 'public'
-        and pg_class.relname = table_name
+        and pg_class.relname = target_table_name
         and pg_class.relrowsecurity
     ) then
-      raise exception 'RLS is not enabled for public.%', table_name;
+      raise exception 'RLS is not enabled for public.%', target_table_name;
     end if;
 
     if not exists (
       select 1
       from information_schema.columns
       where table_schema = 'public'
-        and columns.table_name = table_name
+        and columns.table_name = target_table_name
         and column_name = 'company_id'
     ) then
-      raise exception 'public.% is missing company_id', table_name;
+      raise exception 'public.% is missing company_id', target_table_name;
     end if;
   end loop;
 
@@ -64,8 +64,8 @@ begin
     and provider = 'meta'
     and approval_status = 'active';
 
-  if template_count <> 10 then
-    raise exception 'Expected 10 active platform Meta templates, found %',
+  if template_count <> 12 then
+    raise exception 'Expected 12 active platform Meta templates, found %',
       template_count;
   end if;
 

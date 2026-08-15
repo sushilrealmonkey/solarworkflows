@@ -42,6 +42,10 @@ create index company_onboarding_progress_setup_owner_profile_id_idx
 on public.company_onboarding_progress (setup_owner_profile_id)
 where setup_owner_profile_id is not null;
 
+create index company_onboarding_progress_completed_by_profile_id_idx
+on public.company_onboarding_progress (completed_by_profile_id)
+where completed_by_profile_id is not null;
+
 create trigger set_company_onboarding_progress_updated_at
 before update on public.company_onboarding_progress
 for each row execute function public.set_updated_at();

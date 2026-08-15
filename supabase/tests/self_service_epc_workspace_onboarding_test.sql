@@ -54,6 +54,23 @@ $$;
 -- persisting test data.
 begin;
 
+insert into auth.users (
+  id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+)
+values (
+  '92000000-0000-0000-0000-000000000001',
+  'authenticated',
+  'authenticated',
+  'self-service-onboarding@example.invalid',
+  '',
+  now(),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  '{}'::jsonb,
+  now(),
+  now()
+);
+
 do $$
 declare
   candidate_user_id uuid;

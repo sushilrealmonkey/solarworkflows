@@ -2,6 +2,93 @@
 
 begin;
 
+insert into public.companies (id, company_name, company_slug, status)
+values (
+  'b1000000-0000-0000-0000-000000000001',
+  'Project Notification Test Company',
+  'project-notification-test-company',
+  'active'
+);
+
+insert into public.organizations (id, name, slug, status, company_id)
+values (
+  'b2000000-0000-0000-0000-000000000001',
+  'Project Notification Test Organization',
+  'project-notification-test-org',
+  'active',
+  'b1000000-0000-0000-0000-000000000001'
+);
+
+select public.seed_epc_standard_roles('b2000000-0000-0000-0000-000000000001');
+
+update public.roles
+set company_id = 'b1000000-0000-0000-0000-000000000001'
+where organization_id = 'b2000000-0000-0000-0000-000000000001';
+
+insert into auth.users (
+  id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+)
+values (
+  'b3000000-0000-0000-0000-000000000001',
+  'authenticated', 'authenticated', 'project-notification-user@example.invalid',
+  '', now(), '{"provider":"email","providers":["email"]}'::jsonb,
+  '{}'::jsonb, now(), now()
+);
+
+insert into public.profiles (
+  id, organization_id, company_id, full_name, email, status, is_super_admin
+)
+values (
+  'b3000000-0000-0000-0000-000000000001',
+  'b2000000-0000-0000-0000-000000000001',
+  'b1000000-0000-0000-0000-000000000001',
+  'Project Notification User', 'project-notification-user@example.invalid',
+  'active', false
+);
+
+insert into public.users_profile (
+  id, auth_user_id, organization_id, company_id, full_name, email,
+  status, email_verified, is_super_admin
+)
+values (
+  'b4000000-0000-0000-0000-000000000001',
+  'b3000000-0000-0000-0000-000000000001',
+  'b2000000-0000-0000-0000-000000000001',
+  'b1000000-0000-0000-0000-000000000001',
+  'Project Notification User', 'project-notification-user@example.invalid',
+  'active', true, false
+);
+
+insert into public.user_roles (user_profile_id, user_id, role_id)
+select
+  'b4000000-0000-0000-0000-000000000001',
+  'b3000000-0000-0000-0000-000000000001',
+  roles.id
+from public.roles
+where roles.organization_id = 'b2000000-0000-0000-0000-000000000001'
+  and roles.role_key = 'admin';
+
+insert into public.customers (
+  id, organization_id, full_name, phone, status
+)
+values (
+  'b5000000-0000-0000-0000-000000000001',
+  'b2000000-0000-0000-0000-000000000001',
+  'Project Notification Customer', '9000000001', 'active'
+);
+
+insert into public.projects (
+  id, organization_id, company_id, customer_id, project_name, project_status
+)
+values (
+  'b6000000-0000-0000-0000-000000000001',
+  'b2000000-0000-0000-0000-000000000001',
+  'b1000000-0000-0000-0000-000000000001',
+  'b5000000-0000-0000-0000-000000000001',
+  'Project Notification Test Project', 'created'
+);
+
 do $$
 declare
   target_project public.projects%rowtype;

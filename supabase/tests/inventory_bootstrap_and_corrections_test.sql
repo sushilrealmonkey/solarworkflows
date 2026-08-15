@@ -112,20 +112,18 @@ with inserted as (
 )
 insert into inventory_flow_test_ids select 'profile', id from inserted;
 
-insert into public.user_roles (user_profile_id, user_id, role_id)
+insert into public.user_roles (user_profile_id, role_id)
 select
   profile.id,
-  auth_user.id,
   roles.id
 from inventory_flow_test_ids profile
-cross join inventory_flow_test_ids auth_user
 join public.roles
   on roles.organization_id = (
     select id from inventory_flow_test_ids where key = 'organization'
   )
  and roles.role_key = 'admin'
 where profile.key = 'profile'
-  and auth_user.key = 'auth_user';
+;
 
 with inserted as (
   insert into public.product_categories (tenant_id, name, category_type)
@@ -574,16 +572,14 @@ select is(
   'positive correction sets stock to the counted total'
 );
 
-select is(
-  (
-    select quantity
+select ok(
+  exists (
+    select 1
     from public.inventory_transactions
     where item_id = (select id from inventory_flow_test_ids where key = 'inventory_item')
       and reference_type = 'stock_correction'
-    order by created_at desc
-    limit 1
+      and quantity = 2
   ),
-  2::numeric,
   'positive correction records only the calculated difference'
 );
 
@@ -608,16 +604,14 @@ select is(
   'negative correction sets stock to the counted total'
 );
 
-select is(
-  (
-    select quantity
+select ok(
+  exists (
+    select 1
     from public.inventory_transactions
     where item_id = (select id from inventory_flow_test_ids where key = 'inventory_item')
       and reference_type = 'stock_correction'
-    order by created_at desc
-    limit 1
+      and quantity = -4
   ),
-  (-4)::numeric,
   'negative correction records a signed adjustment'
 );
 

@@ -1,5 +1,103 @@
 -- Active members without Settings access must receive the same safe tenant
 -- display name and logo as another active member of their organization.
+begin;
+
+insert into public.companies (id, company_name, company_slug, status)
+values (
+  'a1000000-0000-0000-0000-000000000001',
+  'Branding Members Test Company',
+  'branding-members-test-company',
+  'active'
+);
+
+insert into public.organizations (id, name, slug, status, company_id)
+values (
+  'a2000000-0000-0000-0000-000000000001',
+  'Branding Members Test Organization',
+  'branding-members-test-org',
+  'active',
+  'a1000000-0000-0000-0000-000000000001'
+);
+
+insert into public.organization_settings (organization_id, company_logo_url)
+values ('a2000000-0000-0000-0000-000000000001', 'https://example.invalid/brand.svg')
+on conflict (organization_id) do update
+set company_logo_url = excluded.company_logo_url;
+
+select public.seed_epc_standard_roles('a2000000-0000-0000-0000-000000000001');
+
+update public.roles
+set company_id = 'a1000000-0000-0000-0000-000000000001'
+where organization_id = 'a2000000-0000-0000-0000-000000000001';
+
+insert into auth.users (
+  id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+)
+values
+  (
+    'a3000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated',
+    'branding-staff@example.invalid', '', now(),
+    '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()
+  ),
+  (
+    'a3000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated',
+    'branding-admin@example.invalid', '', now(),
+    '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()
+  );
+
+insert into public.profiles (
+  id, organization_id, company_id, full_name, email, status, is_super_admin
+)
+values
+  (
+    'a3000000-0000-0000-0000-000000000001',
+    'a2000000-0000-0000-0000-000000000001',
+    'a1000000-0000-0000-0000-000000000001',
+    'Branding Staff', 'branding-staff@example.invalid', 'active', false
+  ),
+  (
+    'a3000000-0000-0000-0000-000000000002',
+    'a2000000-0000-0000-0000-000000000001',
+    'a1000000-0000-0000-0000-000000000001',
+    'Branding Admin', 'branding-admin@example.invalid', 'active', false
+  );
+
+insert into public.users_profile (
+  id, auth_user_id, organization_id, company_id, full_name, email,
+  status, email_verified, is_super_admin
+)
+values
+  (
+    'a4000000-0000-0000-0000-000000000001',
+    'a3000000-0000-0000-0000-000000000001',
+    'a2000000-0000-0000-0000-000000000001',
+    'a1000000-0000-0000-0000-000000000001',
+    'Branding Staff', 'branding-staff@example.invalid', 'active', true, false
+  ),
+  (
+    'a4000000-0000-0000-0000-000000000002',
+    'a3000000-0000-0000-0000-000000000002',
+    'a2000000-0000-0000-0000-000000000001',
+    'a1000000-0000-0000-0000-000000000001',
+    'Branding Admin', 'branding-admin@example.invalid', 'active', true, false
+  );
+
+insert into public.user_roles (user_profile_id, user_id, role_id)
+select
+  case roles.role_key
+    when 'field_staff' then 'a4000000-0000-0000-0000-000000000001'::uuid
+    else 'a4000000-0000-0000-0000-000000000002'::uuid
+  end,
+  case roles.role_key
+    when 'field_staff' then 'a3000000-0000-0000-0000-000000000001'::uuid
+    else 'a3000000-0000-0000-0000-000000000002'::uuid
+  end,
+  roles.id
+from public.roles
+where roles.organization_id = 'a2000000-0000-0000-0000-000000000001'
+  and roles.role_key in ('field_staff', 'admin');
+
 do $$
 declare
   staff_user_id uuid;
@@ -105,3 +203,5 @@ begin
   end if;
 end;
 $$;
+
+rollback;

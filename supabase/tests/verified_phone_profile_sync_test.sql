@@ -43,6 +43,59 @@ $$;
 
 begin;
 
+insert into public.companies (id, company_name, company_slug, status)
+values (
+  '93000000-0000-0000-0000-000000000001',
+  'Verified Phone Test Company',
+  'verified-phone-test-company',
+  'active'
+);
+
+insert into public.organizations (id, name, slug, status, company_id)
+values (
+  '94000000-0000-0000-0000-000000000001',
+  'Verified Phone Test Organization',
+  'verified-phone-test-org',
+  'active',
+  '93000000-0000-0000-0000-000000000001'
+);
+
+insert into auth.users (
+  id, aud, role, email, phone, encrypted_password, email_confirmed_at,
+  phone_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+)
+values (
+  '95000000-0000-0000-0000-000000000001',
+  'authenticated',
+  'authenticated',
+  'verified-phone-sync@example.invalid',
+  '+919500000001',
+  '',
+  now(),
+  now(),
+  '{"provider":"email","providers":["email","phone"]}'::jsonb,
+  '{}'::jsonb,
+  now(),
+  now()
+);
+
+insert into public.users_profile (
+  id, auth_user_id, organization_id, company_id, full_name, email,
+  status, email_verified, phone_verified, is_super_admin
+)
+values (
+  '96000000-0000-0000-0000-000000000001',
+  '95000000-0000-0000-0000-000000000001',
+  '94000000-0000-0000-0000-000000000001',
+  '93000000-0000-0000-0000-000000000001',
+  'Verified Phone Test User',
+  'verified-phone-sync@example.invalid',
+  'active',
+  true,
+  false,
+  false
+);
+
 do $$
 declare
   candidate_user_id uuid;
