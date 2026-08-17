@@ -18,6 +18,11 @@ export const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+// Keep infrastructure, provider, and database details out of tenant-facing
+// responses. Detailed errors are logged inside each Edge Function instead.
+export const ASSISTANT_UNAVAILABLE_MESSAGE =
+  "Bizlee AI is temporarily unavailable. Please try again shortly.";
+
 export function requireEnv(name: string) {
   const value = Deno.env.get(name);
 
@@ -106,7 +111,8 @@ export async function resolveCallerProfile(
     .maybeSingle();
 
   if (error) {
-    return { profile: null, error: error.message };
+    console.error("assistant profile lookup failed", error.message);
+    return { profile: null, error: ASSISTANT_UNAVAILABLE_MESSAGE };
   }
 
   if (!data || !data.organization_id) {
@@ -130,7 +136,10 @@ export async function requireAssistantAccess(
     },
   );
 
-  if (planError) return planError.message;
+  if (planError) {
+    console.error("assistant subscription access check failed", planError.message);
+    return ASSISTANT_UNAVAILABLE_MESSAGE;
+  }
   if (planAccess !== true) {
     return "Bizlee AI requires an active Bizlee Pro plan";
   }
@@ -143,7 +152,10 @@ export async function requireAssistantAccess(
     },
   );
 
-  if (roleError) return roleError.message;
+  if (roleError) {
+    console.error("assistant role access check failed", roleError.message);
+    return ASSISTANT_UNAVAILABLE_MESSAGE;
+  }
   if (roleAccess !== true) {
     return "Your workspace role does not include Bizlee AI";
   }

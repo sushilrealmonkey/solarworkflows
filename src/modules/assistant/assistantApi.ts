@@ -2,6 +2,9 @@ import { env } from "../../config/env";
 import { supabase } from "../../services/supabaseClient";
 import type { BriefResponse, ChatMessage, ChatStreamEvent } from "./types";
 
+export const ASSISTANT_UNAVAILABLE_MESSAGE =
+  "Bizlee AI is temporarily unavailable. Please try again shortly.";
+
 function requireSupabase() {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
@@ -64,10 +67,12 @@ export async function streamAssistantChat(
   });
 
   if (!response.ok || !response.body) {
-    let message = "The assistant is unavailable right now.";
+    let message = ASSISTANT_UNAVAILABLE_MESSAGE;
     try {
       const payload = await response.json();
-      if (payload?.error) message = payload.error;
+      if (response.status < 500 && payload?.error) {
+        message = String(payload.error);
+      }
     } catch {
       // keep the default message
     }
@@ -94,8 +99,12 @@ export async function streamAssistantChat(
       if (!line.startsWith("data:")) continue;
 
       try {
-        const event = JSON.parse(line.slice(5).trim()) as ChatStreamEvent;
-        onEvent(event);
+          const event = JSON.parse(line.slice(5).trim()) as ChatStreamEvent;
+          onEvent(
+            event.type === "error"
+              ? { type: "error", message: ASSISTANT_UNAVAILABLE_MESSAGE }
+              : event,
+          );
       } catch {
         // ignore malformed chunks
       }
@@ -104,22 +113,18 @@ export async function streamAssistantChat(
 }
 
 async function getFunctionErrorMessage(error: unknown): Promise<string> {
-  const fallback = "The assistant is unavailable right now.";
+  const fallback = ASSISTANT_UNAVAILABLE_MESSAGE;
 
   if (error && typeof error === "object" && "context" in error) {
     const context = (error as { context?: Response }).context;
     if (context instanceof Response) {
       try {
         const payload = await context.json();
-        if (payload?.error) return String(payload.error);
+        if (context.status < 500 && payload?.error) return String(payload.error);
       } catch {
         return fallback;
       }
     }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
   }
 
   return fallback;

@@ -7,7 +7,10 @@ import {
   type ReactNode,
 } from "react";
 import { Link } from "react-router-dom";
-import { streamAssistantChat } from "./assistantApi";
+import {
+  ASSISTANT_UNAVAILABLE_MESSAGE,
+  streamAssistantChat,
+} from "./assistantApi";
 import type { ChatMessage } from "./types";
 
 export function useAssistantChat() {
@@ -64,13 +67,9 @@ export function useAssistantChat() {
           },
           controller.signal,
         );
-      } catch (streamError) {
+      } catch {
         if (!controller.signal.aborted) {
-          setError(
-            streamError instanceof Error
-              ? streamError.message
-              : "The assistant is unavailable right now.",
-          );
+          setError(ASSISTANT_UNAVAILABLE_MESSAGE);
         }
       } finally {
         abortRef.current = null;

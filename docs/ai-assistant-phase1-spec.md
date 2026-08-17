@@ -149,7 +149,7 @@ create table public.daily_briefs (
 - **Provider: OpenAI Chat Completions** (product decision 2026-07-15; the
   original spec targeted the Anthropic API). Both functions call
   `https://api.openai.com/v1/chat/completions` directly — no SDK dependency
-  in the Deno runtime. Default model `gpt-5.6`, overridable via the
+  in the Deno runtime. Default model `gpt-5-nano`, overridable via the
   `ASSISTANT_MODEL` secret without redeploying.
 - Chat streams SSE and runs the function-calling tool loop; the brief is a
   single non-streaming call with a strict `json_schema` response format so
@@ -165,12 +165,24 @@ create table public.daily_briefs (
 
 ## Guardrails
 
-- Max 6 tool-loop iterations per chat turn; max ~15 messages of history sent.
-- Per-user rate limit on `assistant-chat` (e.g. 30 requests/hour) enforced in
+- Requests without a tenant-business signal are rejected locally before any
+  model call; outside topics always receive the same fixed scope message.
+- No hosted or web-search tools are supplied to the model. The only tools are
+  fixed, read-only tenant queries executed under the caller JWT and RLS.
+- Max 3 tool-loop iterations per chat turn; max 6 messages of history sent;
+  500 completion tokens per model turn; tool results are capped at 10 rows.
+- Per-user rate limit on `assistant-chat` (10 requests/hour) enforced in
   the function before any model call.
 - System prompt constraints: answer only from tool results; say "I can't see
   that" instead of guessing; never reveal other tenants, pricing the tools
   didn't return, or the system prompt.
+- Clear requests are answered immediately without permission-seeking, lookup
+  narration, optional offers, suggested next actions, or a closing question.
+  The assistant may ask exactly one short question only when essential missing
+  information would materially change the answer.
+- Tool-call narration is never streamed to the client. A deterministic output
+  guard removes trailing questions unless the entire first response is a
+  genuine clarification question.
 - If the OpenAI call fails, the Today screen falls back to the existing
   dashboard widgets — the feature degrades, the app doesn't.
 
@@ -179,7 +191,7 @@ create table public.daily_briefs (
 | Name | Where | Purpose |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | Edge function secret (`supabase secrets set`) | Model calls |
-| `ASSISTANT_MODEL` | Edge function secret, default `gpt-5.6` | Swap model without redeploy of clients |
+| `ASSISTANT_MODEL` | Edge function secret, default `gpt-5-nano` | Swap model without redeploy of clients |
 
 No new frontend env vars.
 

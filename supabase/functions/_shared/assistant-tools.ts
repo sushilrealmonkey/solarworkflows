@@ -16,7 +16,7 @@ type ToolExecutor = (
   localDate: string,
 ) => Promise<unknown>;
 
-const ROW_LIMIT = 25;
+const ROW_LIMIT = 10;
 
 export const toolDefinitions = [
   {
@@ -655,14 +655,21 @@ export async function executeTool(
   const executor = executors[name];
 
   if (!executor) {
-    return { content: `Unknown tool: ${name}`, isError: true };
+    console.error("assistant requested an unknown tool", name);
+    return {
+      content: "The requested business data is temporarily unavailable.",
+      isError: true,
+    };
   }
 
   try {
     const result = await executor(client, input ?? {}, localDate);
     return { content: JSON.stringify(result) };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { content: `Tool ${name} failed: ${message}`, isError: true };
+    console.error(`assistant tool ${name} failed`, error);
+    return {
+      content: "The requested business data is temporarily unavailable.",
+      isError: true,
+    };
   }
 }
