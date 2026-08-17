@@ -265,7 +265,8 @@ export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: bool
 
   return (
     <form
-      className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+      className="scroll-mt-24 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+      id="company-profile"
       onSubmit={handleSubmit}
     >
       <div className="border-b border-stone-200 px-4 py-4 sm:px-6">
@@ -711,7 +712,7 @@ export function StaffManagementPage({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="scroll-mt-24 space-y-3" id="staff-management">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SectionTitle title="Staff Management" />
         {!readOnly ? <Button onClick={openCreateForm}>Add Staff</Button> : null}

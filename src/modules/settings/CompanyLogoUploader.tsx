@@ -19,11 +19,13 @@ export function CompanyLogoUploader({
   disabled,
   readOnly = false,
   onUpload,
+  tone = "light",
 }: {
   currentUrl: string;
   disabled: boolean;
   readOnly?: boolean;
   onUpload: (logo: Blob) => Promise<void>;
+  tone?: "light" | "dark";
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -124,28 +126,51 @@ export function CompanyLogoUploader({
         cropPreviewHeight,
       )
     : null;
+  const dark = tone === "dark";
 
   return (
-    <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+    <div
+      className={`overflow-hidden rounded-xl border shadow-sm ${
+        dark
+          ? "border-white/10 bg-white/[0.06]"
+          : "border-stone-200 bg-white"
+      }`}
+    >
       <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
-        <div className="flex h-28 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg border border-stone-200 bg-[linear-gradient(135deg,#fafaf9_25%,#ffffff_25%,#ffffff_50%,#fafaf9_50%,#fafaf9_75%,#ffffff_75%,#ffffff)] bg-[length:20px_20px] p-3 sm:w-52">
+        <div
+          className={`flex h-28 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-[length:20px_20px] p-3 sm:w-52 ${
+            dark
+              ? "border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.07)_25%,rgba(255,255,255,0.03)_25%,rgba(255,255,255,0.03)_50%,rgba(255,255,255,0.07)_50%,rgba(255,255,255,0.07)_75%,rgba(255,255,255,0.03)_75%,rgba(255,255,255,0.03))]"
+              : "border-stone-200 bg-[linear-gradient(135deg,#fafaf9_25%,#ffffff_25%,#ffffff_50%,#fafaf9_50%,#fafaf9_75%,#ffffff_75%,#ffffff)]"
+          }`}
+        >
           {currentUrl ? (
             <img className="h-full w-full object-contain" src={currentUrl} alt="Current company logo" />
           ) : (
-            <span className="text-sm text-slate-500">No logo uploaded</span>
+            <span className={`text-sm ${dark ? "text-slate-300" : "text-slate-500"}`}>
+              No logo uploaded
+            </span>
           )}
         </div>
         <div className="min-w-0 flex-1 sm:px-1">
-          <p className="text-sm font-semibold text-slate-950">
+          <p className={`text-sm font-semibold ${dark ? "text-white" : "text-slate-950"}`}>
             {currentUrl ? "Your current logo" : "Upload your company logo"}
           </p>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-600">
+          <p className={`mt-1 max-w-2xl text-xs leading-5 ${dark ? "text-slate-300" : "text-slate-600"}`}>
             Use PNG, JPG, or SVG up to 1 MB. Empty borders are trimmed automatically for a cleaner fit.
           </p>
-          {!sourceUrl && error ? <p className="mt-2 text-xs text-rose-700">{error}</p> : null}
+          {!sourceUrl && error ? (
+            <p className={`mt-2 text-xs ${dark ? "text-red-200" : "text-rose-700"}`} role="alert">
+              {error}
+            </p>
+          ) : null}
         </div>
         {!readOnly ? <div className="sm:shrink-0">
-          <label className={`inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700 sm:w-auto ${
+          <label className={`inline-flex min-h-10 w-full items-center justify-center rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition sm:w-auto ${
+            dark
+              ? "border-white/15 bg-white/10 text-white hover:border-orange-300/50 hover:bg-orange-400/15 hover:text-orange-100"
+              : "border-stone-200 bg-white text-slate-700 hover:border-orange-200 hover:bg-orange-50 hover:text-orange-700"
+          } ${
             disabled || preparing ? "cursor-not-allowed opacity-60" : "cursor-pointer"
           }`}>
             {preparing ? "Preparing logo..." : currentUrl ? "Replace logo" : "Choose logo"}

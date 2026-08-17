@@ -25,7 +25,7 @@ export function resolveTenantOnboardingDestination({
   const expectedPath = onboardingPathForProgress(progress);
 
   if (progress.status !== "deferred") {
-    return pathname === expectedPath ? null : expectedPath;
+    return isAllowedPathForProgress(pathname, progress) ? null : expectedPath;
   }
 
   if ((onboardingPath || workspaceSetupPath) && pathname !== expectedPath) {
@@ -45,5 +45,26 @@ function onboardingPathForProgress(progress: CompanyOnboardingProgress) {
 }
 
 function onboardingPathForStep(step: OnboardingStep) {
-  return step === "company" ? "/onboarding/company" : "/onboarding";
+  if (step === "company") return "/onboarding/company";
+  if (step === "products") return "/onboarding/products";
+  if (step === "product_entry") return "/onboarding/products/add";
+  if (step === "team") return "/onboarding/team";
+  if (step === "ready") return "/onboarding/ready";
+  return "/onboarding";
+}
+
+function isAllowedPathForProgress(
+  pathname: string,
+  progress: CompanyOnboardingProgress,
+) {
+  const expectedPath = onboardingPathForProgress(progress);
+  if (pathname === expectedPath) return true;
+
+  // Product import does not have its own database step. The existing
+  // `products` phase plus this nested URL is sufficient to restore a refresh
+  // without introducing a second persisted onboarding-state system.
+  return (
+    progress.current_step === "products" &&
+    pathname === "/onboarding/products/import"
+  );
 }

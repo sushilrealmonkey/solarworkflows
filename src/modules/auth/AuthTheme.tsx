@@ -6,6 +6,8 @@ type AuthThemeShellProps = {
   title: string;
   mobileDescription: string;
   desktopDescription?: string;
+  contentMaxWidthClass?: string;
+  workspaceLayout?: boolean;
   children: ReactNode;
 };
 
@@ -14,12 +16,20 @@ export function AuthThemeShell({
   title,
   mobileDescription,
   desktopDescription,
+  contentMaxWidthClass = "max-w-md",
+  workspaceLayout = false,
   children,
 }: AuthThemeShellProps) {
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-[#06173f] px-4 py-5 text-white sm:px-6 lg:px-8">
       <AuthDarkBackground />
-      <div className="relative z-10 mx-auto grid min-h-[calc(100vh-2.5rem)] w-full max-w-6xl items-center gap-6 lg:grid-cols-[0.9fr_1fr] lg:gap-12">
+      <div
+        className={`relative z-10 mx-auto grid min-h-[calc(100vh-2.5rem)] w-full items-center gap-6 ${
+          workspaceLayout
+            ? "max-w-[90rem] lg:grid-cols-[minmax(18rem,0.55fr)_minmax(0,1.45fr)] lg:gap-8"
+            : "max-w-6xl lg:grid-cols-[0.9fr_1fr] lg:gap-12"
+        }`}
+      >
         <section className="relative hidden px-1 py-4 text-white lg:flex lg:min-h-[34rem] lg:flex-col lg:justify-center lg:px-0">
           <div className="relative z-10">
             <PortalLogo
@@ -40,8 +50,12 @@ export function AuthThemeShell({
           </div>
         </section>
 
-        <section className="flex items-center justify-center px-5 py-8 sm:px-10 lg:py-10">
-          <div className="w-full max-w-md">
+        <section
+          className={`flex items-center justify-center py-8 lg:py-10 ${
+            workspaceLayout ? "px-0 sm:px-4 lg:px-0" : "px-5 sm:px-10"
+          }`}
+        >
+          <div className={`w-full ${contentMaxWidthClass}`}>
             <div className="lg:hidden">
               <PortalLogo
                 className="h-14 w-full max-w-[12rem] object-contain object-left sm:h-16"

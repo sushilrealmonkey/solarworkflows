@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseClient";
+import type { UserProfile } from "../../app/AuthProvider";
 import type { CompanyOnboardingProgress, OnboardingStep } from "./types";
 
 function requireSupabase() {
@@ -37,6 +38,38 @@ export async function deferCurrentCompanyOnboarding() {
 
 export async function completeCurrentCompanyOnboarding() {
   return runProgressRpc("complete_current_company_onboarding");
+}
+
+export async function fetchCurrentCompanyState(profile: UserProfile | null) {
+  requireCompanyId(profile);
+  const { data, error } = await requireSupabase().rpc(
+    "get_current_onboarding_company_state",
+  );
+
+  if (error) throw new Error(error.message);
+  return typeof data === "string" ? data : "";
+}
+
+export async function updateCurrentCompanyState(
+  profile: UserProfile | null,
+  state: string,
+) {
+  requireCompanyId(profile);
+  const { data, error } = await requireSupabase().rpc(
+    "update_current_onboarding_company_state",
+    { new_state: state },
+  );
+
+  if (error) throw new Error(error.message);
+  return typeof data === "string" ? data : "";
+}
+
+function requireCompanyId(profile: UserProfile | null) {
+  if (!profile?.company_id) {
+    throw new Error("No company is assigned to this user.");
+  }
+
+  return profile.company_id;
 }
 
 async function runProgressRpc(

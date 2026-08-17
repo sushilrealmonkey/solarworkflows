@@ -1,4 +1,5 @@
 import { labelize, requiredError } from "../crm/crmUtils";
+import { productUnitOptions } from "./productFormCore";
 import type {
   Product,
   ProductCategory,
@@ -11,6 +12,13 @@ import type {
   ProductUnit,
   ProductUsageSummary,
 } from "./types";
+
+export {
+  buildGeneratedProductName,
+  emptyProductForm,
+  productUnitOptions,
+  validateProductForm,
+} from "./productFormCore";
 
 export const productCategoryTypeOptions: ProductCategoryType[] = [
   "SOLAR_PANEL",
@@ -25,17 +33,6 @@ export const productCategoryTypeOptions: ProductCategoryType[] = [
   "PROTECTION_DEVICE",
   "ACCESSORY",
   "OTHER",
-];
-
-export const productUnitOptions: ProductUnit[] = [
-  "piece",
-  "set",
-  "roll",
-  "meter",
-  "kg",
-  "watt",
-  "kw",
-  "lot",
 ];
 
 export const productStatusOptions: ProductStatus[] = [
@@ -69,22 +66,6 @@ export function productCategoryToForm(
   };
 }
 
-export function emptyProductForm(): ProductFormValues {
-  return {
-    category_id: "",
-    hsn_code: "",
-    product_name: "",
-    brand: "",
-    model_number: "",
-    specifications: "",
-    unit: "piece",
-    gst_percent: "0",
-    warranty_description: "",
-    status: "active",
-    notes: "",
-  };
-}
-
 export function productToForm(product: Product): ProductFormValues {
   return {
     category_id: product.category_id,
@@ -109,24 +90,6 @@ export function productCategoryTypeLabel(
   categoryType: ProductCategoryType | "" | null | undefined,
 ) {
   return labelize(categoryType);
-}
-
-export function buildGeneratedProductName(
-  values: ProductFormValues,
-  categories: ProductCategory[],
-) {
-  const categoryName =
-    categories.find((category) => category.id === values.category_id)?.name ?? "";
-
-  return [
-    values.brand,
-    categoryName,
-    values.model_number,
-    values.specifications,
-  ]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(" ");
 }
 
 export function formatProductCurrency(value: number | null | undefined) {
@@ -165,19 +128,6 @@ export function productPriceToForm(
 
 export function productStatusLabel(status: ProductStatus | null | undefined) {
   return labelize(status);
-}
-
-export function validateProductForm(values: ProductFormValues) {
-  return {
-    category_id: requiredError(values.category_id, "Category"),
-    product_name: requiredError(
-      values.product_name,
-      "Auto generated display name",
-    ),
-    unit: requiredError(values.unit, "Unit"),
-    gst_percent: nonNegativeNumberError(values.gst_percent, "GST percent"),
-    status: requiredError(values.status, "Status"),
-  };
 }
 
 export function validateProductPriceForm(values: ProductPriceFormValues) {

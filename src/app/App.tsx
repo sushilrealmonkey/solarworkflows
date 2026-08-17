@@ -15,7 +15,12 @@ import { AuthCallbackPage } from "../modules/auth/AuthCallbackPage";
 import { WorkspaceOnboardingPage } from "../modules/auth/WorkspaceOnboardingPage";
 import { OnboardingGate } from "../modules/onboarding/OnboardingGate";
 import { OnboardingWelcomePage } from "../modules/onboarding/OnboardingWelcomePage";
-import { OnboardingCompanyPlaceholderPage } from "../modules/onboarding/OnboardingCompanyPlaceholderPage";
+import { OnboardingCompanyPage } from "../modules/onboarding/OnboardingCompanyPage";
+import { OnboardingProductsPage } from "../modules/onboarding/OnboardingProductsPage";
+import { OnboardingProductEntryPage } from "../modules/onboarding/OnboardingProductEntryPage";
+import { OnboardingProductImportPage } from "../modules/onboarding/OnboardingProductImportPage";
+import { OnboardingTeamPage } from "../modules/onboarding/OnboardingTeamPage";
+import { OnboardingReadyPage } from "../modules/onboarding/OnboardingReadyPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
 import { TodayPage } from "../modules/assistant/TodayPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
@@ -76,7 +81,27 @@ export default function App() {
         <Route path="/onboarding" element={<OnboardingWelcomePage />} />
         <Route
           path="/onboarding/company"
-          element={<OnboardingCompanyPlaceholderPage />}
+          element={<OnboardingCompanyPage />}
+        />
+        <Route
+          path="/onboarding/products"
+          element={<OnboardingProductsPage />}
+        />
+        <Route
+          path="/onboarding/products/add"
+          element={<OnboardingProductEntryPage />}
+        />
+        <Route
+          path="/onboarding/products/import"
+          element={<OnboardingProductImportPage />}
+        />
+        <Route
+          path="/onboarding/team"
+          element={<OnboardingTeamPage />}
+        />
+        <Route
+          path="/onboarding/ready"
+          element={<OnboardingReadyPage />}
         />
         <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>

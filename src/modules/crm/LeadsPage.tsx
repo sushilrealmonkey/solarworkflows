@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
@@ -72,6 +72,7 @@ type LeadFilters = {
 export function LeadsPage() {
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
+  const location = useLocation();
   const navigate = useNavigate();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [followups, setFollowups] = useState<LeadFollowupWithLead[]>([]);
@@ -142,6 +143,30 @@ export function LeadsPage() {
     // loadData closes over the current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archiveScope, canView, profile?.id]);
+
+  useEffect(() => {
+    const queryRequestsCreate =
+      new URLSearchParams(location.search).get("new") === "1";
+
+    if (
+      !canCreate ||
+      (location.state?.openCreateEnquiry !== true && !queryRequestsCreate)
+    ) {
+      return;
+    }
+
+    setFormErrors({});
+    setFormState({ mode: "create", lead: null, values: emptyLeadForm() });
+
+    const nextSearch = new URLSearchParams(location.search);
+    nextSearch.delete("new");
+    const serializedSearch = nextSearch.toString();
+
+    navigate(`${location.pathname}${serializedSearch ? `?${serializedSearch}` : ""}`, {
+      replace: true,
+      state: null,
+    });
+  }, [canCreate, location.pathname, location.search, location.state, navigate]);
 
   const filteredLeads = useMemo(() => {
     const search = filters.search.trim().toLowerCase();

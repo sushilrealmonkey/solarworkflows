@@ -45,6 +45,7 @@ import {
   type EpcAdminDashboardSnapshot,
 } from "./dashboardApi";
 import { TrialBanner } from "../billing/TrialBanner";
+import { GettingStartedChecklist } from "./GettingStartedChecklist";
 
 export function DashboardPage() {
   const { profile } = useAuth();
@@ -182,6 +183,8 @@ function EpcAdminDashboard() {
           />
         </div>
       </section>
+
+      <GettingStartedChecklist profile={profile} />
 
       {error ? <ErrorPanel message={error} /> : null}
 
