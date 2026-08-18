@@ -53,10 +53,17 @@ export async function fetchBillingPlans() {
 export async function createRazorpayCheckout(
   planKey: BillingPlan["plan_key"],
   billingPeriod: BillingPeriod,
+  discountCode?: string,
 ) {
   const { data, error } = await requireClient().functions.invoke(
     "create-razorpay-subscription",
-    { body: { planKey, billingPeriod } },
+    {
+      body: {
+        planKey,
+        billingPeriod,
+        discountCode: discountCode?.trim() || undefined,
+      },
+    },
   );
 
   if (error) throw new Error(await getFunctionErrorMessage(error));

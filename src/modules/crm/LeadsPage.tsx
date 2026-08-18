@@ -8,8 +8,10 @@ import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
 import type { ArchiveScope } from "../lifecycle/types";
 import {
   createLead,
+  createLeadRequirementType,
   fetchOrganizationFollowups,
   fetchLeads,
+  fetchLeadRequirementTypes,
   fetchStaffOptions,
   updateLead,
 } from "./crmApi";
@@ -22,7 +24,6 @@ import {
   hasPermission,
   labelize,
   leadPriorityOptions,
-  leadRequirementTypeOptions,
   leadSourceOptions,
   leadStatusOptions,
   leadToForm,
@@ -35,6 +36,13 @@ import type {
   LeadFormValues,
   StaffOption,
 } from "./types";
+import {
+  addRequirementTypeOptionValue,
+  maximumRequirementTypeLength,
+  mergeLeadRequirementTypes,
+  normalizeRequirementTypeName,
+  validateNewRequirementType,
+} from "./requirementTypes";
 import {
   AccessDenied,
   Badge,
@@ -77,6 +85,7 @@ export function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [followups, setFollowups] = useState<LeadFollowupWithLead[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [requirementTypes, setRequirementTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
@@ -121,14 +130,16 @@ export function LeadsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextLeads, nextStaff, nextFollowups] = await Promise.all([
+      const [nextLeads, nextStaff, nextFollowups, nextRequirementTypes] = await Promise.all([
         fetchLeads(profile, archiveScope),
         fetchStaffOptions(profile),
         fetchOrganizationFollowups(profile),
+        fetchLeadRequirementTypes(profile),
       ]);
       setLeads(nextLeads);
       setStaff(nextStaff);
       setFollowups(nextFollowups);
+      setRequirementTypes(nextRequirementTypes.map((requirementType) => requirementType.name));
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load leads.",
@@ -142,7 +153,7 @@ export function LeadsPage() {
     void loadData();
     // loadData closes over the current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [archiveScope, canView, profile?.id]);
+  }, [archiveScope, canView, profile?.company_id, profile?.id]);
 
   useEffect(() => {
     const queryRequestsCreate =
@@ -272,6 +283,17 @@ export function LeadsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleAddRequirementType(name: string) {
+    const createdRequirementType = await createLeadRequirementType(profile, name);
+    setRequirementTypes((current) =>
+      [...current, createdRequirementType.name].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    );
+    showToast("Requirement type added.", "success");
+    return createdRequirementType.name;
   }
 
   return (
@@ -482,6 +504,9 @@ export function LeadsPage() {
           }
           errors={formErrors}
           staff={staff}
+          canAddRequirementType={canCreate}
+          requirementTypes={requirementTypes}
+          onAddRequirementType={handleAddRequirementType}
           onClose={() => setFormState(null)}
           onSubmit={handleSubmit}
           saving={saving}
@@ -498,6 +523,9 @@ export function LeadFormModal({
   setValues,
   errors,
   staff,
+  canAddRequirementType,
+  requirementTypes,
+  onAddRequirementType,
   onClose,
   onSubmit,
   saving,
@@ -507,12 +535,64 @@ export function LeadFormModal({
   setValues: (values: LeadFormValues) => void;
   errors: Record<string, string>;
   staff: StaffOption[];
+  canAddRequirementType: boolean;
+  requirementTypes: string[];
+  onAddRequirementType: (name: string) => Promise<string>;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
 }) {
+  const [showNewRequirementType, setShowNewRequirementType] = useState(false);
+  const [newRequirementType, setNewRequirementType] = useState("");
+  const [requirementTypeError, setRequirementTypeError] = useState("");
+  const [addingRequirementType, setAddingRequirementType] = useState(false);
   const update = (key: keyof LeadFormValues, value: string) =>
     setValues({ ...values, [key]: value });
+  const availableRequirementTypes = mergeLeadRequirementTypes(
+    requirementTypes,
+    values.requirement_type,
+  );
+
+  function handleRequirementTypeChange(value: string) {
+    if (value === addRequirementTypeOptionValue) {
+      setShowNewRequirementType(true);
+      setRequirementTypeError("");
+      return;
+    }
+
+    update("requirement_type", value);
+    setShowNewRequirementType(false);
+  }
+
+  async function addNewRequirementType() {
+    const validationError = validateNewRequirementType(
+      newRequirementType,
+      availableRequirementTypes,
+    );
+    setRequirementTypeError(validationError);
+
+    if (validationError) {
+      return;
+    }
+
+    try {
+      setAddingRequirementType(true);
+      const savedName = await onAddRequirementType(
+        normalizeRequirementTypeName(newRequirementType),
+      );
+      update("requirement_type", savedName);
+      setNewRequirementType("");
+      setShowNewRequirementType(false);
+    } catch (nextError) {
+      setRequirementTypeError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to add requirement type.",
+      );
+    } finally {
+      setAddingRequirementType(false);
+    }
+  }
 
   return (
     <Modal
@@ -540,12 +620,61 @@ export function LeadFormModal({
       <SelectInput
         label="Requirement Type"
         value={values.requirement_type}
-        onChange={(value) => update("requirement_type", value)}
+        onChange={handleRequirementTypeChange}
         options={[
           { value: "", label: "Select requirement type" },
-          ...leadRequirementTypeOptions.map((value) => ({ value, label: value })),
+          ...availableRequirementTypes.map((value) => ({ value, label: value })),
+          ...(canAddRequirementType
+            ? [{ value: addRequirementTypeOptionValue, label: "+ Add new requirement type" }]
+            : []),
         ]}
       />
+      {showNewRequirementType ? (
+        <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 md:col-span-2">
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">New Requirement Type</span>
+            <input
+              autoFocus
+              className={`mt-1 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100 ${
+                requirementTypeError ? "border-rose-300" : "border-stone-200"
+              }`}
+              maxLength={maximumRequirementTypeLength}
+              value={newRequirementType}
+              onChange={(event) => {
+                setNewRequirementType(event.target.value);
+                setRequirementTypeError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void addNewRequirementType();
+                }
+              }}
+            />
+          </label>
+          {requirementTypeError ? (
+            <p className="mt-1 text-xs text-rose-700" role="alert">
+              {requirementTypeError}
+            </p>
+          ) : null}
+          <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              disabled={addingRequirementType}
+              onClick={() => {
+                setShowNewRequirementType(false);
+                setNewRequirementType("");
+                setRequirementTypeError("");
+              }}
+              variant="secondary"
+            >
+              Cancel
+            </Button>
+            <Button disabled={addingRequirementType} onClick={() => void addNewRequirementType()}>
+              {addingRequirementType ? "Adding..." : "Add Type"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <SelectInput label="Status" value={values.status} onChange={(value) => update("status", value)} options={leadStatusOptions.map((value) => ({ value, label: labelize(value) }))} />
       <SelectInput label="Priority" value={values.priority} onChange={(value) => update("priority", value)} options={leadPriorityOptions.map((value) => ({ value, label: labelize(value) }))} />
       <StaffSelect staff={staff} value={values.assigned_to} onChange={(value) => update("assigned_to", value)} />

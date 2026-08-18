@@ -65,6 +65,7 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
     useState<BillingPeriod>("monthly");
   const [loading, setLoading] = useState(true);
   const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
+  const [discountCode, setDiscountCode] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
@@ -98,6 +99,7 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
       const checkout = await createRazorpayCheckout(
         plan.plan_key,
         billingPeriod,
+        discountCode,
       );
       if (checkout.upgradeCompleted) {
         await refresh();
@@ -265,6 +267,31 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
             </span>
           </button>
         </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-md rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+        <label
+          className="block text-sm font-semibold text-slate-900"
+          htmlFor="billing-discount-code"
+        >
+          Discount code
+        </label>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          Optional. Eligible offers are applied securely when checkout opens.
+        </p>
+        <input
+          autoCapitalize="characters"
+          autoComplete="off"
+          className="mt-3 min-h-11 w-full rounded-lg border border-stone-300 px-3 text-sm uppercase text-slate-950 outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100 disabled:bg-stone-100"
+          disabled={checkoutPlan !== null}
+          id="billing-discount-code"
+          maxLength={64}
+          onChange={(event) => setDiscountCode(event.target.value)}
+          placeholder="Enter discount code"
+          spellCheck={false}
+          type="text"
+          value={discountCode}
+        />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

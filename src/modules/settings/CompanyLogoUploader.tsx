@@ -20,12 +20,14 @@ export function CompanyLogoUploader({
   readOnly = false,
   onUpload,
   tone = "light",
+  detailsBelowControls = false,
 }: {
   currentUrl: string;
   disabled: boolean;
   readOnly?: boolean;
   onUpload: (logo: Blob) => Promise<void>;
   tone?: "light" | "dark";
+  detailsBelowControls?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -136,7 +138,11 @@ export function CompanyLogoUploader({
           : "border-stone-200 bg-white"
       }`}
     >
-      <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5">
+      <div
+        className={`flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:p-5 ${
+          detailsBelowControls ? "sm:flex-wrap sm:justify-between" : ""
+        }`}
+      >
         <div
           className={`flex h-28 w-full shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-[length:20px_20px] p-3 sm:w-52 ${
             dark
@@ -152,7 +158,13 @@ export function CompanyLogoUploader({
             </span>
           )}
         </div>
-        <div className="min-w-0 flex-1 sm:px-1">
+        <div
+          className={
+            detailsBelowControls
+              ? "order-3 min-w-0 w-full"
+              : "min-w-0 flex-1 sm:px-1"
+          }
+        >
           <p className={`text-sm font-semibold ${dark ? "text-white" : "text-slate-950"}`}>
             {currentUrl ? "Your current logo" : "Upload your company logo"}
           </p>
@@ -165,7 +177,7 @@ export function CompanyLogoUploader({
             </p>
           ) : null}
         </div>
-        {!readOnly ? <div className="sm:shrink-0">
+        {!readOnly ? <div className={detailsBelowControls ? "order-2 sm:shrink-0" : "sm:shrink-0"}>
           <label className={`inline-flex min-h-10 w-full items-center justify-center rounded-lg border px-4 py-2 text-sm font-semibold shadow-sm transition sm:w-auto ${
             dark
               ? "border-white/15 bg-white/10 text-white hover:border-orange-300/50 hover:bg-orange-400/15 hover:text-orange-100"

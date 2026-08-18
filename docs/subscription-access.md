@@ -62,7 +62,9 @@ the user's live Supabase Auth sessions.
 - New workspaces receive a full-feature trial.
 - Company admins choose monthly or yearly Core/Pro plans on `/billing/plans`.
 - `create-razorpay-subscription` validates the selected catalogue price and
-  blocks Core checkout when occupied seats exceed the Core limit.
+  blocks Core checkout when occupied seats exceed the Core limit. An optional
+  server-side discount-code mapping can link an eligible Razorpay Subscription
+  Offer without exposing the offer ID in the browser.
 - Razorpay webhooks update subscription state and create tenant-visible GST
   subscription invoices. `verify-razorpay-subscription` handles post-checkout
   verification.

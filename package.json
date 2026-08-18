@@ -19,10 +19,10 @@
     "test:mobile-api": "tsc -p tsconfig.server.json && node --test server-dist/modules/mobile-api/handler.test.js",
     "test:emails": "node --experimental-strip-types --test supabase/functions/_shared/trial-welcome-email.test.ts",
     "setup:super-admin": "node scripts/setup-super-admin.mjs",
-    "preview": "vite preview"
-    ,"mobile:start": "npm run start --workspace=@bizlee/mobile"
-    ,"mobile:check": "npm run check --workspace=@bizlee/mobile"
-    ,"contracts:check": "npm run check --workspace=@bizlee/contracts"
+    "preview": "vite preview",
+    "mobile:start": "npm run start --workspace=@bizlee/mobile",
+    "mobile:check": "npm run check --workspace=@bizlee/mobile",
+    "contracts:check": "npm run check --workspace=@bizlee/contracts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",

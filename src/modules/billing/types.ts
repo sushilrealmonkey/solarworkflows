@@ -46,6 +46,7 @@ export type BillingPlan = {
 
 export type CheckoutSession = {
   upgradeCompleted?: boolean;
+  discountApplied?: boolean;
   keyId: string;
   subscriptionId?: string;
   planName: string;

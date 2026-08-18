@@ -151,7 +151,7 @@ export function SettingsOverviewPage() {
     <div className="grid gap-4 md:grid-cols-3">
       <SettingsCard
         title="Organization"
-        description="Company logo, tax details, banking, and regional defaults."
+        description="Company logo, tax details, contact information, and banking."
       />
       <SettingsCard
         title="Staff"
@@ -274,8 +274,8 @@ export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: bool
           title="Company Profile"
           description={
             readOnly
-              ? "Company profile, branding, document, regional, and bank information."
-              : "Keep your business identity, branding, document, regional, and banking details up to date."
+              ? "Company profile, branding, contact, and bank information."
+              : "Keep your business identity, branding, contact, and banking details up to date."
           }
         />
       </div>
@@ -304,40 +304,6 @@ export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: bool
             readOnly={readOnly}
             onUpload={handleLogoUpload}
           />
-          <div className="mt-4 grid gap-4 rounded-xl border border-stone-200 bg-white p-4 sm:grid-cols-2 xl:grid-cols-4">
-            <TextInput
-              label="Favicon URL"
-              value={values.favicon_url}
-              onChange={(value) => update("favicon_url", value)}
-              disabled={saving || readOnly}
-            />
-            <TextInput
-              label="Primary Color"
-              value={values.primary_color}
-              onChange={(value) => update("primary_color", value)}
-              disabled={saving || readOnly}
-            />
-            <TextInput
-              label="Secondary Color"
-              value={values.secondary_color}
-              onChange={(value) => update("secondary_color", value)}
-              disabled={saving || readOnly}
-            />
-            <TextInput
-              label="Accent Color"
-              value={values.accent_color}
-              onChange={(value) => update("accent_color", value)}
-              disabled={saving || readOnly}
-            />
-            <div className="sm:col-span-2 xl:col-span-4">
-              <TextInput
-                label="Font Family"
-                value={values.font_family}
-                onChange={(value) => update("font_family", value)}
-                disabled={saving || readOnly}
-              />
-            </div>
-          </div>
         </section>
 
         <div className="grid items-start gap-4 xl:grid-cols-2">
@@ -349,13 +315,6 @@ export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: bool
               label="Company Name"
               value={values.company_name}
               onChange={(value) => update("company_name", value)}
-              disabled={saving || readOnly}
-            />
-            <TextArea
-              className="block"
-              label="Company Details"
-              value={values.company_details}
-              onChange={(value) => update("company_details", value)}
               disabled={saving || readOnly}
             />
             <TextArea
@@ -432,70 +391,6 @@ export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: bool
               onChange={(value) => update("bank_ifsc_code", value)}
               disabled={saving || readOnly}
             />
-          </ProfileSettingsCard>
-
-          <ProfileSettingsCard
-            title="Document numbering"
-            description="Prefixes used for customer and business records"
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <TextInput
-                label="Invoice Prefix"
-                value={values.invoice_prefix}
-                onChange={(value) => update("invoice_prefix", value)}
-                disabled={saving || readOnly}
-              />
-              <TextInput
-                label="Quotation Prefix"
-                value={values.quotation_prefix}
-                onChange={(value) => update("quotation_prefix", value)}
-                disabled={saving || readOnly}
-              />
-              <TextInput
-                label="Customer Prefix"
-                value={values.customer_prefix}
-                onChange={(value) => update("customer_prefix", value)}
-                disabled={saving || readOnly}
-              />
-              <TextInput
-                label="Project Prefix"
-                value={values.project_prefix}
-                onChange={(value) => update("project_prefix", value)}
-                disabled={saving || readOnly}
-              />
-            </div>
-            <TextInput
-              label="Lead Prefix"
-              value={values.lead_prefix}
-              onChange={(value) => update("lead_prefix", value)}
-              disabled={saving || readOnly}
-            />
-          </ProfileSettingsCard>
-
-          <ProfileSettingsCard
-            title="Regional defaults"
-            description="Formatting used across the workspace and documents"
-          >
-            <TextInput
-              label="Timezone"
-              value={values.timezone}
-              onChange={(value) => update("timezone", value)}
-              disabled={saving || readOnly}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <TextInput
-                label="Currency"
-                value={values.currency}
-                onChange={(value) => update("currency", value)}
-                disabled={saving || readOnly}
-              />
-              <TextInput
-                label="Date Format"
-                value={values.date_format}
-                onChange={(value) => update("date_format", value)}
-                disabled={saving || readOnly}
-              />
-            </div>
           </ProfileSettingsCard>
         </div>
 

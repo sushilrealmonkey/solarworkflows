@@ -11,6 +11,7 @@ import type {
   LeadFollowupFormValues,
   LeadFollowupWithLead,
   LeadFormValues,
+  LeadRequirementType,
   LeadQuotationSummary,
   StaffOption,
 } from "./types";
@@ -29,6 +30,14 @@ function requireOrganization(profile: UserProfile | null) {
   }
 
   return profile.organization_id;
+}
+
+function requireCompany(profile: UserProfile | null) {
+  if (!profile?.company_id) {
+    throw new Error("No company is assigned to this user.");
+  }
+
+  return profile.company_id;
 }
 
 function nullable(value: string) {
@@ -110,6 +119,52 @@ export async function fetchStaffOptions(profile: UserProfile | null) {
   }
 
   return (data ?? []) as StaffOption[];
+}
+
+export async function fetchLeadRequirementTypes(profile: UserProfile | null) {
+  if (profile?.is_super_admin && !profile.company_id) {
+    return [];
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("lead_requirement_types")
+    .select("id, company_id, name, created_by, created_at")
+    .eq("company_id", requireCompany(profile))
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as LeadRequirementType[];
+}
+
+export async function createLeadRequirementType(
+  profile: UserProfile | null,
+  name: string,
+) {
+  const client = requireSupabase();
+  const normalizedName = name.trim().replace(/\s+/g, " ");
+  const { data, error } = await client
+    .from("lead_requirement_types")
+    .insert({
+      company_id: requireCompany(profile),
+      name: normalizedName,
+      created_by: profile?.id ?? null,
+    })
+    .select("id, company_id, name, created_by, created_at")
+    .single();
+
+  if (error) {
+    if (error.code === "23505" || error.code === "23514") {
+      throw new Error("This requirement type already exists or is a default option.");
+    }
+
+    throw new Error(error.message);
+  }
+
+  return data as LeadRequirementType;
 }
 
 export async function fetchCustomers(

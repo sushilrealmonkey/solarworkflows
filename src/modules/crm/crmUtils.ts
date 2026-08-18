@@ -40,18 +40,6 @@ export const leadStatusOptions = [
 ];
 
 export const leadPriorityOptions = ["low", "medium", "high", "urgent"];
-export const leadRequirementTypeOptions = [
-  "Residential Solar",
-  "Commercial Solar",
-  "Hybrid System",
-  "On-grid",
-  "Off-grid",
-  "Solar Water Pump",
-  "EV Charger",
-  "Maintenance",
-  "AMC",
-  "Battery Upgrade",
-];
 export const leadSourceOptions = [
   "Referral",
   "Direct",

@@ -7,7 +7,7 @@ type ScopeMessage = {
 };
 
 const BUSINESS_TERMS =
-  /\b(bizlee|business|enquir(?:y|ies)|lead|follow[ -]?up|callback|site survey|survey|quotation|quote|project|inventory|stock|material|product|purchase|supplier|invoice|payment|customer|sales|pipeline|dispatch|installation|solar|epc|overdue|receivable|collection)\b|\b(?:LD|QT|PRJ|INV)-\d+\b/i;
+  /\b(bizlee|business|enquir(?:y|ies)|leads?|follow[ -]?ups?|callbacks?|site surveys?|surveys?|quotations?|quotes?|projects?|inventory|stocks?|materials?|products?|purchases?|suppliers?|invoices?|payments?|customers?|sales|pipelines?|dispatch(?:es)?|installations?|solar|epc|overdue|receivables?|collections?)\b|\b(?:LD|QT|PRJ|INV)-\d+\b/i;
 
 const DAILY_OPERATIONS_QUESTIONS = [
   /\b(today|daily)\b.*\b(brief|summary|priority|priorities|attention|urgent|action)\b/i,

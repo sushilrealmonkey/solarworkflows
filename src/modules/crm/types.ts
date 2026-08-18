@@ -77,6 +77,14 @@ export type Lead = {
   action_state?: LeadActionState;
 };
 
+export type LeadRequirementType = {
+  id: string;
+  company_id: string;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type LeadActionState = {
   hasSiteSurvey: boolean;
   hasQuotation: boolean;

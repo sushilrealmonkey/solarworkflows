@@ -242,6 +242,7 @@ export function OnboardingCompanyPage() {
                 <p className="mb-2 text-sm font-medium text-slate-100">Company Logo</p>
                 <CompanyLogoUploader
                   currentUrl={values.company_logo_url}
+                  detailsBelowControls
                   disabled={action !== null}
                   onUpload={uploadLogo}
                   tone="dark"

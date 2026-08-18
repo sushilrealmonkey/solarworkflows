@@ -139,3 +139,15 @@ reports success; failed rows remain retryable.
 ```powershell
 npx supabase functions deploy process-storage-cleanup --no-verify-jwt
 ```
+## Local reset bootstrap safety
+
+`supabase/roles.sql` exists only so `supabase db reset --local` can replay
+already-applied worker-scheduling migrations before the normal seed runs. It
+contains a deliberately closed loopback URL and a plainly labelled placeholder
+worker secret. Neither value is a production URL or credential.
+
+Never copy these values into a hosted project's Vault. Never run
+`supabase db reset --linked`, and never add `--include-roles` to a linked or
+production `supabase db push`. The production database runbook must use the
+normal migration push without `--include-roles`; real worker Vault values remain
+managed through the separate production secret-provisioning procedure.

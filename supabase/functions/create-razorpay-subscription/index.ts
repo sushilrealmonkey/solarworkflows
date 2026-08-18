@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { trialCheckoutAction } from "./checkout-state.ts";
+import { discountCodeMatches } from "./discount-code.ts";
 
 type PlanKey = "starter" | "premium";
 type BillingPeriod = "monthly" | "yearly";
@@ -31,6 +32,7 @@ Deno.serve(async (request) => {
     const body = await request.json() as {
       planKey?: string;
       billingPeriod?: string;
+      discountCode?: unknown;
     };
     if (body.planKey !== "starter" && body.planKey !== "premium") {
       return json({ error: "Invalid plan" }, 400);
@@ -40,6 +42,7 @@ Deno.serve(async (request) => {
     }
     const planKey = body.planKey as PlanKey;
     const billingPeriod = body.billingPeriod as BillingPeriod;
+    const offerId = resolveDiscountOffer(body.discountCode);
 
     const { data: access, error: accessError } = await caller.rpc(
       "get_current_subscription_access",
@@ -89,6 +92,17 @@ Deno.serve(async (request) => {
       .eq("company_id", access.company_id)
       .single();
 
+    if (
+      offerId &&
+      currentSubscription?.razorpay_subscription_id &&
+      currentSubscription.status !== "trialing"
+    ) {
+      throw new CheckoutError(
+        "Discount codes apply only when creating a new subscription.",
+        409,
+      );
+    }
+
     // A tenant remains on Pro for the whole free trial. If it already started
     // checkout, reuse it when it already targets the selected plan. Razorpay
     // does not allow a subscription in the `created` state to be updated, so a
@@ -110,22 +124,40 @@ Deno.serve(async (request) => {
       const providerPlanId = typeof providerSubscription.plan_id === "string"
         ? providerSubscription.plan_id
         : null;
+      const providerOfferId = typeof providerSubscription.offer_id === "string"
+        ? providerSubscription.offer_id
+        : null;
+      const offerChanged = providerOfferId !== (offerId ?? null);
       const checkoutAction = trialCheckoutAction(
         providerStatus,
         providerPlanId,
         targetPlanId,
       );
 
-      if (checkoutAction === "reuse") {
+      if (offerChanged && providerStatus === "created") {
+        await razorpayRequest(
+          `/v1/subscriptions/${currentSubscription.razorpay_subscription_id}/cancel`,
+          { cancel_at_cycle_end: false },
+        );
+      } else if (
+        offerChanged &&
+        offerId &&
+        providerStatus !== "cancelled" &&
+        providerStatus !== "expired"
+      ) {
+        throw new CheckoutError(
+          "This discount code cannot be applied after subscription authorization has started.",
+          409,
+        );
+      } else if (checkoutAction === "reuse") {
         return checkoutResponse(
           currentSubscription.razorpay_subscription_id,
           planKey,
           profile,
           authData.user,
+          Boolean(providerOfferId),
         );
-      }
-
-      if (checkoutAction === "update") {
+      } else if (checkoutAction === "update") {
         await razorpayRequest(
           `/v1/subscriptions/${currentSubscription.razorpay_subscription_id}`,
           {
@@ -150,10 +182,9 @@ Deno.serve(async (request) => {
           planKey,
           profile,
           authData.user,
+          Boolean(providerOfferId),
         );
-      }
-
-      if (providerStatus === "created") {
+      } else if (providerStatus === "created") {
         await razorpayRequest(
           `/v1/subscriptions/${currentSubscription.razorpay_subscription_id}/cancel`,
           { cancel_at_cycle_end: false },
@@ -220,6 +251,7 @@ Deno.serve(async (request) => {
 
     const razorpaySubscription = await razorpayRequest("/v1/subscriptions", {
       plan_id: planId(planKey, billingPeriod),
+      ...(offerId ? { offer_id: offerId } : {}),
       total_count: billingPeriod === "yearly" ? 10 : 120,
       quantity: 1,
       customer_notify: 1,
@@ -255,13 +287,17 @@ Deno.serve(async (request) => {
       keyId: requiredEnv("RAZORPAY_KEY_ID"),
       subscriptionId: razorpaySubscription.id,
       planName: displayPlanName(planKey),
+      discountApplied: Boolean(offerId),
       customerName: profile?.full_name ?? null,
       customerEmail: profile?.email ?? authData.user.email ?? null,
       customerPhone: profile?.phone ?? authData.user.phone ?? null,
     });
   } catch (error) {
     console.error("Create Razorpay subscription failed", safeMessage(error));
-    return json({ error: safeMessage(error) }, 500);
+    return json(
+      { error: safeMessage(error) },
+      error instanceof CheckoutError ? error.status : 500,
+    );
   }
 });
 
@@ -284,15 +320,39 @@ function checkoutResponse(
     phone?: string | null;
   } | null,
   user: { email?: string | null; phone?: string | null },
+  discountApplied = false,
 ) {
   return json({
     keyId: requiredEnv("RAZORPAY_KEY_ID"),
     subscriptionId,
     planName: displayPlanName(planKey),
+    discountApplied,
     customerName: profile?.full_name ?? null,
     customerEmail: profile?.email ?? user.email ?? null,
     customerPhone: profile?.phone ?? user.phone ?? null,
   });
+}
+
+function resolveDiscountOffer(discountCode: unknown) {
+  if (discountCode === undefined || discountCode === null || discountCode === "") {
+    return undefined;
+  }
+  if (
+    typeof discountCode !== "string" ||
+    !discountCodeMatches(
+      discountCode,
+      Deno.env.get("RAZORPAY_LIVE_DISCOUNT_CODE"),
+    )
+  ) {
+    throw new CheckoutError("Invalid discount code", 400);
+  }
+  return requiredEnv("RAZORPAY_LIVE_DISCOUNT_OFFER_ID");
+}
+
+class CheckoutError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
 }
 
 async function razorpayRequest(

@@ -21,6 +21,20 @@ test("allows tenant business questions", () => {
   );
 });
 
+test("allows common plural quotation and invoice questions", () => {
+  for (const content of [
+    "show me pending quotations",
+    "tell me quotations due",
+    "how many invoices are pending",
+  ]) {
+    assert.equal(
+      isTenantBusinessRequest([{ role: "user", content }]),
+      true,
+      content,
+    );
+  }
+});
+
 test("allows short follow-ups only after business context", () => {
   assert.equal(
     isTenantBusinessRequest([

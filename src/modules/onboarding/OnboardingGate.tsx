@@ -11,6 +11,7 @@ import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { authenticatedHomePath } from "../../app/redirects";
 import { PortalLogo } from "../../components/PortalBrand";
+import { AuthThemeCard, AuthThemeShell } from "../auth/AuthTheme";
 import { Button } from "../crm/CrmComponents";
 import { fetchCurrentCompanyOnboardingProgress } from "./onboardingApi";
 import { resolveTenantOnboardingDestination } from "./onboardingRouting";
@@ -173,16 +174,31 @@ export function useOnboarding() {
 }
 
 function OnboardingResolutionScreen() {
+  const description =
+    "We are checking where to continue your Bizlee setup.";
+
   return (
-    <StatusShell>
-      <span className="mx-auto block h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-orange-500" />
-      <h1 className="mt-5 text-center text-xl font-semibold text-[#06173f]">
-        Preparing your workspace
-      </h1>
-      <p className="mt-2 text-center text-sm leading-6 text-slate-600">
-        We are checking where to continue your Bizlee setup.
-      </p>
-    </StatusShell>
+    <AuthThemeShell
+      badge="Workspace setup"
+      desktopDescription={description}
+      mobileDescription={description}
+      title="Preparing your workspace"
+    >
+      <AuthThemeCard>
+        <div aria-live="polite" className="py-6 text-center" role="status">
+          <span
+            aria-hidden="true"
+            className="mx-auto block h-11 w-11 animate-spin rounded-full border-4 border-white/20 border-t-orange-400"
+          />
+          <p className="mt-5 text-sm font-semibold text-white">
+            Loading your workspace
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {description}
+          </p>
+        </div>
+      </AuthThemeCard>
+    </AuthThemeShell>
   );
 }
 

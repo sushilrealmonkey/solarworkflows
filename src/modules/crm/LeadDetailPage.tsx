@@ -4,8 +4,10 @@ import { useAuth } from "../../app/AuthProvider";
 import { RecordTitle } from "../../components/RecordTitle";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
+  createLeadRequirementType,
   fetchLead,
   fetchLeadActionState,
+  fetchLeadRequirementTypes,
   fetchStaffOptions,
   updateLead,
 } from "./crmApi";
@@ -56,6 +58,7 @@ export function LeadDetailPage() {
     quotations: [],
   });
   const [staff, setStaff] = useState<StaffOption[]>([]);
+  const [requirementTypes, setRequirementTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<LeadFormValues | null>(null);
@@ -96,7 +99,7 @@ export function LeadDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextLead, nextStaff, nextActionState] = await Promise.all([
+      const [nextLead, nextStaff, nextActionState, nextRequirementTypes] = await Promise.all([
         fetchLead(profile, id),
         fetchStaffOptions(profile),
         fetchLeadActionState(profile, id, {
@@ -104,10 +107,12 @@ export function LeadDetailPage() {
           includeQuotation: canViewQuotation,
           includeQuotationBySurvey: canViewSurvey && canViewQuotation,
         }),
+        fetchLeadRequirementTypes(profile),
       ]);
       setLead(nextLead);
       setStaff(nextStaff);
       setLeadActionState(nextActionState);
+      setRequirementTypes(nextRequirementTypes.map((requirementType) => requirementType.name));
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load lead.",
@@ -121,7 +126,7 @@ export function LeadDetailPage() {
     void loadLead();
     // loadLead closes over the current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, id, profile?.id]);
+  }, [canView, id, profile?.company_id, profile?.id]);
 
   if (!canView) {
     return (
@@ -173,6 +178,17 @@ export function LeadDetailPage() {
 
     setFormErrors({});
     setEditing(leadToForm(lead));
+  }
+
+  async function handleAddRequirementType(name: string) {
+    const createdRequirementType = await createLeadRequirementType(profile, name);
+    setRequirementTypes((current) =>
+      [...current, createdRequirementType.name].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    );
+    showToast("Requirement type added.", "success");
+    return createdRequirementType.name;
   }
 
   return (
@@ -345,6 +361,9 @@ export function LeadDetailPage() {
           setValues={setEditing}
           errors={formErrors}
           staff={staff}
+          canAddRequirementType={canCreate}
+          requirementTypes={requirementTypes}
+          onAddRequirementType={handleAddRequirementType}
           onClose={() => setEditing(null)}
           onSubmit={handleEditSubmit}
           saving={saving}
