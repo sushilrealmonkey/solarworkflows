@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./AuthProvider";
 import { moduleKeyForPath } from "./routes";
+import { PageLoader } from "../components/PageLoader";
 
 export function ProtectedRoute() {
-  const { permissions, profile, refresh, session } = useAuth();
+  const { permissions, profile, refresh, session, status } = useAuth();
   const location = useLocation();
   const [isRefreshingAccess, setIsRefreshingAccess] = useState(false);
   const lastAccessRefreshRef = useRef<string | null>(null);
@@ -34,13 +35,14 @@ export function ProtectedRoute() {
     session?.user.id,
   ]);
 
-  if (isRefreshingAccess) {
+  if (status === "loading" || isRefreshingAccess) {
     return (
-      <AccessStateScreen
-        eyebrow="Loading workspace"
-        title="Preparing your dashboard"
-        description="We are checking your account, organization, and permissions."
-      />
+      <main className="flex min-h-screen items-center justify-center bg-stone-50 px-4 py-10">
+        <PageLoader
+          className="w-full max-w-lg"
+          label="Preparing your workspace…"
+        />
+      </main>
     );
   }
 

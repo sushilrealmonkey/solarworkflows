@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader";
+import { PageLoader } from "../../components/PageLoader";
 import { useAuth } from "../../app/AuthProvider";
 import {
   fetchNotifications,
@@ -95,7 +96,7 @@ export function NotificationsPage() {
           </div>
           <button className="text-sm font-semibold text-orange-700" onClick={() => void markAll()} type="button">Mark all as read</button>
         </div>
-        {loading ? <p className="p-10 text-center text-sm text-slate-500">Loading notifications…</p> : null}
+        {loading ? <div className="p-4"><PageLoader label="Loading notifications…" /></div> : null}
         {error ? <p className="m-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700" role="alert">{error}</p> : null}
         {!loading && !error && !items.length ? <p className="p-12 text-center text-sm text-slate-500">No {unreadOnly ? "unread " : ""}notifications.</p> : null}
         {!loading ? items.map((item) => (

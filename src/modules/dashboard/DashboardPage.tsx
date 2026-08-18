@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { OrganizationLogo } from "../../components/OrganizationLogo";
+import { PageLoader } from "../../components/PageLoader";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { formatDisplayDate } from "../../utils/dateFormat";
@@ -127,6 +128,7 @@ function EpcAdminDashboard() {
   return (
     <div className="space-y-3 sm:space-y-5">
       <TrialBanner />
+      {loading ? <PageLoader label="Loading your business overview..." /> : null}
       <section className="rounded-lg border border-orange-100 bg-white p-3 shadow-sm shadow-orange-950/5 sm:p-5">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start xl:items-center">
           <SolarOperationsBrandGraphic
@@ -2373,6 +2375,7 @@ function PlatformDashboard() {
       />
 
       {error ? <ErrorPanel message={error} /> : null}
+      {loading ? <PageLoader label="Loading platform overview..." /> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metrics.map(([label, value]) => (

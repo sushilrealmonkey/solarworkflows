@@ -8,6 +8,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { PageLoader } from "../../components/PageLoader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import { formatDisplayDate, formatDisplayDateTime } from "../../utils/dateFormat";
@@ -361,10 +362,7 @@ export function CompaniesPage() {
             </div>
 
             {isLoading ? (
-              <EmptyState
-                title="Loading companies"
-                description="Fetching tenant workspaces from Supabase."
-              />
+              <PageLoader label="Loading company workspaces..." />
             ) : filteredCompanies.length === 0 ? (
               <EmptyState
                 title="No matching companies"

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { PageLoader } from "../../components/PageLoader";
 import {
   cancelRazorpaySubscription,
   createRazorpayCheckout,
@@ -296,9 +297,9 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
 
       <section className="grid gap-4 lg:grid-cols-2">
         {loading
-          ? [0, 1].map((item) => (
+          ? <><div className="lg:col-span-2"><PageLoader label="Loading subscription plans..." /></div>{[0, 1].map((item) => (
               <div className="h-96 animate-pulse rounded-2xl bg-stone-100" key={item} />
-            ))
+            ))}</>
           : plans.map((plan) => {
               const isCurrent =
                 subscription?.status === "active" &&

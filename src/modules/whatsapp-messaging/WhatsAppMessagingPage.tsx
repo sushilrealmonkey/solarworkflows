@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
+import { PageLoader } from "../../components/PageLoader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
@@ -35,11 +36,13 @@ export function WhatsAppMessagingPage() {
   const [conversations, setConversations] = useState<WhatsAppConversation[]>([]);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [workerHealth, setWorkerHealth] = useState<WhatsAppWorkerHealth | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const companyId = profile?.company_id ?? "";
 
   const refresh = useCallback(async () => {
     try {
+      setLoading(true);
       setError(null);
       const [numbers, contactLists, campaignRows, conversationRows, activity, worker] = await Promise.all([
         fetchWhatsAppPhoneNumbers(), fetchContactLists(), fetchCampaigns(),
@@ -49,6 +52,8 @@ export function WhatsAppMessagingPage() {
       setConversations(conversationRows); setMessages(activity); setWorkerHealth(worker);
     } catch (loadError) {
       setError(messageOf(loadError));
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -69,16 +74,17 @@ export function WhatsAppMessagingPage() {
         ))}
       </nav>
       {error ? <Notice tone="error">{error}</Notice> : null}
-      {tab === "today" ? <TodayQueue campaigns={campaigns}
+      {loading ? <PageLoader label="Loading WhatsApp outreach data..." /> : null}
+      {!loading && tab === "today" ? <TodayQueue campaigns={campaigns}
         showToast={showToast} /> : null}
-      {tab === "campaigns" ? <Campaigns phoneNumbers={phoneNumbers}
+      {!loading && tab === "campaigns" ? <Campaigns phoneNumbers={phoneNumbers}
         lists={lists} campaigns={campaigns} workerHealth={workerHealth}
         onChanged={refresh} showToast={showToast} /> : null}
-      {tab === "contacts" ? <ContactLists phoneNumbers={phoneNumbers} lists={lists}
+      {!loading && tab === "contacts" ? <ContactLists phoneNumbers={phoneNumbers} lists={lists}
         onChanged={refresh} showToast={showToast} /> : null}
-      {tab === "inbox" ? <Inbox conversations={conversations} /> : null}
-      {tab === "activity" ? <Activity messages={messages} onRefresh={refresh} /> : null}
-      {tab === "settings" ? <Settings companyId={companyId} showToast={showToast} /> : null}
+      {!loading && tab === "inbox" ? <Inbox conversations={conversations} /> : null}
+      {!loading && tab === "activity" ? <Activity messages={messages} onRefresh={refresh} /> : null}
+      {!loading && tab === "settings" ? <Settings companyId={companyId} showToast={showToast} /> : null}
     </div>
   );
 }

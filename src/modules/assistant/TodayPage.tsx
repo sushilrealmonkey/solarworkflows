@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import { PageLoader } from "../../components/PageLoader";
 import { fetchDailyBrief } from "./assistantApi";
 import { AssistantChat, useAssistantChat } from "./AssistantChat";
 import { BriefCard } from "./BriefCard";
@@ -75,6 +76,7 @@ export function TodayPage() {
 
       {briefLoading ? (
         <div className="space-y-3">
+          <PageLoader label="Preparing your daily brief…" />
           {[0, 1, 2].map((index) => (
             <div
               key={index}

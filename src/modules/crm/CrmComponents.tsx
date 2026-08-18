@@ -1,6 +1,7 @@
 import type { FormEvent, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
+import { PageLoader } from "../../components/PageLoader";
 import type { StaffOption } from "./types";
 import { labelize } from "./crmUtils";
 
@@ -460,6 +461,7 @@ export function EmptyState({
 export function LoadingSkeleton() {
   return (
     <div className="space-y-3">
+      <PageLoader label="Loading page data…" />
       {Array.from({ length: 5 }, (_, index) => (
         <div
           key={index}
