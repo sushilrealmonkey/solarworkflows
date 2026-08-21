@@ -5,27 +5,36 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { PageLoader } from "../../components/PageLoader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
 import { useToast } from "../../components/ui/ToastProvider";
-import { formatDisplayDate, formatDisplayDateTime } from "../../utils/dateFormat";
+import { formatDisplayDateTime } from "../../utils/dateFormat";
 import {
   createPlatformCompany,
   fetchPlatformCompanies,
   sendPlatformAdminSetupLink,
-  updatePlatformAdminStatus,
-  updatePlatformCompanyStatus,
 } from "./companyApi";
+import {
+  billingStatusLabel,
+  companyContactName,
+  companyContactPhone,
+  companyPlanLabel,
+} from "./companyUtils";
 import type {
   CreatePlatformCompanyFormValues,
+  PlatformCompanyBillingStatus,
   PlatformCompany,
 } from "./types";
 
-type ViewMode = "companies" | "invites" | "new";
-type CompanyFilter = "all" | "active" | "inactive" | "pending";
+type ViewMode = "companies" | "in_house" | "invites" | "new";
+type CompanyFilter =
+  | "all"
+  | PlatformCompanyBillingStatus
+  | "trials_ending_soon"
+  | "subscription_risk";
 
 const emptyFormValues: CreatePlatformCompanyFormValues = {
   organization_name: "",
@@ -38,15 +47,17 @@ export function CompaniesPage() {
   const { profile } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [companies, setCompanies] = useState<PlatformCompany[]>([]);
   const [values, setValues] =
     useState<CreatePlatformCompanyFormValues>(emptyFormValues);
-  const [viewMode, setViewMode] = useState<ViewMode>("companies");
-  const [filter, setFilter] = useState<CompanyFilter>("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(
-    null,
+  const [viewMode, setViewMode] = useState<ViewMode>(() =>
+    viewModeFromSearchParams(searchParams),
   );
+  const [filter, setFilter] = useState<CompanyFilter>(() =>
+    filterFromSearchParams(searchParams),
+  );
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -60,13 +71,6 @@ export function CompaniesPage() {
       setError(null);
       const nextCompanies = await fetchPlatformCompanies();
       setCompanies(nextCompanies);
-      setSelectedCompanyId((current) => {
-        if (current && nextCompanies.some((company) => company.id === current)) {
-          return current;
-        }
-
-        return nextCompanies[0]?.id ?? null;
-      });
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -87,31 +91,51 @@ export function CompaniesPage() {
     void loadCompanies();
   }, [canUsePlatformWorkflow, loadCompanies]);
 
+  useEffect(() => {
+    setViewMode(viewModeFromSearchParams(searchParams));
+    setFilter(filterFromSearchParams(searchParams));
+  }, [searchParams]);
+
+  const clientCompanies = useMemo(
+    () => companies.filter((company) => !company.is_in_house),
+    [companies],
+  );
+  const inHouseCompanies = useMemo(
+    () => companies.filter((company) => company.is_in_house),
+    [companies],
+  );
+
   const stats = useMemo(() => {
-    const activeCompanies = companies.filter(
-      (company) => company.status === "active",
+    const freeTrialActive = clientCompanies.filter(
+      (company) => company.billing_status === "free_trial_active",
     ).length;
-    const inactiveCompanies = companies.filter(
-      (company) => company.status === "inactive",
+    const freeTrialEnded = clientCompanies.filter(
+      (company) => company.billing_status === "free_trial_ended",
     ).length;
-    const pendingAdmins = companies.filter(isAdminSetupPending).length;
-    const activeAdmins = companies.filter(
+    const subscribed = clientCompanies.filter(
+      (company) => company.billing_status === "subscribed",
+    ).length;
+    const activeAdmins = clientCompanies.filter(
       (company) => company.admin?.status === "active",
     ).length;
 
     return {
       activeAdmins,
-      activeCompanies,
-      inactiveCompanies,
-      pendingAdmins,
-      totalCompanies: companies.length,
+      freeTrialActive,
+      freeTrialEnded,
+      inHouseCompanies: inHouseCompanies.length,
+      subscribed,
+      totalCompanies: clientCompanies.length,
     };
-  }, [companies]);
+  }, [clientCompanies, inHouseCompanies]);
+
+  const companiesForDirectory =
+    viewMode === "in_house" ? inHouseCompanies : clientCompanies;
 
   const filteredCompanies = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
 
-    return companies.filter((company) => {
+    return companiesForDirectory.filter((company) => {
       const matchesSearch =
         !normalizedQuery ||
         [
@@ -121,6 +145,9 @@ export function CompaniesPage() {
           company.admin?.full_name,
           company.admin?.email,
           company.admin?.phone,
+          company.settings?.contact_person,
+          company.settings?.contact_phone,
+          company.subscription?.plan_name,
         ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(normalizedQuery));
@@ -129,31 +156,13 @@ export function CompaniesPage() {
         return false;
       }
 
-      if (filter === "active") {
-        return company.status === "active";
-      }
-
-      if (filter === "inactive") {
-        return company.status === "inactive";
-      }
-
-      if (filter === "pending") {
-        return isAdminSetupPending(company);
-      }
-
-      return true;
+      return matchesCompanyFilter(company, filter);
     });
-  }, [companies, filter, searchQuery]);
-
-  const selectedCompany =
-    companies.find((company) => company.id === selectedCompanyId) ??
-    filteredCompanies[0] ??
-    companies[0] ??
-    null;
+  }, [companiesForDirectory, filter, searchQuery]);
 
   const pendingCompanies = useMemo(
-    () => companies.filter(isAdminSetupPending),
-    [companies],
+    () => clientCompanies.filter(isAdminSetupPending),
+    [clientCompanies],
   );
   const companyPagination = useTablePagination(filteredCompanies);
   const paginatedCompanies = companyPagination.pageItems;
@@ -176,7 +185,6 @@ export function CompaniesPage() {
       const result = await createPlatformCompany(values);
       setValues(emptyFormValues);
       await loadCompanies();
-      setSelectedCompanyId(result.organization_id);
       setViewMode("companies");
       showToast("EPC company invite email sent.", "success");
       navigate(`/companies/${result.organization_id}`);
@@ -221,6 +229,29 @@ export function CompaniesPage() {
     }
   }
 
+  function switchView(nextView: ViewMode) {
+    setViewMode(nextView);
+    setFilter("all");
+    setSearchQuery("");
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set("tab", tabForViewMode(nextView));
+    nextSearchParams.delete("status");
+    setSearchParams(nextSearchParams, { replace: true });
+  }
+
+  function changeFilter(nextFilter: CompanyFilter) {
+    setFilter(nextFilter);
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (nextFilter === "all") {
+      nextSearchParams.delete("status");
+    } else {
+      nextSearchParams.set("status", nextFilter);
+    }
+    setSearchParams(nextSearchParams, { replace: true });
+  }
+
   if (!canUsePlatformWorkflow) {
     return (
       <div className="space-y-6">
@@ -243,35 +274,41 @@ export function CompaniesPage() {
         description="Create, invite, activate, and review EPC tenant workspaces."
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Total companies" value={stats.totalCompanies} />
-        <MetricCard label="Active workspaces" value={stats.activeCompanies} />
-        <MetricCard label="Inactive workspaces" value={stats.inactiveCompanies} />
-        <MetricCard label="Pending setup" value={stats.pendingAdmins} />
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <MetricCard label="Client companies" value={stats.totalCompanies} />
+        <MetricCard label="In-house accounts" value={stats.inHouseCompanies} />
+        <MetricCard label="Free Trial Active" value={stats.freeTrialActive} />
+        <MetricCard label="Free Trial Ended" value={stats.freeTrialEnded} />
+        <MetricCard label="Subscribed" value={stats.subscribed} />
         <MetricCard label="Active admins" value={stats.activeAdmins} />
       </section>
 
       <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <ModeButton
             active={viewMode === "companies"}
-            label="Companies"
-            onClick={() => setViewMode("companies")}
+            label="Client companies"
+            onClick={() => switchView("companies")}
+          />
+          <ModeButton
+            active={viewMode === "in_house"}
+            label="In-house"
+            onClick={() => switchView("in_house")}
           />
           <ModeButton
             active={viewMode === "invites"}
             label="Invites"
-            onClick={() => setViewMode("invites")}
+            onClick={() => switchView("invites")}
           />
           <ModeButton
             active={viewMode === "new"}
             label="New"
-            onClick={() => setViewMode("new")}
+            onClick={() => switchView("new")}
           />
         </div>
         <button
           className="rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500"
-          onClick={() => setViewMode("new")}
+          onClick={() => switchView("new")}
           type="button"
         >
           Add EPC company
@@ -317,7 +354,6 @@ export function CompaniesPage() {
                     }
                   }}
                   onSelect={() => {
-                    setSelectedCompanyId(company.id);
                     navigate(`/companies/${company.id}`);
                   }}
                 />
@@ -331,10 +367,19 @@ export function CompaniesPage() {
         </section>
       ) : null}
 
-      {viewMode === "companies" ? (
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <div className="rounded-lg border border-stone-200 bg-white shadow-sm">
+      {viewMode === "companies" || viewMode === "in_house" ? (
+        <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
             <div className="border-b border-stone-200 p-4">
+              <div className="mb-4">
+                <h2 className="text-base font-semibold text-slate-950">
+                  {viewMode === "in_house" ? "In-house accounts" : "Client companies"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  {viewMode === "in_house"
+                    ? "Internal and test workspaces kept separate from the client directory."
+                    : "Client EPC workspaces and their current subscription status."}
+                </p>
+              </div>
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                 <label className="block">
                   <span className="sr-only">Search companies</span>
@@ -348,15 +393,15 @@ export function CompaniesPage() {
                 </label>
                 <select
                   className="rounded-lg border border-stone-300 px-3 py-2.5 text-base outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                  onChange={(event) =>
-                    setFilter(event.target.value as CompanyFilter)
-                  }
+                  onChange={(event) => changeFilter(event.target.value as CompanyFilter)}
                   value={filter}
                 >
                   <option value="all">All</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="pending">Pending setup</option>
+                  <option value="free_trial_active">Free Trial Active</option>
+                  <option value="free_trial_ended">Free Trial Ended</option>
+                  <option value="subscribed">Subscribed</option>
+                  <option value="trials_ending_soon">Trials ending soon</option>
+                  <option value="subscription_risk">Subscription risk</option>
                 </select>
               </div>
             </div>
@@ -369,52 +414,33 @@ export function CompaniesPage() {
                 description="Change the search or filter to review more workspaces."
               />
             ) : (
-              <div className="divide-y divide-stone-200">
-                {paginatedCompanies.map((company) => (
-                  <CompanyRow
-                    company={company}
-                    isSelected={selectedCompany?.id === company.id}
-                    key={company.id}
-                    onSelect={() => navigate(`/companies/${company.id}`)}
-                  />
-                ))}
+              <>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[860px]">
+                    <div className="grid grid-cols-[minmax(240px,1.4fr)_minmax(180px,1fr)_160px_180px_190px] border-b border-stone-200 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-5">
+                      <span>Company name</span>
+                      <span>Contact person</span>
+                      <span>Mobile</span>
+                      <span>Plan</span>
+                      <span>Status</span>
+                    </div>
+                    <div className="divide-y divide-stone-200">
+                      {paginatedCompanies.map((company) => (
+                        <CompanyRow
+                          company={company}
+                          key={company.id}
+                          onSelect={() => navigate(`/companies/${company.id}`)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
                 <TablePagination
                   label="companies"
                   pagination={companyPagination}
                 />
-              </div>
+              </>
             )}
-          </div>
-
-          <CompanyDetail
-            busyAction={busyAction}
-            company={selectedCompany}
-            onAdminStatus={(company, status) =>
-              company.admin
-                ? runAction(
-                    `admin-status:${company.admin.id}:${status}`,
-                    "Admin status updated.",
-                    () => updatePlatformAdminStatus(company.admin!.id, status),
-                  )
-                : undefined
-            }
-            onCompanyStatus={(company, status) =>
-              runAction(
-                `company-status:${company.id}:${status}`,
-                "Workspace status updated.",
-                () => updatePlatformCompanyStatus(company.id, status),
-              )
-            }
-            onSendSetupLink={(company) =>
-              company.admin
-                ? runAction(
-                    `setup:${company.admin.id}`,
-                    "Admin setup link sent.",
-                    () => sendPlatformAdminSetupLink(company.admin!.id),
-                  )
-                : undefined
-            }
-          />
         </section>
       ) : null}
     </div>
@@ -495,178 +521,48 @@ function CreateCompanyForm({
 
 function CompanyRow({
   company,
-  isSelected,
   onSelect,
 }: {
   company: PlatformCompany;
-  isSelected: boolean;
   onSelect: () => void;
 }) {
   return (
     <button
-      className={`block w-full px-4 py-4 text-left transition ${
-        isSelected ? "bg-orange-50" : "hover:bg-stone-50"
-      }`}
+      aria-label={`Open ${company.name}`}
+      className="grid w-full grid-cols-[minmax(240px,1.4fr)_minmax(180px,1fr)_160px_180px_190px] items-center gap-0 px-4 py-4 text-left transition hover:bg-orange-50 focus-visible:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-orange-500 sm:px-5"
       onClick={onSelect}
       type="button"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-slate-950">
-            {company.name}
-          </h3>
-          <p className="mt-1 text-xs text-slate-500">
-            {company.slug}
-            {company.subdomain ? ` / ${company.subdomain}` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone={company.status === "active" ? "success" : "neutral"}>
-            {company.status ?? "unknown"}
-          </Badge>
-          <Badge tone={isAdminSetupPending(company) ? "warning" : "success"}>
-            {adminSetupLabel(company)}
-          </Badge>
-        </div>
-      </div>
-      <div className="mt-3 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-        <span>{company.admin?.full_name ?? "No admin"}</span>
-        <span>{company.admin?.email ?? "No admin email"}</span>
-        <span>{formatDate(company.created_at)}</span>
-      </div>
+      <span className="min-w-0 pr-4">
+        <span className="block truncate text-sm font-semibold text-slate-950">
+          {company.name}
+        </span>
+        <span className="mt-1 block truncate text-xs text-slate-500">
+          {company.slug}
+          {company.subdomain ? ` / ${company.subdomain}` : ""}
+        </span>
+      </span>
+      <span className="truncate pr-4 text-sm text-slate-700">
+        {companyContactName(company)}
+      </span>
+      <span className="truncate pr-4 text-sm text-slate-700">
+        {companyContactPhone(company)}
+      </span>
+      <span className="truncate pr-4 text-sm text-slate-700">
+        {companyPlanLabel(company)}
+      </span>
+      <span>
+        <Badge
+          tone={
+            company.billing_status === "free_trial_ended"
+              ? "warning"
+              : "success"
+          }
+        >
+          {billingStatusLabel(company.billing_status)}
+        </Badge>
+      </span>
     </button>
-  );
-}
-
-function CompanyDetail({
-  busyAction,
-  company,
-  onAdminStatus,
-  onCompanyStatus,
-  onSendSetupLink,
-}: {
-  busyAction: string | null;
-  company: PlatformCompany | null;
-  onAdminStatus: (
-    company: PlatformCompany,
-    status: "invited" | "active" | "inactive",
-  ) => void;
-  onCompanyStatus: (
-    company: PlatformCompany,
-    status: "active" | "inactive",
-  ) => void;
-  onSendSetupLink: (company: PlatformCompany) => void;
-}) {
-  if (!company) {
-    return (
-      <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
-        <EmptyState
-          title="No company selected"
-          description="Select a company workspace to review details."
-        />
-      </section>
-    );
-  }
-
-  const nextCompanyStatus = company.status === "active" ? "inactive" : "active";
-  const admin = company.admin;
-
-  return (
-    <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
-      <SectionHeader
-        description={`${company.slug}${company.subdomain ? ` / ${company.subdomain}` : ""}`}
-        title={company.name}
-      />
-
-      <div className="space-y-5 p-4 sm:p-5">
-        <div className="flex flex-wrap gap-2">
-          <Badge tone={company.status === "active" ? "success" : "neutral"}>
-            {`Workspace ${company.status ?? "unknown"}`}
-          </Badge>
-          <Badge tone={isAdminSetupPending(company) ? "warning" : "success"}>
-            {adminSetupLabel(company)}
-          </Badge>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Detail label="Created" value={formatDateTime(company.created_at)} />
-          <Detail label="Updated" value={formatDateTime(company.updated_at)} />
-          <Detail label="Users" value={String(company.user_count)} />
-          <Detail label="Roles" value={String(company.role_count)} />
-          <Detail label="Custom domain" value={company.custom_domain ?? "-"} />
-          <Detail
-            label="GST"
-            value={company.settings?.gst_number ?? "-"}
-          />
-        </div>
-
-        <div className="rounded-lg bg-stone-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-normal text-slate-500">
-            Primary admin
-          </p>
-          {admin ? (
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Detail label="Name" value={admin.full_name ?? "-"} />
-              <Detail label="Email" value={admin.email ?? "-"} />
-              <Detail label="Phone" value={admin.phone ?? "-"} />
-              <Detail label="Status" value={admin.status ?? "-"} />
-              <Detail label="Invited" value={formatDateTime(admin.invited_at)} />
-              <Detail
-                label="Onboarded"
-                value={formatDateTime(admin.onboarded_at)}
-              />
-              <Detail
-                label="Last login"
-                value={formatDateTime(admin.last_login_at)}
-              />
-              <Detail
-                label="Auth"
-                value={admin.auth_user_id ? "Linked" : "Not linked"}
-              />
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-600">
-              No primary admin profile found.
-            </p>
-          )}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            className="rounded-lg border border-stone-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={Boolean(busyAction)}
-            onClick={() => onCompanyStatus(company, nextCompanyStatus)}
-            type="button"
-          >
-            Mark workspace {nextCompanyStatus}
-          </button>
-          <button
-            className="rounded-lg border border-stone-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={Boolean(busyAction) || !admin || admin.status === "inactive"}
-            onClick={() => onSendSetupLink(company)}
-            type="button"
-          >
-            Send setup link
-          </button>
-          <button
-            className="rounded-lg border border-stone-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={Boolean(busyAction) || !admin || admin.status === "active"}
-            onClick={() => onAdminStatus(company, "active")}
-            type="button"
-          >
-            Mark admin active
-          </button>
-          <button
-            className="rounded-lg border border-stone-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={Boolean(busyAction) || !admin || admin.status === "inactive"}
-            onClick={() => onAdminStatus(company, "inactive")}
-            type="button"
-          >
-            Mark admin inactive
-          </button>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -803,17 +699,6 @@ function TextField({
   );
 }
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-xs font-semibold uppercase tracking-normal text-slate-500">
-        {label}
-      </p>
-      <p className="mt-1 break-words text-sm text-slate-800">{value}</p>
-    </div>
-  );
-}
-
 function Badge({
   children,
   tone,
@@ -880,6 +765,73 @@ function validateForm(values: CreatePlatformCompanyFormValues) {
   return null;
 }
 
+function viewModeFromSearchParams(searchParams: URLSearchParams): ViewMode {
+  const tab = searchParams.get("tab");
+
+  if (tab === "in_house") return "in_house";
+  if (tab === "invites") return "invites";
+  if (tab === "new") return "new";
+  return "companies";
+}
+
+function filterFromSearchParams(searchParams: URLSearchParams): CompanyFilter {
+  const status = searchParams.get("status");
+
+  if (
+    status === "free_trial_active" ||
+    status === "free_trial_ended" ||
+    status === "subscribed" ||
+    status === "trials_ending_soon" ||
+    status === "subscription_risk"
+  ) {
+    return status;
+  }
+
+  return "all";
+}
+
+function tabForViewMode(viewMode: ViewMode) {
+  if (viewMode === "companies") return "clients";
+  return viewMode;
+}
+
+function matchesCompanyFilter(
+  company: PlatformCompany,
+  filter: CompanyFilter,
+) {
+  if (filter === "all") {
+    return true;
+  }
+
+  if (
+    filter === "free_trial_active" ||
+    filter === "free_trial_ended" ||
+    filter === "subscribed"
+  ) {
+    return company.billing_status === filter;
+  }
+
+  if (filter === "subscription_risk") {
+    return Boolean(
+      company.subscription?.plan_key &&
+        ["past_due", "suspended", "cancelled"].includes(
+          company.subscription.status ?? "",
+        ),
+    );
+  }
+
+  const trialEndsAt = company.subscription?.trial_ends_at
+    ? new Date(company.subscription.trial_ends_at).getTime()
+    : Number.NaN;
+
+  return (
+    company.billing_status === "free_trial_active" &&
+    Number.isFinite(trialEndsAt) &&
+    trialEndsAt > Date.now() &&
+    trialEndsAt <= Date.now() + 7 * 24 * 60 * 60 * 1000
+  );
+}
+
 function isAdminSetupPending(company: PlatformCompany) {
   if (!company.admin) {
     return true;
@@ -894,26 +846,6 @@ function isAdminSetupPending(company: PlatformCompany) {
     !company.admin.auth_user_id ||
     !company.admin.onboarded_at
   );
-}
-
-function adminSetupLabel(company: PlatformCompany) {
-  if (!company.admin) {
-    return "No admin";
-  }
-
-  if (company.admin.status === "inactive") {
-    return "Admin inactive";
-  }
-
-  if (isAdminSetupPending(company)) {
-    return "Pending setup";
-  }
-
-  return "Admin active";
-}
-
-function formatDate(value: string | null) {
-  return formatDisplayDate(value);
 }
 
 function formatDateTime(value: string | null) {

@@ -1,5 +1,22 @@
 export type PlatformCompanyStatus = "active" | "inactive" | string;
 export type PlatformAdminStatus = "invited" | "active" | "inactive" | string;
+export type PlatformCompanyBillingStatus =
+  | "free_trial_active"
+  | "free_trial_ended"
+  | "subscribed";
+
+export type PlatformCompanySubscription = {
+  company_id: string;
+  plan_key: string | null;
+  plan_name: string | null;
+  status: string | null;
+  billing_period: string | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  current_period_started_at: string | null;
+  current_period_ends_at: string | null;
+  cancel_at_period_end: boolean;
+};
 
 export type PlatformCompanyAdmin = {
   id: string;
@@ -49,6 +66,8 @@ export type PlatformActivityLog = {
 
 export type PlatformCompany = {
   id: string;
+  company_id: string | null;
+  is_in_house: boolean;
   name: string;
   slug: string;
   subdomain: string | null;
@@ -58,6 +77,8 @@ export type PlatformCompany = {
   updated_at: string | null;
   settings: PlatformCompanySettings | null;
   admin: PlatformCompanyAdmin | null;
+  subscription: PlatformCompanySubscription | null;
+  billing_status: PlatformCompanyBillingStatus;
   tenant_users?: PlatformTenantUser[];
   role_count: number;
   user_count: number;
@@ -122,21 +143,26 @@ export type PlatformCompanyActionResult = {
 };
 
 export type PlatformDashboardSnapshot = {
-  totalCompanies: number;
-  activeCompanies: number;
-  inactiveCompanies: number;
-  pendingAdminSetup: number;
-  activeAdmins: number;
-  totalUsers: number;
-  totalCustomers: number;
-  totalLeads: number;
-  activeProjects: number;
-  completedProjects: number;
-  pendingSiteSurveys: number;
-  quotationsSent: number;
-  quotationsAccepted: number;
-  lowStockItems: number;
-  pendingDocuments: number;
-  recentActivity: PlatformActivityLog[];
-  companies: PlatformCompany[];
+  clientWorkspaceCount: number;
+  activeClientWorkspaceCount: number;
+  inactiveClientWorkspaceCount: number;
+  inHouseAccountCount: number;
+  activeTrialCount: number;
+  trialsEndingSoonCount: number;
+  trialEndedCount: number;
+  subscribedWorkspaceCount: number;
+  subscriptionRiskCount: number;
+  pendingAdminSetupCount: number;
+  activeAdminCount: number;
+  totalClientUsers: number;
+  activeClientUsers7d: number;
+  mtdNewClientWorkspaces: number;
+  mtdNewClientUsers: number;
+  mtdNewEnquiries: number;
+  mtdNewQuotations: number;
+  mtdNewProjects: number;
+  totalClientCustomers: number;
+  activeClientProjects: number;
+  periodStart: string;
+  periodEnd: string;
 };

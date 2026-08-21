@@ -1,6 +1,6 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "../../services/supabaseClient";
-import { slugify } from "./companyUtils";
+import { deriveCompanyBillingStatus, slugify } from "./companyUtils";
 import type {
   CreatePlatformCompanyFormValues,
   CreatePlatformCompanyResult,
@@ -11,13 +11,14 @@ import type {
   PlatformCompanyAdmin,
   PlatformTenantUser,
   PlatformTenantUserRole,
-  PlatformDashboardSnapshot,
   PlatformCompanySettings,
+  PlatformCompanySubscription,
   UpdatePlatformCompanyFormValues,
 } from "./types";
 
 type OrganizationRow = {
   id: string;
+  company_id: string | null;
   name: string;
   slug: string;
   subdomain: string | null;
@@ -25,6 +26,16 @@ type OrganizationRow = {
   status: string | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+type SubscriptionPlanRow = {
+  plan_key: string;
+  display_name: string | null;
+};
+
+type CompanyClassificationRow = {
+  id: string;
+  is_in_house: boolean;
 };
 
 type UserProfileRow = PlatformCompanyAdmin & {
@@ -76,7 +87,9 @@ export async function fetchPlatformCompanies() {
 
   const { data: organizationsData, error: organizationsError } = await client
     .from("organizations")
-    .select("id, name, slug, subdomain, custom_domain, status, created_at, updated_at")
+    .select(
+      "id, company_id, name, slug, subdomain, custom_domain, status, created_at, updated_at",
+    )
     .order("created_at", { ascending: false });
 
   if (organizationsError) {
@@ -85,6 +98,9 @@ export async function fetchPlatformCompanies() {
 
   const organizations = (organizationsData ?? []) as OrganizationRow[];
   const organizationIds = organizations.map((organization) => organization.id);
+  const companyIds = organizations
+    .map((organization) => organization.company_id)
+    .filter((companyId): companyId is string => Boolean(companyId));
 
   if (organizationIds.length === 0) {
     return [];
@@ -135,6 +151,9 @@ export async function fetchPlatformCompanies() {
   const [
     { data: settingsData, error: settingsError },
     { data: roleData, error: roleError },
+    { data: companyData, error: companyError },
+    { data: subscriptionData, error: subscriptionError },
+    { data: planData, error: planError },
   ] = await Promise.all([
     client
       .from("organization_settings")
@@ -146,6 +165,20 @@ export async function fetchPlatformCompanies() {
       .from("roles")
       .select("organization_id")
       .in("organization_id", organizationIds),
+    client
+      .from("companies")
+      .select("id, is_in_house")
+      .in("id", companyIds),
+    client
+      .from("company_subscriptions")
+      .select(
+        "company_id, plan_key, status, billing_period, trial_started_at, trial_ends_at, current_period_started_at, current_period_ends_at, cancel_at_period_end",
+      )
+      .in("company_id", companyIds),
+    client
+      .from("subscription_plans")
+      .select("plan_key, display_name")
+      .eq("is_active", true),
   ]);
 
   if (settingsError) {
@@ -154,6 +187,45 @@ export async function fetchPlatformCompanies() {
 
   if (roleError) {
     throw new Error(roleError.message);
+  }
+
+  if (companyError) {
+    throw new Error(companyError.message);
+  }
+
+  if (subscriptionError) {
+    throw new Error(subscriptionError.message);
+  }
+
+  if (planError) {
+    throw new Error(planError.message);
+  }
+
+  const planNameByKey = new Map(
+    ((planData ?? []) as SubscriptionPlanRow[]).map((plan) => [
+      plan.plan_key,
+      plan.display_name,
+    ]),
+  );
+  const subscriptionByCompanyId = new Map<string, PlatformCompanySubscription>();
+
+  const inHouseByCompanyId = new Map(
+    ((companyData ?? []) as CompanyClassificationRow[]).map((company) => [
+      company.id,
+      company.is_in_house,
+    ]),
+  );
+
+  for (const subscription of (subscriptionData ?? []) as Omit<
+    PlatformCompanySubscription,
+    "plan_name"
+  >[]) {
+    subscriptionByCompanyId.set(subscription.company_id, {
+      ...subscription,
+      plan_name: subscription.plan_key
+        ? planNameByKey.get(subscription.plan_key) ?? null
+        : null,
+    });
   }
 
   const settingsByOrganizationId = new Map<string, PlatformCompanySettings>();
@@ -190,6 +262,17 @@ export async function fetchPlatformCompanies() {
 
   return organizations.map((organization) => ({
     ...organization,
+    is_in_house: organization.company_id
+      ? inHouseByCompanyId.get(organization.company_id) ?? false
+      : false,
+    subscription: organization.company_id
+      ? subscriptionByCompanyId.get(organization.company_id) ?? null
+      : null,
+    billing_status: deriveCompanyBillingStatus(
+      organization.company_id
+        ? subscriptionByCompanyId.get(organization.company_id) ?? null
+        : null,
+    ),
     settings: settingsByOrganizationId.get(organization.id) ?? null,
     admin: adminByOrganizationId.get(organization.id) ?? null,
     role_count: roleCountByOrganizationId.get(organization.id) ?? 0,
@@ -300,70 +383,6 @@ async function fetchPlatformTenantUsers(
         ),
     };
   });
-}
-
-export async function fetchPlatformDashboardSnapshot() {
-  const [companies, summaryByOrganizationId, recentActivity] = await Promise.all([
-    fetchPlatformCompanies(),
-    fetchDashboardSummaryByOrganizationId(),
-    fetchPlatformActivityLogs(null, 10),
-  ]);
-
-  const summary = Array.from(summaryByOrganizationId.values()).reduce(
-    (total, row) => ({
-      total_customers: total.total_customers + Number(row.total_customers ?? 0),
-      total_leads: total.total_leads + Number(row.total_leads ?? 0),
-      active_projects: total.active_projects + Number(row.active_projects ?? 0),
-      completed_projects:
-        total.completed_projects + Number(row.completed_projects ?? 0),
-      pending_site_surveys:
-        total.pending_site_surveys + Number(row.pending_site_surveys ?? 0),
-      quotations_sent: total.quotations_sent + Number(row.quotations_sent ?? 0),
-      quotations_accepted:
-        total.quotations_accepted + Number(row.quotations_accepted ?? 0),
-      total_project_value:
-        total.total_project_value + Number(row.total_project_value ?? 0),
-      total_received_amount:
-        total.total_received_amount + Number(row.total_received_amount ?? 0),
-      total_balance_due:
-        total.total_balance_due + Number(row.total_balance_due ?? 0),
-      low_stock_items: total.low_stock_items + Number(row.low_stock_items ?? 0),
-      pending_documents:
-        total.pending_documents + Number(row.pending_documents ?? 0),
-    }),
-    emptyActivitySummary(),
-  );
-
-  return {
-    totalCompanies: companies.length,
-    activeCompanies: companies.filter((company) => company.status === "active")
-      .length,
-    inactiveCompanies: companies.filter(
-      (company) => company.status === "inactive",
-    ).length,
-    pendingAdminSetup: companies.filter(isAdminSetupPending).length,
-    activeAdmins: companies.filter((company) => company.admin?.status === "active")
-      .length,
-    totalUsers: companies.reduce(
-      (total, company) => total + Number(company.user_count ?? 0),
-      0,
-    ),
-    totalCustomers: summary.total_customers,
-    totalLeads: summary.total_leads,
-    activeProjects: summary.active_projects,
-    completedProjects: summary.completed_projects,
-    pendingSiteSurveys: summary.pending_site_surveys,
-    quotationsSent: summary.quotations_sent,
-    quotationsAccepted: summary.quotations_accepted,
-    lowStockItems: summary.low_stock_items,
-    pendingDocuments: summary.pending_documents,
-    recentActivity,
-    companies: companies.map((company) => ({
-      ...company,
-      activity_summary:
-        summaryByOrganizationId.get(company.id) ?? emptyActivitySummary(),
-    })),
-  } satisfies PlatformDashboardSnapshot;
 }
 
 export async function createPlatformCompany(
@@ -534,22 +553,6 @@ function emptyActivitySummary(): PlatformCompanyActivitySummary {
     low_stock_items: 0,
     pending_documents: 0,
   };
-}
-
-function isAdminSetupPending(company: PlatformCompany) {
-  if (!company.admin) {
-    return true;
-  }
-
-  if (company.admin.status === "inactive") {
-    return false;
-  }
-
-  return (
-    company.admin.status === "invited" ||
-    !company.admin.auth_user_id ||
-    !company.admin.onboarded_at
-  );
 }
 
 async function getFunctionErrorMessage(error: unknown) {

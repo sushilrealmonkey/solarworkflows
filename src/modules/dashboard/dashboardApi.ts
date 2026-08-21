@@ -10,6 +10,7 @@ import type { ProjectWithRelations } from "../projects/types";
 import type { PurchaseOrderWithRelations } from "../purchases/types";
 import type { QuotationInventoryReservation, QuotationWithRelations } from "../quotations/types";
 import type { SiteSurveyWithRelations } from "../site-surveys/types";
+import type { PlatformDashboardSnapshot } from "../companies/types";
 
 export type DashboardSummaryRow = {
   organization_id: string;
@@ -77,6 +78,96 @@ function requireSupabase() {
   }
 
   return supabase;
+}
+
+type PlatformDashboardSummaryRow = {
+  client_workspace_count: number | string | null;
+  active_client_workspace_count: number | string | null;
+  inactive_client_workspace_count: number | string | null;
+  in_house_account_count: number | string | null;
+  active_trial_count: number | string | null;
+  trials_ending_soon_count: number | string | null;
+  trial_ended_count: number | string | null;
+  subscribed_workspace_count: number | string | null;
+  subscription_risk_count: number | string | null;
+  pending_admin_setup_count: number | string | null;
+  active_admin_count: number | string | null;
+  total_client_users: number | string | null;
+  active_client_users_7d: number | string | null;
+  mtd_new_client_workspaces: number | string | null;
+  mtd_new_client_users: number | string | null;
+  mtd_new_enquiries: number | string | null;
+  mtd_new_quotations: number | string | null;
+  mtd_new_projects: number | string | null;
+  total_client_customers: number | string | null;
+  active_client_projects: number | string | null;
+  period_start: string;
+  period_end: string;
+};
+
+export async function fetchPlatformDashboardSnapshot() {
+  const client = requireSupabase();
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const reportStart = formatLocalDate(start);
+  const reportEnd = formatLocalDate(end);
+
+  const { data, error } = await client.rpc("platform_dashboard_summary", {
+    report_start: reportStart,
+    report_end: reportEnd,
+    trial_window_days: 7,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | PlatformDashboardSummaryRow
+    | null
+    | undefined;
+
+  if (!row) {
+    throw new Error("The platform dashboard returned no statistics.");
+  }
+
+  return {
+    clientWorkspaceCount: Number(row.client_workspace_count ?? 0),
+    activeClientWorkspaceCount: Number(
+      row.active_client_workspace_count ?? 0,
+    ),
+    inactiveClientWorkspaceCount: Number(
+      row.inactive_client_workspace_count ?? 0,
+    ),
+    inHouseAccountCount: Number(row.in_house_account_count ?? 0),
+    activeTrialCount: Number(row.active_trial_count ?? 0),
+    trialsEndingSoonCount: Number(row.trials_ending_soon_count ?? 0),
+    trialEndedCount: Number(row.trial_ended_count ?? 0),
+    subscribedWorkspaceCount: Number(row.subscribed_workspace_count ?? 0),
+    subscriptionRiskCount: Number(row.subscription_risk_count ?? 0),
+    pendingAdminSetupCount: Number(row.pending_admin_setup_count ?? 0),
+    activeAdminCount: Number(row.active_admin_count ?? 0),
+    totalClientUsers: Number(row.total_client_users ?? 0),
+    activeClientUsers7d: Number(row.active_client_users_7d ?? 0),
+    mtdNewClientWorkspaces: Number(row.mtd_new_client_workspaces ?? 0),
+    mtdNewClientUsers: Number(row.mtd_new_client_users ?? 0),
+    mtdNewEnquiries: Number(row.mtd_new_enquiries ?? 0),
+    mtdNewQuotations: Number(row.mtd_new_quotations ?? 0),
+    mtdNewProjects: Number(row.mtd_new_projects ?? 0),
+    totalClientCustomers: Number(row.total_client_customers ?? 0),
+    activeClientProjects: Number(row.active_client_projects ?? 0),
+    periodStart: row.period_start,
+    periodEnd: row.period_end,
+  } satisfies PlatformDashboardSnapshot;
+}
+
+function formatLocalDate(value: Date) {
+  return [
+    value.getFullYear(),
+    String(value.getMonth() + 1).padStart(2, "0"),
+    String(value.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 function requireOrganization(profile: UserProfile | null) {

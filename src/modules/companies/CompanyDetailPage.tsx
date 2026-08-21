@@ -31,6 +31,8 @@ import {
 } from "./companyApi";
 import {
   adminSetupLabel,
+  billingStatusLabel,
+  companyPlanLabel,
   companyToUpdateForm,
   formatDateTime,
   slugify,
@@ -301,6 +303,9 @@ export function CompanyDetailPage() {
 
       <section className="flex flex-wrap gap-2">
         <StatusBadge value={company.status} />
+        <Badge tone={company.billing_status === "free_trial_ended" ? "amber" : "green"}>
+          {billingStatusLabel(company.billing_status)}
+        </Badge>
         <Badge tone={adminSetupLabel(company).includes("active") ? "green" : "amber"}>
           {adminSetupLabel(company)}
         </Badge>
@@ -429,13 +434,28 @@ export function CompanyDetailPage() {
         </section>
       </section>
 
-      <DetailSection title="Phase 2 Subscription And Financials">
-        <DetailItem label="Subscription Status" value="Coming in Phase 2" />
-        <DetailItem label="Current Plan" value="Coming in Phase 2" />
-        <DetailItem label="Trial Dates" value="Coming in Phase 2" />
-        <DetailItem label="Billing Cycle" value="Coming in Phase 2" />
-        <DetailItem label="Outstanding Amount" value="Coming in Phase 2" />
-        <DetailItem label="Last Invoice / Payment" value="Coming in Phase 2" />
+      <DetailSection title="Subscription And Billing">
+        <DetailItem
+          label="Subscription Status"
+          value={billingStatusLabel(company.billing_status)}
+        />
+        <DetailItem label="Current Plan" value={companyPlanLabel(company)} />
+        <DetailItem
+          label="Trial Started"
+          value={formatDateTime(company.subscription?.trial_started_at ?? null)}
+        />
+        <DetailItem
+          label="Trial Ends"
+          value={formatDateTime(company.subscription?.trial_ends_at ?? null)}
+        />
+        <DetailItem
+          label="Billing Cycle"
+          value={labelize(company.subscription?.billing_period)}
+        />
+        <DetailItem
+          label="Current Period Ends"
+          value={formatDateTime(company.subscription?.current_period_ends_at ?? null)}
+        />
       </DetailSection>
 
       <Link className="text-sm font-semibold text-[#06173f]" to="/companies">

@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { OrganizationLogo } from "../../components/OrganizationLogo";
@@ -26,9 +32,7 @@ import { formatKw } from "../projects/projectUtils";
 import type { PurchaseOrderWithRelations } from "../purchases/types";
 import { getSurveyContact } from "../site-surveys/surveyUtils";
 import type { SiteSurveyWithRelations } from "../site-surveys/types";
-import {
-  fetchPlatformDashboardSnapshot,
-} from "../companies/companyApi";
+import { fetchPlatformDashboardSnapshot } from "./dashboardApi";
 import type { PlatformDashboardSnapshot } from "../companies/types";
 import {
   aggregateDashboardSummary,
@@ -2327,134 +2331,226 @@ function PlatformDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadSnapshot() {
-      try {
-        setLoading(true);
-        setError(null);
-        const nextSnapshot = await fetchPlatformDashboardSnapshot();
-        if (isMounted) {
-          setSnapshot(nextSnapshot);
-        }
-      } catch (nextError) {
-        if (isMounted) {
-          setError(
-            nextError instanceof Error
-              ? nextError.message
-              : "Unable to load platform dashboard.",
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
+  const loadSnapshot = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const nextSnapshot = await fetchPlatformDashboardSnapshot();
+      setSnapshot(nextSnapshot);
+    } catch (nextError) {
+      setError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to load platform dashboard.",
+      );
+    } finally {
+      setLoading(false);
     }
-
-    void loadSnapshot();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
 
-  const metrics = [
-    ["Total EPC Companies", snapshot?.totalCompanies ?? 0],
-    ["Active Companies", snapshot?.activeCompanies ?? 0],
-    ["Inactive Companies", snapshot?.inactiveCompanies ?? 0],
-    ["Pending Admin Setup", snapshot?.pendingAdminSetup ?? 0],
-    ["Active EPC Admins", snapshot?.activeAdmins ?? 0],
-    ["Total Users", snapshot?.totalUsers ?? 0],
-    ["Customers", snapshot?.totalCustomers ?? 0],
-    ["Leads", snapshot?.totalLeads ?? 0],
-    ["Active Projects", snapshot?.activeProjects ?? 0],
-    ["Completed Projects", snapshot?.completedProjects ?? 0],
-    ["Pending Surveys", snapshot?.pendingSiteSurveys ?? 0],
-    ["Pending Documents", snapshot?.pendingDocuments ?? 0],
-  ] satisfies Array<[string, number]>;
+  useEffect(() => {
+    void loadSnapshot();
+  }, [loadSnapshot]);
+
+  const healthMetrics = [
+    {
+      label: "Client workspaces",
+      value: snapshot
+        ? `${snapshot.activeClientWorkspaceCount} / ${snapshot.clientWorkspaceCount}`
+        : 0,
+    },
+    {
+      label: "In-house accounts",
+      value: snapshot?.inHouseAccountCount ?? 0,
+      to: "/companies?tab=in_house",
+    },
+    { label: "Active free trials", value: snapshot?.activeTrialCount ?? 0 },
+    {
+      label: "Trials ending in 7 days",
+      value: snapshot?.trialsEndingSoonCount ?? 0,
+    },
+    {
+      label: "Subscribed workspaces",
+      value: snapshot?.subscribedWorkspaceCount ?? 0,
+    },
+    { label: "Subscription risk", value: snapshot?.subscriptionRiskCount ?? 0 },
+    {
+      label: "Pending admin setup",
+      value: snapshot?.pendingAdminSetupCount ?? 0,
+      to: "/companies?tab=invites",
+    },
+  ] satisfies Array<{ label: string; value: ReactNode; to?: string }>;
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Super Admin Dashboard"
-        description="Platform-level snapshot across EPC company workspaces, admins, setup status, and activity."
-      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <PageHeader
+          title="Super Admin Dashboard"
+          description="Daily client workspace health, subscription risk, onboarding, and month-to-date adoption."
+        />
+        <button
+          className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-orange-400 hover:text-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={loading}
+          onClick={() => void loadSnapshot()}
+          type="button"
+        >
+          {loading ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
 
       {error ? <ErrorPanel message={error} /> : null}
-      {loading ? <PageLoader label="Loading platform overview..." /> : null}
+      {loading ? <PageLoader label="Loading platform dashboard..." /> : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map(([label, value]) => (
-          <MetricCard key={label} label={label} loading={loading} value={value} />
-        ))}
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold text-slate-950">Platform health</h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {healthMetrics.map(({ label, value, to }) => {
+            const card = (
+              <MetricCard label={label} loading={loading} value={value} />
+            );
+
+            return to ? (
+              <Link className="block h-full" key={label} to={to}>
+                {card}
+              </Link>
+            ) : (
+              <div key={label}>{card}</div>
+            );
+          })}
+        </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
-        <WidgetFrame
-          title="EPC Companies"
-          locked={false}
-          action={
-            <Link className="text-sm font-semibold text-[#06173f]" to="/companies">
-              Open
-            </Link>
-          }
-        >
-          {loading ? <LoadingRows count={5} /> : null}
-          {!loading && snapshot?.companies.length === 0 ? (
-            <EmptyState>No EPC companies invited yet.</EmptyState>
-          ) : null}
-          {!loading && snapshot && snapshot.companies.length > 0 ? (
-            <div className="mt-4 divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-100">
-              {snapshot.companies.slice(0, 8).map((company) => (
-                <Link
-                  className="grid gap-3 bg-stone-50 p-3 hover:bg-orange-50 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
-                  key={company.id}
-                  to={`/companies/${company.id}`}
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-slate-950">
-                      {company.name}
-                    </span>
-                    <span className="mt-1 block truncate text-xs text-slate-500">
-                      {company.slug} / {company.admin?.email ?? "No admin email"}
-                    </span>
-                  </span>
-                  <span className="text-sm font-semibold text-slate-700">
-                    {labelize(company.status)}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          ) : null}
-        </WidgetFrame>
-
-        <WidgetFrame title="Recent Activity" locked={false}>
-          {loading ? <LoadingRows count={5} /> : null}
-          {!loading && (snapshot?.recentActivity.length ?? 0) === 0 ? (
-            <EmptyState>No platform activity yet.</EmptyState>
-          ) : null}
-          {!loading && snapshot && snapshot.recentActivity.length > 0 ? (
-            <div className="mt-4 space-y-3">
-              {snapshot.recentActivity.map((activity) => (
-                <article
-                  className="rounded-lg border border-stone-100 bg-stone-50 p-3"
-                  key={activity.id}
-                >
-                  <p className="text-sm font-semibold text-slate-950">
-                    {labelize(activity.module)} / {labelize(activity.action)}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {formatDateTime(activity.created_at)}
-                  </p>
-                </article>
-              ))}
-            </div>
-          ) : null}
-        </WidgetFrame>
+      <section className="space-y-3">
+        <h2 className="text-base font-semibold text-slate-950">Needs attention</h2>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AttentionCard
+            count={snapshot?.trialsEndingSoonCount ?? 0}
+            description="Review trial workspaces before access expires."
+            loading={loading}
+            title="Trials ending soon"
+            to="/companies?tab=clients&status=trials_ending_soon"
+          />
+          <AttentionCard
+            count={snapshot?.trialEndedCount ?? 0}
+            description="Free trials that have not converted to paid access."
+            loading={loading}
+            title="Trials ended without conversion"
+            to="/companies?tab=clients&status=free_trial_ended"
+          />
+          <AttentionCard
+            count={snapshot?.pendingAdminSetupCount ?? 0}
+            description="Primary admins still need to finish workspace setup."
+            loading={loading}
+            title="Pending admin setup"
+            to="/companies?tab=invites"
+          />
+          <AttentionCard
+            count={snapshot?.subscriptionRiskCount ?? 0}
+            description="Paid workspaces marked past due, suspended, or cancelled."
+            loading={loading}
+            title="Subscription risk"
+            to="/companies?tab=clients&status=subscription_risk"
+          />
+        </div>
       </section>
+
+      <WidgetFrame
+        title="Month to date"
+        locked={false}
+        action={
+          <span className="text-xs font-medium text-slate-500">
+            {snapshot
+              ? `Since ${formatDisplayDate(snapshot.periodStart)}`
+              : "Loading period..."}
+          </span>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <MetricCard
+            label="New client workspaces"
+            loading={loading}
+            value={snapshot?.mtdNewClientWorkspaces ?? 0}
+          />
+          <MetricCard
+            label="New client users"
+            loading={loading}
+            value={snapshot?.mtdNewClientUsers ?? 0}
+          />
+          <MetricCard
+            label="New enquiries"
+            loading={loading}
+            value={snapshot?.mtdNewEnquiries ?? 0}
+          />
+          <MetricCard
+            label="New quotations"
+            loading={loading}
+            value={snapshot?.mtdNewQuotations ?? 0}
+          />
+          <MetricCard
+            label="New projects"
+            loading={loading}
+            value={snapshot?.mtdNewProjects ?? 0}
+          />
+        </div>
+      </WidgetFrame>
+
+      <WidgetFrame title="Adoption snapshot" locked={false}>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard
+            label="Active client users in 7 days"
+            loading={loading}
+            value={snapshot?.activeClientUsers7d ?? 0}
+          />
+          <MetricCard
+            label="Total client users"
+            loading={loading}
+            value={snapshot?.totalClientUsers ?? 0}
+          />
+          <MetricCard
+            label="Client customers"
+            loading={loading}
+            value={snapshot?.totalClientCustomers ?? 0}
+          />
+          <MetricCard
+            label="Active projects"
+            loading={loading}
+            value={snapshot?.activeClientProjects ?? 0}
+          />
+        </div>
+      </WidgetFrame>
     </div>
+  );
+}
+
+function AttentionCard({
+  title,
+  description,
+  count,
+  loading,
+  to,
+}: {
+  title: string;
+  description: string;
+  count: number;
+  loading: boolean;
+  to: string;
+}) {
+  return (
+    <Link
+      className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm transition hover:border-orange-300 hover:bg-orange-50"
+      to={to}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-950">{title}</p>
+        {loading ? (
+          <div className="h-7 w-10 animate-pulse rounded-md bg-stone-100" />
+        ) : (
+          <p className="text-2xl font-semibold text-orange-700">{count}</p>
+        )}
+      </div>
+      <p className="mt-2 text-xs leading-5 text-slate-600">{description}</p>
+      <p className="mt-3 text-xs font-semibold text-[#06173f]">Review companies →</p>
+    </Link>
   );
 }
 

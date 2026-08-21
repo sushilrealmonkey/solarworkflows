@@ -187,7 +187,7 @@ export function DashboardLayout() {
             <div className="flex min-w-0 items-center gap-3">
               <div className="min-w-0">
                 <p className="truncate text-base font-semibold text-slate-950 sm:text-lg">
-                  {organization.name}
+                  {profile?.is_super_admin ? "Platform" : organization.name}
                 </p>
               </div>
             </div>

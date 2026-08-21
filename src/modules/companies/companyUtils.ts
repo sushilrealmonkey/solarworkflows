@@ -1,5 +1,7 @@
 import type {
+  PlatformCompanyBillingStatus,
   PlatformCompany,
+  PlatformCompanySubscription,
   UpdatePlatformCompanyFormValues,
 } from "./types";
 import { formatDisplayDate, formatDisplayDateTime } from "../../utils/dateFormat";
@@ -94,4 +96,68 @@ export function formatDate(value: string | null) {
 
 export function formatDateTime(value: string | null) {
   return formatDisplayDateTime(value);
+}
+
+export function deriveCompanyBillingStatus(
+  subscription: PlatformCompanySubscription | null | undefined,
+  now = new Date(),
+): PlatformCompanyBillingStatus {
+  if (!subscription) {
+    return "free_trial_ended";
+  }
+
+  if (subscription.status === "trialing") {
+    const trialEndsAt = subscription.trial_ends_at
+      ? new Date(subscription.trial_ends_at).getTime()
+      : Number.NaN;
+
+    return Number.isFinite(trialEndsAt) && trialEndsAt > now.getTime()
+      ? "free_trial_active"
+      : "free_trial_ended";
+  }
+
+  if (
+    subscription.status === "active" ||
+    subscription.status === "past_due" ||
+    subscription.status === "cancelled" ||
+    subscription.status === "grandfathered"
+  ) {
+    return "subscribed";
+  }
+
+  return "free_trial_ended";
+}
+
+export function billingStatusLabel(status: PlatformCompanyBillingStatus) {
+  if (status === "free_trial_active") return "Free Trial Active";
+  if (status === "free_trial_ended") return "Free Trial Ended";
+  return "Subscribed";
+}
+
+export function billingStatusTone(
+  status: PlatformCompanyBillingStatus,
+): "green" | "amber" | "neutral" {
+  if (status === "free_trial_active") return "green";
+  if (status === "subscribed") return "green";
+  return "amber";
+}
+
+export function companyContactName(company: PlatformCompany) {
+  return (
+    company.settings?.contact_person?.trim() ||
+    company.admin?.full_name?.trim() ||
+    "—"
+  );
+}
+
+export function companyContactPhone(company: PlatformCompany) {
+  return company.settings?.contact_phone?.trim() || company.admin?.phone?.trim() || "—";
+}
+
+export function companyPlanLabel(company: PlatformCompany) {
+  return (
+    company.subscription?.plan_name?.trim() ||
+    company.subscription?.plan_key?.trim() ||
+    "—"
+  );
 }
