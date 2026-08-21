@@ -14,6 +14,7 @@ import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
   Badge,
+  Button,
   EmptyState,
   LoadingSkeleton,
   Modal,
@@ -89,6 +90,7 @@ export function ProjectsPage() {
   });
 
   const canView = hasPermission(profile, permissions, "projects", "view");
+  const canCreateEnquiry = hasPermission(profile, permissions, "leads", "create");
 
   async function loadData() {
     if (!canView) {
@@ -156,6 +158,7 @@ export function ProjectsPage() {
 
   const projectPagination = useTablePagination(filteredProjects);
   const paginatedProjects = projectPagination.pageItems;
+  const isNewAccount = !loading && !error && projects.length === 0;
 
   if (!canView) {
     return (
@@ -187,11 +190,16 @@ export function ProjectsPage() {
           title="Projects"
           description="Track accepted solar installations created from quotation approval through commissioning."
         />
+        {isNewAccount && canCreateEnquiry ? (
+          <Button onClick={() => navigate("/leads?new=1")}>Add Enquiry</Button>
+        ) : null}
       </div>
 
-      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      {!isNewAccount ? (
+        <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      ) : null}
 
-      <Toolbar className="md:grid-cols-4">
+      {!isNewAccount ? <Toolbar className="md:grid-cols-4">
         <SearchInput
           className="md:col-span-4"
           placeholder="Search project, customer, or phone"
@@ -246,7 +254,7 @@ export function ProjectsPage() {
             setFilters((current) => ({ ...current, startDate }))
           }
         />
-      </Toolbar>
+      </Toolbar> : null}
 
       {loading ? <LoadingSkeleton /> : null}
       {error ? <EmptyState title="Could not load projects" description={error} /> : null}

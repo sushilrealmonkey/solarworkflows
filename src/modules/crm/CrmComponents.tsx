@@ -146,17 +146,20 @@ export function SelectInput({
   value,
   onChange,
   options,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Option[];
+  disabled?: boolean;
 }) {
   return (
     <label className="block">
       <span className="text-sm font-medium text-slate-700">{label}</span>
       <select
-        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+        className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-slate-500"
+        disabled={disabled}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >

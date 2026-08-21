@@ -5,6 +5,7 @@ export type QuotationWorkflowSummary = {
 export type QuotationWorkflowState =
   | "none"
   | "waiting"
+  | "loan_approval_due"
   | "accepted"
   | "rejected"
   | "expired"
@@ -25,6 +26,14 @@ export function quotationWorkflowState(
 
   if (quotations.some((quotation) => quotation.status === "accepted")) {
     return "accepted";
+  }
+
+  if (quotations.some((quotation) => quotation.status === "loan_approved")) {
+    return "accepted";
+  }
+
+  if (quotations.some((quotation) => quotation.status === "loan_approval_due")) {
+    return "loan_approval_due";
   }
 
   const terminalStatus = terminalStates.find((status) =>
@@ -51,6 +60,9 @@ export function quotationWorkflowPillLabel(state: QuotationWorkflowState) {
     return "Quotation accepted";
   }
 
+  if (state === "loan_approval_due") {
+    return "Loan Approval Due";
+  }
+
   return "Waiting for quotation approval";
 }
-

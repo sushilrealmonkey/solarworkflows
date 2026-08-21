@@ -109,6 +109,24 @@ export async function fetchDashboardSummary() {
   return (data ?? []) as DashboardSummaryRow[];
 }
 
+export async function fetchDashboardTeamMemberCount() {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc(
+    "get_current_company_team_member_count",
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const count = Number(data ?? 0);
+  if (!Number.isInteger(count) || count < 0) {
+    throw new Error("The dashboard team-member count is invalid.");
+  }
+
+  return count;
+}
+
 export async function fetchEpcAdminDashboardSnapshot(
   profile: UserProfile | null,
   options: EpcAdminDashboardSnapshotOptions = {},

@@ -168,6 +168,8 @@ export type SiteSurveyFormValues = {
   remarks: string;
 };
 
+export type SiteSurveyFormMode = "schedule" | "detail";
+
 export type SurveyFormLookups = {
   leads: SurveyLeadSummary[];
   customers: SurveyCustomerSummary[];

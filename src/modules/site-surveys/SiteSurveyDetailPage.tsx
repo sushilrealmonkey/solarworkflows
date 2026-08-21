@@ -144,7 +144,7 @@ export function SiteSurveyDetailPage() {
 
     try {
       setSaving(true);
-      await updateSiteSurvey(survey.id, editing);
+      await updateSiteSurvey(survey.id, editing, "detail");
       setEditing(null);
       showToast("Site survey updated.", "success");
       await loadSurvey();
@@ -523,6 +523,7 @@ export function SiteSurveyDetailPage() {
         <SiteSurveyFormModal
           title="Edit Site Survey"
           values={editing}
+          formMode="detail"
           setValues={setEditing}
           errors={formErrors}
           lookups={{ leads, staff }}

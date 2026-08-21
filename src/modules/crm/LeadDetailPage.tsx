@@ -276,7 +276,18 @@ export function LeadDetailPage() {
 
           <DetailSection title="Enquiry Basic Details">
             <DetailItem label="Enq Code" value={formatEnquiryCode(lead.lead_code)} />
-            <DetailItem label="Status" value={<StatusBadge value={lead.status} />} />
+            <DetailItem
+              label="Status"
+              value={
+                <StatusBadge
+                  value={
+                    quotationState === "loan_approval_due"
+                      ? "loan_approval_due"
+                      : lead.status
+                  }
+                />
+              }
+            />
             <DetailItem label="Priority" value={<StatusBadge value={lead.priority} />} />
             <DetailItem label="Enquiry Source" value={lead.lead_source ?? "-"} />
             <DetailItem label="Offered Price" value={formatCurrency(lead.offered_price)} />
@@ -361,6 +372,7 @@ export function LeadDetailPage() {
           setValues={setEditing}
           errors={formErrors}
           staff={staff}
+          showAdditionalFields
           canAddRequirementType={canCreate}
           requirementTypes={requirementTypes}
           onAddRequirementType={handleAddRequirementType}
@@ -379,6 +391,10 @@ function LeadQuotationWorkflowPill({
 }: {
   state: Exclude<QuotationWorkflowState, "none">;
 }) {
-  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  const tone = state === "accepted"
+    ? "green"
+    : state === "waiting" || state === "loan_approval_due"
+      ? "amber"
+      : "red";
   return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }

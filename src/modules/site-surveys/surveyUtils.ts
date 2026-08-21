@@ -61,11 +61,6 @@ export function leadToSurveyForm(lead: Lead): SiteSurveyFormValues {
   values.lead_id = lead.id;
   values.customer_id = lead.converted_customer_id ?? lead.customer_id ?? "";
   values.assigned_to = lead.assigned_to ?? "";
-  values.roof_type = lead.roof_type ?? "";
-  values.recommended_capacity_kw =
-    lead.estimated_load_kw === null || lead.estimated_load_kw === undefined
-      ? ""
-      : String(lead.estimated_load_kw);
   values.address_notes = formatLeadAddress(lead);
   return values;
 }

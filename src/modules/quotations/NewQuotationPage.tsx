@@ -745,26 +745,6 @@ export function NewQuotationPage() {
     setBomDraft(emptyMaterialItem());
   }
 
-  function removeBomItem(index: number) {
-    setValues((current) => {
-      const item = current.material_items[index];
-      const nextItems = item?.bom_category_key
-        ? current.material_items.map((candidate, itemIndex) =>
-            itemIndex === index
-              ? {
-                  ...emptyMaterialItem(),
-                  bom_category_key: candidate.bom_category_key,
-                  bom_category_name: candidate.bom_category_name,
-                  product_category_id: candidate.product_category_id,
-                }
-              : candidate,
-          )
-        : current.material_items.filter((_, itemIndex) => itemIndex !== index);
-
-      return { ...current, material_items: nextItems };
-    });
-  }
-
   function updateWarranty(
     index: number,
     key: keyof QuotationWarrantyFormValues,
@@ -1177,9 +1157,6 @@ export function NewQuotationPage() {
                           {categoryLabel}
                         </h3>
                       </div>
-                      <Button onClick={() => removeBomItem(index)} variant="secondary">
-                        {item.bom_category_key ? "Clear" : "Remove"}
-                      </Button>
                     </div>
 
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -1229,7 +1206,6 @@ export function NewQuotationPage() {
                     <th className="px-4 py-3">Brand</th>
                     <th className="px-4 py-3">Specifications</th>
                     <th className="px-4 py-3">Quantity</th>
-                    <th className="px-4 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
@@ -1290,14 +1266,6 @@ export function NewQuotationPage() {
                               updateBomRow(index, "quantity", event.target.value)
                             }
                           />
-                        </td>
-                        <td className="px-4 py-3">
-                          <Button
-                            onClick={() => removeBomItem(index)}
-                            variant="secondary"
-                          >
-                            {item.bom_category_key ? "Clear" : "Remove"}
-                          </Button>
                         </td>
                       </tr>
                     );
@@ -1483,16 +1451,16 @@ export function NewQuotationPage() {
 
       {activeTab === "Warranty & Payment" ? (
         <Section title="Warranty And Payment Terms">
-          <div className="space-y-3 md:col-span-2">
+          <div className="space-y-2 md:col-span-2">
             <h2 className="text-sm font-semibold text-slate-950">Warranty Table</h2>
             {values.warranty_rows.map((warranty, index) => (
               <div
-                className="grid gap-3 rounded-lg border border-stone-200 p-3 md:grid-cols-[56px_1fr_1.5fr_auto]"
+                className="grid items-start gap-2 rounded-lg border border-stone-200 p-2 md:grid-cols-[44px_1fr_1.5fr_auto]"
                 key={`${warranty.component}-${index}`}
               >
                 <div>
                   <p className="text-xs font-semibold text-slate-500">Sr.</p>
-                  <p className="mt-3 text-sm font-semibold text-slate-900">
+                  <p className="mt-2 text-sm font-semibold text-slate-900">
                     {index + 1}
                   </p>
                 </div>
@@ -1501,12 +1469,12 @@ export function NewQuotationPage() {
                   value={warranty.component}
                   onChange={(value) => updateWarranty(index, "component", value)}
                 />
-                <TextArea
+                <TextInput
                   label="Warranty"
                   value={warranty.warranty_text}
                   onChange={(value) => updateWarranty(index, "warranty_text", value)}
                 />
-                <div className="flex items-end">
+                <div className="flex items-end self-end">
                   <Button
                     onClick={() =>
                       setValues((current) => ({
@@ -1567,7 +1535,7 @@ export function NewQuotationPage() {
                   label="Amount"
                   value={moneyPreview(paymentTerm.amount)}
                 />
-                <div className="flex items-end">
+                <div className="flex items-end self-end md:-translate-y-1">
                   <Button
                     onClick={() =>
                       setValues((current) => ({
@@ -1837,7 +1805,7 @@ function ProposalPreview({
           {values.quotation_title || "Solar PV System Proposal"}
         </h2>
         <p className="mt-1 text-slate-600">
-          Ref. No.: {values.quotation_code || "Draft"} / Date:{" "}
+          Ref. No.: {values.quotation_code || "Created"} / Date:{" "}
           {formatDisplayDate(values.quotation_date)}
         </p>
       </div>

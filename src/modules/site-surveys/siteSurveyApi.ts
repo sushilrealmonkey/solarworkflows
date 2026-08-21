@@ -7,6 +7,7 @@ import type {
   SiteSurvey,
   SiteSurveyFile,
   SiteSurveyFormValues,
+  SiteSurveyFormMode,
   SiteSurveyQuotationSummary,
   SiteSurveyStatus,
   SiteSurveyWithRelations,
@@ -48,23 +49,34 @@ function nullableNumber(value: string) {
   return Number.isFinite(nextValue) ? nextValue : null;
 }
 
-function surveyPayload(values: SiteSurveyFormValues) {
-  return {
+function surveyPayload(
+  values: SiteSurveyFormValues,
+  mode: SiteSurveyFormMode = "detail",
+) {
+  const payload = {
     lead_id: nullable(values.lead_id),
     customer_id: nullable(values.customer_id),
     scheduled_date: nullable(values.scheduled_date),
     scheduled_time: nullable(values.scheduled_time),
     assigned_to: nullable(values.assigned_to),
+    address_notes: nullable(values.address_notes),
+    remarks: nullable(values.remarks),
+  };
+
+  if (mode === "schedule") {
+    return payload;
+  }
+
+  return {
+    ...payload,
     roof_type: nullable(values.roof_type),
     roof_area_sqft: nullableNumber(values.roof_area_sqft),
     shadow_free_area_sqft: nullableNumber(values.shadow_free_area_sqft),
     latitude: nullableNumber(values.latitude),
     longitude: nullableNumber(values.longitude),
-    address_notes: nullable(values.address_notes),
     recommended_capacity_kw: nullableNumber(values.recommended_capacity_kw),
     sanctioned_load_kw: nullableNumber(values.sanctioned_load_kw),
     phase_type: nullable(values.phase_type),
-    remarks: nullable(values.remarks),
   };
 }
 
@@ -169,6 +181,7 @@ export async function fetchSiteSurvey(profile: UserProfile | null, id: string) {
 export async function createSiteSurvey(
   profile: UserProfile | null,
   values: SiteSurveyFormValues,
+  mode: SiteSurveyFormMode = "detail",
 ) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -177,7 +190,7 @@ export async function createSiteSurvey(
       organization_id: requireOrganization(profile),
       created_by: profile?.id ?? null,
       survey_status: "scheduled",
-      ...surveyPayload(values),
+      ...surveyPayload(values, mode),
     })
     .select("*")
     .single();
@@ -192,11 +205,12 @@ export async function createSiteSurvey(
 export async function updateSiteSurvey(
   id: string,
   values: SiteSurveyFormValues,
+  mode: SiteSurveyFormMode = "detail",
 ) {
   const client = requireSupabase();
   const { data, error } = await client
     .from("site_surveys")
-    .update(surveyPayload(values))
+    .update(surveyPayload(values, mode))
     .eq("id", id)
     .select("*")
     .single();

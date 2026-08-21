@@ -91,7 +91,6 @@ export const navigationItems: NavigationItem[] = [
     children: [
       navigationRoute("/products-materials/products"),
       navigationRoute("/products-materials/categories"),
-      navigationRoute("/setup/bom-templates"),
     ],
   },
   navigationRoute("/settings"),

@@ -17,7 +17,6 @@ import {
 } from "./crmApi";
 import {
   emptyLeadForm,
-  emailError,
   formatDate,
   formatEnquiryCode,
   getLeadFollowupState,
@@ -209,6 +208,7 @@ export function LeadsPage() {
 
   const leadPagination = useTablePagination(filteredLeads);
   const paginatedLeads = leadPagination.pageItems;
+  const isNewAccount = !loading && !error && leads.length === 0;
 
   if (!canView) {
     return (
@@ -253,7 +253,6 @@ export function LeadsPage() {
     const nextErrors = {
       full_name: formState.values.full_name.trim() ? "" : "Full name is required.",
       phone: tenDigitPhoneError(formState.values.phone),
-      email: emailError(formState.values.email),
     };
     setFormErrors(nextErrors);
 
@@ -306,9 +305,11 @@ export function LeadsPage() {
         {canCreate ? <Button onClick={openCreateForm}>Add Enquiry</Button> : null}
       </div>
 
-      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      {!isNewAccount ? (
+        <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      ) : null}
 
-      <Toolbar className="md:grid-cols-4">
+      {!isNewAccount ? <Toolbar className="md:grid-cols-4">
         <SearchInput
           className="md:col-span-4"
           placeholder="Search name, phone, or enq code"
@@ -368,7 +369,7 @@ export function LeadsPage() {
             })),
           ]}
         />
-      </Toolbar>
+      </Toolbar> : null}
 
       {loading ? <LoadingSkeleton /> : null}
       {error ? <EmptyState title="Could not load enquiries" description={error} /> : null}
@@ -414,7 +415,7 @@ export function LeadsPage() {
                     </td>
                     <td className="px-4 py-3">{lead.phone}</td>
                     <td className="px-4 py-3">
-                      <StatusBadge value={lead.status} />
+                      <StatusBadge value={leadTableStatus(lead)} />
                     </td>
                     <td className="px-4 py-3">
                       <StatusBadge value={lead.priority} />
@@ -455,7 +456,7 @@ export function LeadsPage() {
                     </h2>
                     <p className="mt-1 text-sm text-slate-600">{lead.phone}</p>
                   </div>
-                  <StatusBadge value={lead.status} />
+                  <StatusBadge value={leadTableStatus(lead)} />
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
@@ -523,6 +524,7 @@ export function LeadFormModal({
   setValues,
   errors,
   staff,
+  showAdditionalFields = false,
   canAddRequirementType,
   requirementTypes,
   onAddRequirementType,
@@ -535,6 +537,7 @@ export function LeadFormModal({
   setValues: (values: LeadFormValues) => void;
   errors: Record<string, string>;
   staff: StaffOption[];
+  showAdditionalFields?: boolean;
   canAddRequirementType: boolean;
   requirementTypes: string[];
   onAddRequirementType: (name: string) => Promise<string>;
@@ -604,21 +607,9 @@ export function LeadFormModal({
     >
       <TextInput label="Full Name" value={values.full_name} onChange={(value) => update("full_name", value)} error={errors.full_name} required />
       <TextInput label="Phone" value={values.phone} onChange={(value) => update("phone", value)} error={errors.phone} inputMode="numeric" maxLength={10} pattern="[0-9]{10}" type="tel" validationMessage="Please enter 10 digit mobile number." required />
-      <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} error={errors.email} inputMode="email" type="email" />
-      <TextInput label="Offered Price" value={values.offered_price} onChange={(value) => update("offered_price", value)} type="number" />
-      <TextArea label="Full Address" value={values.address} onChange={(value) => update("address", value)} />
       <TextInput label="City" value={values.city} onChange={(value) => update("city", value)} />
       <SelectInput
-        label="Enquiry Source"
-        value={values.lead_source}
-        onChange={(value) => update("lead_source", value)}
-        options={[
-          { value: "", label: "Select enquiry source" },
-          ...leadSourceOptions.map((value) => ({ value, label: value })),
-        ]}
-      />
-      <SelectInput
-        label="Requirement Type"
+        label="Requirement"
         value={values.requirement_type}
         onChange={handleRequirementTypeChange}
         options={[
@@ -675,10 +666,34 @@ export function LeadFormModal({
           </div>
         </div>
       ) : null}
-      <SelectInput label="Status" value={values.status} onChange={(value) => update("status", value)} options={leadStatusOptions.map((value) => ({ value, label: labelize(value) }))} />
-      <SelectInput label="Priority" value={values.priority} onChange={(value) => update("priority", value)} options={leadPriorityOptions.map((value) => ({ value, label: labelize(value) }))} />
+      <TextInput label="Offered Price" value={values.offered_price} onChange={(value) => update("offered_price", value)} type="number" />
       <StaffSelect staff={staff} value={values.assigned_to} onChange={(value) => update("assigned_to", value)} />
-      <TextArea label="Notes" value={values.notes} onChange={(value) => update("notes", value)} />
+      {showAdditionalFields ? (
+        <>
+          <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} error={errors.email} inputMode="email" type="email" />
+          <TextInput label="Alternate Phone" value={values.alternate_phone} onChange={(value) => update("alternate_phone", value)} inputMode="numeric" type="tel" />
+          <TextArea label="Full Address" value={values.address} onChange={(value) => update("address", value)} />
+          <TextInput label="District" value={values.district} onChange={(value) => update("district", value)} />
+          <TextInput label="State" value={values.state} onChange={(value) => update("state", value)} />
+          <TextInput label="Pincode" value={values.pincode} onChange={(value) => update("pincode", value)} inputMode="numeric" />
+          <SelectInput
+            label="Enquiry Source"
+            value={values.lead_source}
+            onChange={(value) => update("lead_source", value)}
+            options={[
+              { value: "", label: "Select enquiry source" },
+              ...leadSourceOptions.map((value) => ({ value, label: value })),
+            ]}
+          />
+          <TextInput label="Estimated Load (kW)" value={values.estimated_load_kw} onChange={(value) => update("estimated_load_kw", value)} type="number" />
+          <TextInput label="Electricity Bill Amount" value={values.electricity_bill_amount} onChange={(value) => update("electricity_bill_amount", value)} type="number" />
+          <TextInput label="Property Type" value={values.property_type} onChange={(value) => update("property_type", value)} />
+          <TextInput label="Roof Type" value={values.roof_type} onChange={(value) => update("roof_type", value)} />
+          <SelectInput label="Status" value={values.status} onChange={(value) => update("status", value)} options={leadStatusOptions.map((value) => ({ value, label: labelize(value) }))} />
+          <SelectInput label="Priority" value={values.priority} onChange={(value) => update("priority", value)} options={leadPriorityOptions.map((value) => ({ value, label: labelize(value) }))} />
+          <TextArea label="Notes" value={values.notes} onChange={(value) => update("notes", value)} />
+        </>
+      ) : null}
     </Modal>
   );
 }
@@ -756,11 +771,22 @@ function LeadNextStepActions({
   );
 }
 
+function leadTableStatus(lead: Lead) {
+  return quotationWorkflowState(lead.action_state?.quotations) ===
+    "loan_approval_due"
+    ? "loan_approval_due"
+    : lead.status;
+}
+
 function LeadQuotationWorkflowPill({
   state,
 }: {
   state: Exclude<QuotationWorkflowState, "none">;
 }) {
-  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  const tone = state === "accepted"
+    ? "green"
+    : state === "waiting" || state === "loan_approval_due"
+      ? "amber"
+      : "red";
   return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }

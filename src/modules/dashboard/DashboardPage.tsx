@@ -221,7 +221,7 @@ function EpcAdminDashboard() {
           loading={loading}
         />
         <CommandMetricCard
-          label="Quotations Sent"
+          label="Quotations Created"
           value={adminData.sentQuotations.length}
           detail={`${compactCurrencyFormatter.format(adminData.quotedValue)} quoted`}
           trend={`${adminData.awaitingQuotations.length} awaiting response`}
@@ -389,15 +389,19 @@ function buildEpcDashboardModel(
   const newLeadsThisMonth = leads.filter((lead) =>
     isSameMonth(lead.created_at, today),
   ).length;
-  const sentQuotations = quotations.filter((quotation) => quotation.status === "sent");
+  const sentQuotations = quotations.filter(
+    (quotation) => quotation.status !== "cancelled",
+  );
   const acceptedQuotations = quotations.filter(
-    (quotation) => quotation.status === "accepted",
+    (quotation) =>
+      quotation.status === "accepted" || quotation.status === "loan_approved",
   );
   const rejectedQuotations = quotations.filter((quotation) =>
-    ["rejected", "expired"].includes(quotation.status ?? ""),
+    quotation.status === "cancelled",
   );
   const awaitingQuotations = sentQuotations.filter(
-    (quotation) => !quotation.accepted_at && !quotation.rejected_at,
+    (quotation) =>
+      quotation.status === "created" || quotation.status === "loan_approval_due",
   );
   const decisionQuotationCount =
     sentQuotations.length + acceptedQuotations.length + rejectedQuotations.length;
@@ -456,7 +460,7 @@ function buildEpcDashboardModel(
       tone: "violet",
     },
     {
-      label: "Quotation Sent",
+      label: "Quotation Created",
       count: sentQuotations.length,
       value: sumQuotationValue(sentQuotations),
       tone: "orange",
@@ -1174,7 +1178,7 @@ function QuotationInsightsPanel({
           />
           <SmallStatList
             rows={[
-              ["Total Sent", data.sentQuotations.length],
+              ["Total Created", data.sentQuotations.length],
               ["Accepted Value", currencyFormatter.format(sumQuotationValue(data.acceptedQuotations))],
               ["Awaiting Response", data.awaitingQuotations.length],
               ["Acceptance Rate", `${data.quoteAcceptanceRate}%`],
@@ -1880,7 +1884,11 @@ function buildMonthlyRows(
       label,
       quotationValue: sumQuotationValue(monthlyQuotations),
       acceptedQuotationValue: sumQuotationValue(
-        monthlyQuotations.filter((quotation) => quotation.status === "accepted"),
+        monthlyQuotations.filter(
+          (quotation) =>
+            quotation.status === "accepted" ||
+            quotation.status === "loan_approved",
+        ),
       ),
       projectValue: sumQuotationValue(
         projects

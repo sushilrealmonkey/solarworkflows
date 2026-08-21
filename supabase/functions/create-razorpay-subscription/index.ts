@@ -266,6 +266,16 @@ Deno.serve(async (request) => {
     if (typeof razorpaySubscription.id !== "string") {
       throw new Error("Razorpay did not return a subscription id");
     }
+    const providerOfferId = typeof razorpaySubscription.offer_id === "string"
+      ? razorpaySubscription.offer_id
+      : null;
+    if (offerId && providerOfferId !== offerId) {
+      await cancelCreatedSubscription(razorpaySubscription.id);
+      throw new CheckoutError(
+        "Razorpay created checkout without applying the discount offer. Verify the offer is enabled and applicable to this plan.",
+        502,
+      );
+    }
 
     const subscriptionPatch = currentSubscription?.status === "trialing"
       ? {
@@ -287,7 +297,7 @@ Deno.serve(async (request) => {
       keyId: requiredEnv("RAZORPAY_KEY_ID"),
       subscriptionId: razorpaySubscription.id,
       planName: displayPlanName(planKey),
-      discountApplied: Boolean(offerId),
+      discountApplied: Boolean(providerOfferId),
       customerName: profile?.full_name ?? null,
       customerEmail: profile?.email ?? authData.user.email ?? null,
       customerPhone: profile?.phone ?? authData.user.phone ?? null,
@@ -374,9 +384,32 @@ async function razorpayRequest(
   });
   const payload = await response.json();
   if (!response.ok) {
-    throw new Error(payload?.error?.description ?? "Razorpay rejected the request");
+    throw new CheckoutError(
+      razorpayErrorMessage(payload?.error?.description),
+      502,
+    );
   }
   return payload as Record<string, unknown>;
+}
+
+async function cancelCreatedSubscription(subscriptionId: string) {
+  try {
+    await razorpayRequest(`/v1/subscriptions/${subscriptionId}/cancel`, {
+      cancel_at_cycle_end: false,
+    });
+  } catch (error) {
+    console.error("Unable to cancel non-discounted Razorpay checkout", safeMessage(error));
+  }
+}
+
+function razorpayErrorMessage(description: unknown) {
+  const message = typeof description === "string" && description.trim()
+    ? description.trim()
+    : "Razorpay rejected the request";
+  if (message.toLowerCase().includes("discounted amount less than minimum")) {
+    return "Razorpay cannot apply a full subscription discount because the payable amount must stay above Rs.1. Update the offer to leave at least Rs.1 payable, then retry checkout.";
+  }
+  return message;
 }
 
 function requiredEnv(name: string) {

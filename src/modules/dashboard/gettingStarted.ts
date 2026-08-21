@@ -1,8 +1,5 @@
-import type { OrganizationSettings, SettingsStaff } from "../settings/types";
-import {
-  openCreateEnquiryState,
-  summarizeAdditionalTeam,
-} from "../onboarding/onboardingReady.ts";
+import type { OrganizationSettings } from "../settings/types";
+import { openCreateEnquiryState } from "../onboarding/onboardingReady.ts";
 
 export const gettingStartedDestinations = {
   company: "/settings#company-profile",
@@ -36,8 +33,7 @@ export type GettingStartedState = {
 };
 
 type TeamActivationData = {
-  setupOwnerProfileId: string | null;
-  staff: readonly Pick<SettingsStaff, "id" | "status">[];
+  additionalActiveOrInvitedCount: number;
 };
 
 type GettingStartedDependencies = {
@@ -127,12 +123,9 @@ export function isCompanySetupComplete(
 }
 
 export function hasAdditionalActiveOrInvitedTeamMember({
-  setupOwnerProfileId,
-  staff,
+  additionalActiveOrInvitedCount,
 }: TeamActivationData) {
-  if (!setupOwnerProfileId) return false;
-
-  return summarizeAdditionalTeam(staff, setupOwnerProfileId).totalCount > 0;
+  return additionalActiveOrInvitedCount > 0;
 }
 
 export function shouldShowGettingStarted(state: GettingStartedState) {
@@ -140,7 +133,6 @@ export function shouldShowGettingStarted(state: GettingStartedState) {
 }
 
 function teamStatus(data: TeamActivationData): GettingStartedTaskStatus {
-  if (!data.setupOwnerProfileId) return "unknown";
   return statusFromCompletion(hasAdditionalActiveOrInvitedTeamMember(data));
 }
 

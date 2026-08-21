@@ -17,7 +17,7 @@ insert into quotations (
 )
 values (
   gen_random_uuid(),
-  'sent',
+  'created',
   null,
   'generated',
   100,
@@ -42,7 +42,7 @@ begin
     raise exception 'Expected the non-draft commercial edit guard to reject the update';
   exception
     when check_violation then
-      if sqlerrm <> 'Commercial terms are locked after draft. Create a revision instead.' then
+      if sqlerrm <> 'Commercial terms are locked after creation. Create a revision instead.' then
         raise;
       end if;
   end;

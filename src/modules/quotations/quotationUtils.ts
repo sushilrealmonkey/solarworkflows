@@ -21,12 +21,11 @@ import type {
 } from "./types";
 
 export const quotationStatusOptions: QuotationStatus[] = [
-  "draft",
-  "sent",
+  "created",
   "accepted",
-  "rejected",
-  "expired",
   "cancelled",
+  "loan_approval_due",
+  "loan_approved",
 ];
 
 export const quotationSystemTypeOptions = [
@@ -1317,19 +1316,25 @@ export function getQuotationContact(quotation: QuotationWithRelations) {
 }
 
 export function quotationStatusTone(value: string | null | undefined) {
-  if (value === "accepted") {
+  if (value === "accepted" || value === "loan_approved") {
     return "green" as const;
   }
 
-  if (value === "rejected" || value === "cancelled" || value === "expired") {
+  if (value === "cancelled") {
     return "red" as const;
   }
 
-  if (value === "sent") {
-    return "blue" as const;
+  if (value === "loan_approval_due") {
+    return "amber" as const;
   }
 
   return "neutral" as const;
+}
+
+export function isQuotationProjectStatus(
+  value: string | null | undefined,
+) {
+  return value === "accepted" || value === "loan_approved";
 }
 
 function toDateInput(date: Date) {

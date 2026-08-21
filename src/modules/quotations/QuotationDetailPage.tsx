@@ -40,6 +40,7 @@ import {
   formatMoneyWithPaise,
   getQuotationContact,
   hasTurnkeyGstAmount,
+  isQuotationProjectStatus,
   quotationStatusOptions,
   quotationValidUntilFromDateInput,
   quotationSnapshotFormValues,
@@ -163,8 +164,8 @@ export function QuotationDetailPage() {
       setUpdatingStatus(true);
       await updateQuotationStatus(quotation.id, statusTarget);
       showToast(
-        statusTarget === "accepted"
-          ? "Quotation accepted. Customer and project created."
+        statusTarget === "accepted" || statusTarget === "loan_approved"
+          ? "Quotation approved. Customer and project created."
           : "Quotation status updated.",
         "success",
       );
@@ -407,7 +408,7 @@ export function QuotationDetailPage() {
                     contact.phone,
                   ]}
                   action={
-                    canUpdate && quotation.status === "draft" && !quotation.archived_at ? (
+                    canUpdate && quotation.status === "created" && !quotation.archived_at ? (
                       <button
                         aria-label="Edit quotation"
                         className="inline-flex min-h-10 w-10 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -444,14 +445,14 @@ export function QuotationDetailPage() {
                   )}
                   {workflowState !== "none" && workflowState !== "accepted" ? (
                     <QuotationWorkflowPill state={workflowState} />
-                  ) : openProjectId && canViewProjects && quotation.status === "accepted" ? (
+                  ) : openProjectId && canViewProjects && isQuotationProjectStatus(quotation.status) ? (
                     <Link
                       className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
                       to={`/projects/${openProjectId}`}
                     >
                       Open Project
                     </Link>
-                  ) : quotation.status === "accepted" ? (
+                  ) : isQuotationProjectStatus(quotation.status) ? (
                     <PlaceholderAction>Open Project</PlaceholderAction>
                   ) : !relatedSiteSurveyId && canCreateSurvey && quotation.lead_id ? (
                     <Link
@@ -471,7 +472,7 @@ export function QuotationDetailPage() {
                     </p>
                     <QuotationStatusSelect
                       disabled={updatingStatus}
-                      value={quotation.status ?? "draft"}
+                      value={quotation.status ?? "created"}
                       onChange={setStatusTarget}
                     />
                   </div>
@@ -911,9 +912,9 @@ export function QuotationDetailPage() {
           title="Update quotation status?"
           description={`Set ${quotation.quotation_code ?? "this quotation"} to ${labelize(statusTarget)}.`}
           confirming={updatingStatus}
-          confirmLabel={statusTarget === "rejected" ? "Reject" : "Update Status"}
+          confirmLabel={statusTarget === "cancelled" ? "Cancel" : "Update Status"}
           confirmingLabel="Updating..."
-          confirmVariant={statusTarget === "rejected" ? "danger" : "primary"}
+          confirmVariant={statusTarget === "cancelled" ? "danger" : "primary"}
           onCancel={() => setStatusTarget(null)}
           onConfirm={confirmStatusAction}
         />
@@ -1059,16 +1060,8 @@ function PencilIcon() {
 }
 
 function quotationStatusUpdatedAt(quotation: QuotationWithRelations) {
-  if (quotation.status === "accepted") {
+  if (isQuotationProjectStatus(quotation.status)) {
     return quotation.accepted_at ?? quotation.updated_at;
-  }
-
-  if (quotation.status === "rejected") {
-    return quotation.rejected_at ?? quotation.updated_at;
-  }
-
-  if (quotation.status === "sent") {
-    return quotation.sent_at ?? quotation.updated_at;
   }
 
   return quotation.updated_at ?? quotation.created_at;

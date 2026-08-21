@@ -15,11 +15,7 @@ function dependencies(overrides = {}) {
     loadCompany: async () => ({ company_name: "Bizlee Solar" }),
     loadProducts: async () => [{ id: "product-1" }],
     loadTeam: async () => ({
-      setupOwnerProfileId: "owner-1",
-      staff: [
-        { id: "owner-1", status: "active" },
-        { id: "staff-1", status: "active" },
-      ],
+      additionalActiveOrInvitedCount: 1,
     }),
     loadEnquiries: async () => [{ id: "enquiry-1" }],
     ...overrides,
@@ -60,24 +56,16 @@ test("product completion derives from any Product Master record", async () => {
   assert.equal(complete.tasks[1].status, "complete");
 });
 
-test("team completion excludes the setup owner and inactive staff", () => {
+test("team completion uses the tenant-scoped additional-member count", () => {
   assert.equal(
     hasAdditionalActiveOrInvitedTeamMember({
-      setupOwnerProfileId: "owner-1",
-      staff: [
-        { id: "owner-1", status: "active" },
-        { id: "inactive-1", status: "inactive" },
-      ],
+      additionalActiveOrInvitedCount: 0,
     }),
     false,
   );
   assert.equal(
     hasAdditionalActiveOrInvitedTeamMember({
-      setupOwnerProfileId: "owner-1",
-      staff: [
-        { id: "owner-1", status: "active" },
-        { id: "invite-1", status: "invited" },
-      ],
+      additionalActiveOrInvitedCount: 1,
     }),
     true,
   );
@@ -90,19 +78,11 @@ test("enquiry completion derives from existing enquiries", async () => {
   assert.equal(state.tasks[3].status, "incomplete");
 });
 
-test("completed onboarding cannot override skipped products, team, or enquiry", async () => {
-  const completedOnboarding = {
-    status: "completed",
-    current_step: "ready",
-    setup_owner_profile_id: "owner-1",
-  };
+test("skipped products, team, or enquiry remain incomplete", async () => {
   const state = await loadGettingStartedState(
     dependencies({
       loadProducts: async () => [],
-      loadTeam: async () => ({
-        setupOwnerProfileId: completedOnboarding.setup_owner_profile_id,
-        staff: [{ id: "owner-1", status: "active" }],
-      }),
+      loadTeam: async () => ({ additionalActiveOrInvitedCount: 0 }),
       loadEnquiries: async () => [],
     }),
   );
@@ -144,10 +124,7 @@ test("Welcome defer reaches a usable dashboard with the activation checklist", a
   const state = await loadGettingStartedState(
     dependencies({
       loadProducts: async () => [],
-      loadTeam: async () => ({
-        setupOwnerProfileId: "owner-1",
-        staff: [{ id: "owner-1", status: "active" }],
-      }),
+      loadTeam: async () => ({ additionalActiveOrInvitedCount: 0 }),
       loadEnquiries: async () => [],
     }),
   );
@@ -184,4 +161,13 @@ test("four confirmed tasks remove the activation card", async () => {
   assert.equal(state.completedCount, 4);
   assert.equal(state.hasUnknown, false);
   assert.equal(shouldShowGettingStarted(state), false);
+});
+
+test("a confirmed team-member count completes the team task", () => {
+  assert.equal(
+    hasAdditionalActiveOrInvitedTeamMember({
+      additionalActiveOrInvitedCount: 1,
+    }),
+    true,
+  );
 });

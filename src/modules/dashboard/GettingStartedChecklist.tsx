@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { UserProfile } from "../../app/AuthProvider";
-import { fetchDashboardRecentLeads } from "./dashboardApi";
-import { fetchCurrentCompanyOnboardingProgress } from "../onboarding/onboardingApi";
-import { fetchProducts } from "../product-master/productMasterApi";
 import {
-  fetchOrganizationSettings,
-  fetchSettingsStaff,
-} from "../settings/settingsApi";
+  fetchDashboardRecentLeads,
+  fetchDashboardTeamMemberCount,
+} from "./dashboardApi";
+import { fetchProducts } from "../product-master/productMasterApi";
+import { fetchOrganizationSettings } from "../settings/settingsApi";
 import {
   loadGettingStartedState,
   openGettingStartedEnquiryState,
@@ -29,14 +28,8 @@ export function GettingStartedChecklist({
       loadCompany: fetchOrganizationSettings,
       loadProducts: () => fetchProducts(profile, "all"),
       loadTeam: async () => {
-        const [staff, progress] = await Promise.all([
-          fetchSettingsStaff(),
-          fetchCurrentCompanyOnboardingProgress(),
-        ]);
-
         return {
-          staff,
-          setupOwnerProfileId: progress?.setup_owner_profile_id ?? null,
+          additionalActiveOrInvitedCount: await fetchDashboardTeamMemberCount(),
         };
       },
       loadEnquiries: () => fetchDashboardRecentLeads(profile, 1),

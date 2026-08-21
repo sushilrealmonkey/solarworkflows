@@ -110,6 +110,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
     b2bWriteAllowed && hasPermission(profile, permissions, "customers", "update");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateB2BSale = hasPermission(profile, permissions, "b2b_sales", "create");
+  const canCreateEnquiry = hasPermission(profile, permissions, "leads", "create");
   const canCreateDirectly = segment === "b2b_direct" && canCreate;
 
   async function loadData() {
@@ -180,6 +181,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
 
   const customerPagination = useTablePagination(filteredCustomers);
   const paginatedCustomers = customerPagination.pageItems;
+  const isNewAccount = !loading && !error && customers.length === 0;
 
   if (!canView) {
     return (
@@ -320,11 +322,16 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
           }
         />
         {canCreateDirectly ? <Button onClick={openCreateForm}>Add Business Customer</Button> : null}
+        {segment === "project_based" && isNewAccount && canCreateEnquiry ? (
+          <Button onClick={() => navigate("/leads?new=1")}>Add Enquiry</Button>
+        ) : null}
       </div>
 
-      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      {!isNewAccount ? (
+        <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      ) : null}
 
-      <Toolbar>
+      {!isNewAccount ? <Toolbar>
         <SearchInput
           placeholder="Search name, business, phone, GST, or code"
           value={filters.search}
@@ -356,7 +363,7 @@ export function CustomersPage({ segment }: { segment: CustomerSegment }) {
             })),
           ]}
         />
-      </Toolbar>
+      </Toolbar> : null}
 
       {loading ? <LoadingSkeleton /> : null}
       {error ? (

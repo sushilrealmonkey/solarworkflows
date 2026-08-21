@@ -6,11 +6,10 @@ import type {
 import type { BomCalculationType } from "../bom-templates/types";
 
 export type QuotationStatus =
-  | "draft"
-  | "sent"
+  | "created"
+  | "loan_approval_due"
+  | "loan_approved"
   | "accepted"
-  | "rejected"
-  | "expired"
   | "cancelled";
 
 export type QuotationBomStatus =

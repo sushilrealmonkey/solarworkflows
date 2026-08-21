@@ -61,6 +61,7 @@ import {
 } from "./surveyUtils";
 import type {
   SiteSurveyFormValues,
+  SiteSurveyFormMode,
   SiteSurveyStatus,
   SiteSurveyWithRelations,
   SurveyLeadSummary,
@@ -132,6 +133,7 @@ export function SiteSurveysPage() {
 
   const canView = hasPermission(profile, permissions, "site_surveys", "view");
   const canCreate = hasPermission(profile, permissions, "site_surveys", "create");
+  const canCreateEnquiry = hasPermission(profile, permissions, "leads", "create");
   const canUpdate = hasPermission(profile, permissions, "site_surveys", "update");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateQuotation = hasPermission(
@@ -250,6 +252,7 @@ export function SiteSurveysPage() {
 
   const surveyPagination = useTablePagination(filteredSurveys);
   const paginatedSurveys = surveyPagination.pageItems;
+  const isNewAccount = !loading && !error && surveys.length === 0;
 
   if (!canView) {
     return (
@@ -301,10 +304,10 @@ export function SiteSurveysPage() {
     try {
       setSaving(true);
       if (formState.mode === "create") {
-        await createSiteSurvey(profile, formState.values);
+        await createSiteSurvey(profile, formState.values, "schedule");
         showToast("Site survey scheduled.", "success");
       } else if (formState.survey) {
-        await updateSiteSurvey(formState.survey.id, formState.values);
+        await updateSiteSurvey(formState.survey.id, formState.values, "schedule");
         showToast("Site survey updated.", "success");
       }
       setFormState(null);
@@ -351,11 +354,16 @@ export function SiteSurveysPage() {
           title="Site Surveys"
           description="Review inspections created from enquiries and keep the survey handoff ready for future quotations."
         />
+        {isNewAccount && canCreateEnquiry ? (
+          <Button onClick={() => navigate("/leads?new=1")}>Add Enquiry</Button>
+        ) : null}
       </div>
 
-      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      {!isNewAccount ? (
+        <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      ) : null}
 
-      <Toolbar className="md:grid-cols-3">
+      {!isNewAccount ? <Toolbar className="md:grid-cols-3">
         <SearchInput
           className="md:col-span-3"
           placeholder="Search survey, name, or phone"
@@ -396,7 +404,7 @@ export function SiteSurveysPage() {
             setFilters((current) => ({ ...current, scheduledDate }))
           }
         />
-      </Toolbar>
+      </Toolbar> : null}
 
       {loading ? <LoadingSkeleton /> : null}
       {error ? (
@@ -572,6 +580,7 @@ export function SiteSurveysPage() {
             formState.mode === "create" ? "Schedule Site Survey" : "Edit Site Survey"
           }
           values={formState.values}
+          formMode="schedule"
           setValues={(values) =>
             setFormState((current) => (current ? { ...current, values } : current))
           }
@@ -602,6 +611,7 @@ export function SiteSurveysPage() {
 export function SiteSurveyFormModal({
   title,
   values,
+  formMode,
   setValues,
   errors,
   lookups,
@@ -611,6 +621,7 @@ export function SiteSurveyFormModal({
 }: {
   title: string;
   values: SiteSurveyFormValues;
+  formMode: SiteSurveyFormMode;
   setValues: (values: SiteSurveyFormValues) => void;
   errors: Record<string, string>;
   lookups: {
@@ -621,6 +632,7 @@ export function SiteSurveyFormModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
 }) {
+  const isScheduleForm = formMode === "schedule";
   const update = (key: keyof SiteSurveyFormValues, value: string) =>
     setValues({ ...values, [key]: value });
   const roofTypeOptions = [
@@ -684,6 +696,7 @@ export function SiteSurveyFormModal({
         label="Enquiry"
         value={values.lead_id}
         onChange={handleLeadChange}
+        disabled={isScheduleForm}
         options={[
           { value: "", label: "No enquiry linked" },
           ...lookups.leads.map((lead) => ({
@@ -711,64 +724,81 @@ export function SiteSurveyFormModal({
         value={values.assigned_to}
         onChange={(value) => update("assigned_to", value)}
       />
-      <SelectInput
-        label="Roof Type"
-        value={values.roof_type}
-        onChange={(value) => update("roof_type", value)}
-        options={roofTypeOptions}
-      />
-      <TextInput
-        label="Roof Area (sqft)"
-        value={values.roof_area_sqft}
-        onChange={(value) => update("roof_area_sqft", value)}
-        type="number"
-      />
-      <TextInput
-        label="Shadow Free Area (sqft)"
-        value={values.shadow_free_area_sqft}
-        onChange={(value) => update("shadow_free_area_sqft", value)}
-        type="number"
-      />
-      <TextInput
-        label="Latitude"
-        value={values.latitude}
-        onChange={(value) => update("latitude", value)}
-        type="number"
-      />
-      <TextInput
-        label="Longitude"
-        value={values.longitude}
-        onChange={(value) => update("longitude", value)}
-        type="number"
-      />
-      <TextInput
-        label="Recommended Capacity (kW)"
-        value={values.recommended_capacity_kw}
-        onChange={(value) => update("recommended_capacity_kw", value)}
-        type="number"
-      />
-      <TextInput
-        label="Sanctioned Load (kW)"
-        value={values.sanctioned_load_kw}
-        onChange={(value) => update("sanctioned_load_kw", value)}
-        type="number"
-      />
-      <SelectInput
-        label="Phase Type"
-        value={values.phase_type}
-        onChange={(value) => update("phase_type", value)}
-        options={phaseTypeOptions}
-      />
-      <TextArea
-        label="Address Notes"
-        value={values.address_notes}
-        onChange={(value) => update("address_notes", value)}
-      />
-      <TextArea
-        label="Remarks"
-        value={values.remarks}
-        onChange={(value) => update("remarks", value)}
-      />
+      {isScheduleForm ? (
+        <>
+          <TextArea
+            label="Address"
+            value={values.address_notes}
+            onChange={(value) => update("address_notes", value)}
+          />
+          <TextArea
+            label="Remarks"
+            value={values.remarks}
+            onChange={(value) => update("remarks", value)}
+          />
+        </>
+      ) : (
+        <>
+          <SelectInput
+            label="Roof Type"
+            value={values.roof_type}
+            onChange={(value) => update("roof_type", value)}
+            options={roofTypeOptions}
+          />
+          <TextInput
+            label="Roof Area (sqft)"
+            value={values.roof_area_sqft}
+            onChange={(value) => update("roof_area_sqft", value)}
+            type="number"
+          />
+          <TextInput
+            label="Shadow Free Area (sqft)"
+            value={values.shadow_free_area_sqft}
+            onChange={(value) => update("shadow_free_area_sqft", value)}
+            type="number"
+          />
+          <TextInput
+            label="Latitude"
+            value={values.latitude}
+            onChange={(value) => update("latitude", value)}
+            type="number"
+          />
+          <TextInput
+            label="Longitude"
+            value={values.longitude}
+            onChange={(value) => update("longitude", value)}
+            type="number"
+          />
+          <TextInput
+            label="Recommended Capacity (kW)"
+            value={values.recommended_capacity_kw}
+            onChange={(value) => update("recommended_capacity_kw", value)}
+            type="number"
+          />
+          <TextInput
+            label="Sanctioned Load (kW)"
+            value={values.sanctioned_load_kw}
+            onChange={(value) => update("sanctioned_load_kw", value)}
+            type="number"
+          />
+          <SelectInput
+            label="Phase Type"
+            value={values.phase_type}
+            onChange={(value) => update("phase_type", value)}
+            options={phaseTypeOptions}
+          />
+          <TextArea
+            label="Address Notes"
+            value={values.address_notes}
+            onChange={(value) => update("address_notes", value)}
+          />
+          <TextArea
+            label="Remarks"
+            value={values.remarks}
+            onChange={(value) => update("remarks", value)}
+          />
+        </>
+      )}
     </Modal>
   );
 }
@@ -828,7 +858,11 @@ export function SiteSurveyQuotationApprovalPill({
 }: {
   state?: Exclude<QuotationWorkflowState, "none">;
 }) {
-  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  const tone = state === "accepted"
+    ? "green"
+    : state === "waiting" || state === "loan_approval_due"
+      ? "amber"
+      : "red";
   return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }
 

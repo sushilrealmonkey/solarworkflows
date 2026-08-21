@@ -1016,7 +1016,7 @@ export async function createQuotation(
   const data = await insertQuotationRecord({
     organization_id: requireOrganization(profile),
     created_by: profile?.id ?? null,
-    status: "draft",
+    status: "created",
     ...quotationPayload(normalizedValues),
   });
 
@@ -1259,6 +1259,23 @@ export async function acceptQuotation(quotationId: string) {
   return data as Quotation;
 }
 
+export async function approveQuotation(
+  quotationId: string,
+  status: "loan_approved",
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("approve_quotation", {
+    target_quotation_id: quotationId,
+    approval_status: status,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as Quotation;
+}
+
 export async function rejectQuotation(quotationId: string) {
   const client = requireSupabase();
   const { data, error } = await client.rpc("reject_quotation", {
@@ -1276,16 +1293,12 @@ export async function updateQuotationStatus(
   quotationId: string,
   status: QuotationStatus,
 ) {
-  if (status === "sent") {
-    return markQuotationSent(quotationId);
-  }
-
   if (status === "accepted") {
     return acceptQuotation(quotationId);
   }
 
-  if (status === "rejected") {
-    return rejectQuotation(quotationId);
+  if (status === "loan_approved") {
+    return approveQuotation(quotationId, status);
   }
 
   const client = requireSupabase();

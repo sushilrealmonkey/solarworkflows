@@ -34,6 +34,7 @@ import {
   formatKw,
   formatMoney,
   getQuotationContact,
+  isQuotationProjectStatus,
   quotationStatusOptions,
   quotationStatusTone,
 } from "./quotationUtils";
@@ -65,6 +66,7 @@ export function QuotationsPage() {
 
   const canView = hasPermission(profile, permissions, "quotations", "view");
   const canCreate = hasPermission(profile, permissions, "quotations", "create");
+  const canCreateEnquiry = hasPermission(profile, permissions, "leads", "create");
   const canUpdate = hasPermission(profile, permissions, "quotations", "update");
   const canViewProjects = hasPermission(profile, permissions, "projects", "view");
   const canCreateSurvey = hasPermission(
@@ -168,6 +170,7 @@ export function QuotationsPage() {
 
   const quotationPagination = useTablePagination(filteredQuotations);
   const paginatedQuotations = quotationPagination.pageItems;
+  const isNewAccount = !loading && !error && quotations.length === 0;
 
   if (!canView) {
     return (
@@ -203,11 +206,16 @@ export function QuotationsPage() {
           title="Quotations"
           description="Review itemized solar proposals created from enquiries and completed site survey data."
         />
+        {isNewAccount && canCreateEnquiry ? (
+          <Button onClick={() => navigate("/leads?new=1")}>Add Enquiry</Button>
+        ) : null}
       </div>
 
-      <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      {!isNewAccount ? (
+        <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
+      ) : null}
 
-      <Toolbar className="md:grid-cols-3">
+      {!isNewAccount ? <Toolbar className="md:grid-cols-3">
         <SearchInput
           className="md:col-span-3"
           placeholder="Search quote, customer, or phone"
@@ -248,7 +256,7 @@ export function QuotationsPage() {
             })),
           ]}
         />
-      </Toolbar>
+      </Toolbar> : null}
 
       {loading ? <LoadingSkeleton /> : null}
       {error ? <EmptyState title="Could not load quotations" description={error} /> : null}
@@ -452,7 +460,7 @@ function QuotationNextStepActions({
     >
       {workflowState !== "none" && workflowState !== "accepted" ? (
         <QuotationWorkflowPill state={workflowState} />
-      ) : relatedSiteSurveyId && quotation.status === "accepted" && canViewProjects ? (
+      ) : relatedSiteSurveyId && isQuotationProjectStatus(quotation.status) && canViewProjects ? (
         <Link className={className} to={projectPath}>
           Go to Project
         </Link>
@@ -481,7 +489,11 @@ export function QuotationWorkflowPill({
 }: {
   state: Exclude<QuotationWorkflowState, "none">;
 }) {
-  const tone = state === "accepted" ? "green" : state === "waiting" ? "amber" : "red";
+  const tone = state === "accepted"
+    ? "green"
+    : state === "waiting" || state === "loan_approval_due"
+      ? "amber"
+      : "red";
   return <Badge tone={tone}>{quotationWorkflowPillLabel(state)}</Badge>;
 }
 
