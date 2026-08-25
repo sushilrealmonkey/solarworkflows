@@ -54,6 +54,8 @@ import { ProformaInvoicesPage } from "../modules/proforma-invoices/ProformaInvoi
 import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/ProformaInvoiceDetailPage";
 import { CompaniesPage } from "../modules/companies/CompaniesPage";
 import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
+import { DemoBookingsPage } from "../modules/demo-bookings/DemoBookingsPage";
+import { DemoBookingDetailPage } from "../modules/demo-bookings/DemoBookingDetailPage";
 import { WhatsAppMessagingPage } from "../modules/whatsapp-messaging/WhatsAppMessagingPage";
 import { PlatformStaffPage } from "../modules/platform-staff/PlatformStaffPage";
 import {
@@ -109,6 +111,8 @@ export default function App() {
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/companies" element={<CompaniesPage />} />
           <Route path="/companies/:id" element={<CompanyDetailPage />} />
+          <Route path="/demo-bookings" element={<DemoBookingsPage />} />
+          <Route path="/demo-bookings/:id" element={<DemoBookingDetailPage />} />
           <Route path="/platform-staff" element={<PlatformStaffPage />} />
           <Route
             path="/whatsapp-messaging"
@@ -207,6 +211,7 @@ export default function App() {
                   "/dashboard",
                   "/companies",
                   "/companies/:id",
+                  "/demo-bookings",
                   "/whatsapp-messaging",
                   "/customers/project-based",
                   "/customers/b2b-direct",

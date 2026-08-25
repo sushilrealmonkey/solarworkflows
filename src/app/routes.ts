@@ -46,6 +46,13 @@ export const routes: AppRoute[] = [
     superAdminOnly: true,
   },
   {
+    path: "/demo-bookings",
+    label: "Demo Bookings",
+    moduleKey: "demo_bookings",
+    description: "Review demo booking submissions and their scheduling details.",
+    superAdminOnly: true,
+  },
+  {
     path: "/whatsapp-messaging",
     label: "WhatsApp Outreach",
     moduleKey: "whatsapp_messaging",
