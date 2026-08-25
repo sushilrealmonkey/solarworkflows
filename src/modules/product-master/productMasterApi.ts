@@ -158,6 +158,24 @@ export async function fetchProductCategories(profile: UserProfile | null, archiv
   );
 }
 
+export async function fetchProductCategoriesForOrganization(
+  organizationId: string,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("product_categories")
+    .select("*")
+    .eq("tenant_id", organizationId)
+    .order("display_order", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as ProductCategory[];
+}
+
 export async function createProductCategory(
   profile: UserProfile | null,
   values: ProductCategoryFormValues,
@@ -274,6 +292,27 @@ export async function createProduct(
     .from("products")
     .insert({
       tenant_id: requireTenant(profile),
+      ...productPayload(values),
+    })
+    .select(productSelect)
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return redactLegacyProductPricing(data as unknown as Product);
+}
+
+export async function createProductForOrganization(
+  organizationId: string,
+  values: ProductFormValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("products")
+    .insert({
+      tenant_id: organizationId,
       ...productPayload(values),
     })
     .select(productSelect)

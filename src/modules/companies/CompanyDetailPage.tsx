@@ -8,6 +8,7 @@ import {
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
+import { EpcProductImportPanel } from "./EpcProductImportPanel";
 import {
   Badge,
   Button,
@@ -68,6 +69,7 @@ export function CompanyDetailPage() {
   const [setupLinkNotice, setSetupLinkNotice] =
     useState<SetupLinkNotice | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [productImportOpen, setProductImportOpen] = useState(false);
 
   const loadCompany = useCallback(async () => {
     if (!id) {
@@ -392,6 +394,31 @@ export function CompanyDetailPage() {
       </DetailSection>
 
       <TenantUsersSection users={company.tenant_users ?? []} />
+
+      <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950">
+              Product Catalog
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+              Add this EPC workspace’s products in bulk from a CSV or Excel file.
+              The import is validated against this workspace’s product categories.
+            </p>
+          </div>
+          {!productImportOpen ? (
+            <Button onClick={() => setProductImportOpen(true)}>
+              Upload products
+            </Button>
+          ) : null}
+        </div>
+        {productImportOpen ? (
+          <EpcProductImportPanel
+            onClose={() => setProductImportOpen(false)}
+            organizationId={company.id}
+          />
+        ) : null}
+      </section>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <DetailSection title="Activity Snapshot">
