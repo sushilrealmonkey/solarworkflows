@@ -25,6 +25,7 @@ import {
 
 export function DemoBookingDetailPage() {
   const { profile } = useAuth();
+  const canAccess = Boolean(profile?.is_super_admin || profile?.platform_role === "backend_staff");
   const { id } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
@@ -57,8 +58,8 @@ export function DemoBookingDetailPage() {
   }, [id]);
 
   useEffect(() => {
-    if (profile?.is_super_admin) void loadBooking();
-  }, [loadBooking, profile?.is_super_admin]);
+    if (canAccess) void loadBooking();
+  }, [canAccess, loadBooking]);
 
   async function saveStatus() {
     if (!booking) return;
@@ -78,8 +79,8 @@ export function DemoBookingDetailPage() {
     }
   }
 
-  if (!profile?.is_super_admin) {
-    return <AccessDenied title="Demo bookings are not available" description="Only Super Admins can review and update demo booking submissions." />;
+  if (!canAccess) {
+    return <AccessDenied title="Demo bookings are not available" description="Demo bookings are available to authorized platform staff." />;
   }
 
   if (loading) {

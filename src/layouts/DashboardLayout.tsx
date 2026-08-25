@@ -27,7 +27,10 @@ export function DashboardLayout() {
 
   const visibleNavigationItems = useMemo<NavigationItem[]>(() => {
     if (profile?.platform_role === "backend_staff") {
-      return platformNavigationItems.filter((item) => item.path === "/whatsapp-messaging");
+      return platformNavigationItems.filter((item) =>
+        item.path === "/demo-bookings" ||
+        item.path === "/whatsapp-messaging",
+      );
     }
     if (profile?.is_super_admin) {
       return platformNavigationItems;
@@ -84,7 +87,12 @@ export function DashboardLayout() {
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (profile?.platform_role === "backend_staff" && location.pathname !== "/whatsapp-messaging") {
+  if (
+    profile?.platform_role === "backend_staff" &&
+    location.pathname !== "/demo-bookings" &&
+    !location.pathname.startsWith("/demo-bookings/") &&
+    location.pathname !== "/whatsapp-messaging"
+  ) {
     return <Navigate to="/whatsapp-messaging" replace />;
   }
 

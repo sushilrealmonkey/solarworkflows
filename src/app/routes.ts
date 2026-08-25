@@ -26,6 +26,7 @@ const routeModulePrefixes: Array<[string, string]> = [
   ["/leads", "leads"],
   ["/today", "assistant"],
   ["/dashboard", "dashboard"],
+  ["/demo-bookings", "demo_bookings"],
   ["/reports", "reports"],
   ["/settings", "settings"],
   ["/billing/plans", "settings"],
@@ -50,7 +51,6 @@ export const routes: AppRoute[] = [
     label: "Demo Bookings",
     moduleKey: "demo_bookings",
     description: "Review demo booking submissions and their scheduling details.",
-    superAdminOnly: true,
   },
   {
     path: "/whatsapp-messaging",

@@ -14,6 +14,7 @@ type FilterValue = "all" | string;
 export function DemoBookingsPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const canAccess = Boolean(profile?.is_super_admin || profile?.platform_role === "backend_staff");
   const [bookings, setBookings] = useState<DemoBooking[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<FilterValue>("all");
@@ -23,7 +24,7 @@ export function DemoBookingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!profile?.is_super_admin) {
+    if (!canAccess) {
       setLoading(false);
       return;
     }
@@ -45,7 +46,7 @@ export function DemoBookingsPage() {
     return () => {
       active = false;
     };
-  }, [profile?.is_super_admin]);
+  }, [canAccess]);
 
   const options = useMemo(
     () => ({
@@ -85,8 +86,8 @@ export function DemoBookingsPage() {
 
   const pagination = useTablePagination(filteredBookings);
 
-  if (!profile?.is_super_admin) {
-    return <AccessDenied title="Demo bookings are not available" description="Only Super Admins can review demo booking submissions." />;
+  if (!canAccess) {
+    return <AccessDenied title="Demo bookings are not available" description="Demo bookings are available to authorized platform staff." />;
   }
 
   return (

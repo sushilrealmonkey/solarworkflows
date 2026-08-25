@@ -13,6 +13,8 @@ export function ProtectedRoute() {
   const canViewModule =
     !moduleKey ||
     Boolean(profile?.is_super_admin) ||
+    (profile?.platform_role === "backend_staff" &&
+      (moduleKey === "trial_outreach" || moduleKey === "demo_bookings")) ||
     permissions.some(
       (permission) =>
         permission.moduleKey === moduleKey && permission.actionKey === "view",
