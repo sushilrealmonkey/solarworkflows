@@ -10,11 +10,13 @@ export function ProtectedRoute() {
   const [isRefreshingAccess, setIsRefreshingAccess] = useState(false);
   const lastAccessRefreshRef = useRef<string | null>(null);
   const moduleKey = moduleKeyForPath(location.pathname);
+  const isPlatformStaffModule =
+    profile?.platform_role === "backend_staff" &&
+    (moduleKey === "trial_outreach" || moduleKey === "demo_bookings");
   const canViewModule =
     !moduleKey ||
     Boolean(profile?.is_super_admin) ||
-    (profile?.platform_role === "backend_staff" &&
-      (moduleKey === "trial_outreach" || moduleKey === "demo_bookings")) ||
+    isPlatformStaffModule ||
     permissions.some(
       (permission) =>
         permission.moduleKey === moduleKey && permission.actionKey === "view",

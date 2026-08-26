@@ -12,12 +12,12 @@ import { labelize } from "../crm/crmUtils";
 import {
   createProductForOrganization,
   fetchProductCategoriesForOrganization,
-} from "../product-master/productMasterApi";
-import { productUnitOptions } from "../product-master/productMasterUtils";
+} from "./productMasterApi";
+import { productUnitOptions } from "./productMasterUtils";
 import type {
   ProductCategory,
   ProductFormValues,
-} from "../product-master/types";
+} from "./types";
 import {
   buildProductImportTemplateCsv,
   importProductRows,
@@ -32,12 +32,16 @@ import {
 
 type ImportProgress = { completed: number; total: number } | null;
 
-export function EpcProductImportPanel({
+export function ProductImportPanel({
   organizationId,
   onClose,
+  onImported,
+  workspaceLabel = "EPC workspace",
 }: {
   organizationId: string;
   onClose: () => void;
+  onImported?: () => void | Promise<void>;
+  workspaceLabel?: string;
 }) {
   const { showToast } = useToast();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -188,9 +192,10 @@ export function EpcProductImportPanel({
         setError("Review the failed rows, correct them, and retry.");
       } else if (result.allImported) {
         setSummary(
-          `${result.importedCount} product${result.importedCount === 1 ? "" : "s"} added to this EPC workspace.`,
+          `${result.importedCount} product${result.importedCount === 1 ? "" : "s"} added to this ${workspaceLabel}.`,
         );
-        showToast("EPC product catalog imported.", "success");
+        showToast("Product catalog imported.", "success");
+        await onImported?.();
       }
     } catch (nextError) {
       setError(messageOf(nextError, "Products could not be imported."));
@@ -208,8 +213,8 @@ export function EpcProductImportPanel({
             Upload product list
           </h3>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-            Upload a CSV or XLSX file, review the rows, and add them to this EPC
-            workspace. Existing product categories are used to validate the file.
+            Upload a CSV or XLSX file, review the rows, and add them to this {workspaceLabel}.
+            Existing product categories are used to validate the file.
           </p>
         </div>
         <button
@@ -223,7 +228,7 @@ export function EpcProductImportPanel({
 
       {loading ? (
         <p className="mt-4 rounded-lg border border-stone-200 bg-white p-4 text-sm text-slate-600">
-          Loading EPC product categories…
+          Loading {workspaceLabel} product categories...
         </p>
       ) : loadError ? (
         <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
@@ -231,8 +236,8 @@ export function EpcProductImportPanel({
         </p>
       ) : categories.length === 0 ? (
         <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-          This EPC workspace has no active product categories. Add a category in
-          the workspace before importing products.
+          This {workspaceLabel} has no active product categories. Add a category
+          in the workspace before importing products.
         </p>
       ) : rows.length === 0 ? (
         <div className="mt-5 grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">

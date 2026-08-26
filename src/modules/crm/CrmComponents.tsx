@@ -478,14 +478,23 @@ export function LoadingSkeleton() {
 export function DetailSection({
   title,
   children,
+  compact = false,
 }: {
   title: string;
   children: ReactNode;
+  compact?: boolean;
 }) {
+  const sectionSpacing = compact ? "p-4" : "p-5";
+  const gridSpacing = compact ? "mt-3 gap-3" : "mt-4 gap-4";
+
   return (
-    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+    <section
+      className={
+        "rounded-xl border border-stone-200 bg-white shadow-sm " + sectionSpacing
+      }
+    >
       <h2 className="text-base font-semibold text-slate-950">{title}</h2>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">{children}</div>
+      <div className={"grid sm:grid-cols-2 " + gridSpacing}>{children}</div>
     </section>
   );
 }
@@ -581,6 +590,20 @@ export function PencilIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="1.9"
+      />
+    </svg>
+  );
+}
+
+export function CheckIcon() {
+  return (
+    <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24">
+      <path
+        d="m5 12.5 4.5 4.5L19 7.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
       />
     </svg>
   );

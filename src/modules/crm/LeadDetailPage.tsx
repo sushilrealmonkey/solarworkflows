@@ -10,8 +10,10 @@ import {
   fetchLeadRequirementTypes,
   fetchStaffOptions,
   updateLead,
+  updateLeadNotes,
 } from "./crmApi";
 import {
+  bulletNoteText,
   emailError,
   formatCurrency,
   formatDate,
@@ -20,6 +22,7 @@ import {
   hasPermission,
   labelize,
   leadToForm,
+  noteItems,
   requiredError,
   tenDigitPhoneError,
   staffName,
@@ -28,6 +31,7 @@ import type { Lead, LeadActionState, LeadFormValues, StaffOption } from "./types
 import {
   AccessDenied,
   Badge,
+  Button,
   DetailItem,
   DetailSection,
   EmptyState,
@@ -64,6 +68,9 @@ export function LeadDetailPage() {
   const [editing, setEditing] = useState<LeadFormValues | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState("");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   const canView = hasPermission(profile, permissions, "leads", "view");
   const canCreate = hasPermission(profile, permissions, "leads", "create");
@@ -157,7 +164,10 @@ export function LeadDetailPage() {
 
     try {
       setSaving(true);
-      const updatedLead = await updateLead(lead.id, editing);
+      const updatedLead = await updateLead(lead.id, {
+        ...editing,
+        notes: bulletNoteText(editing.notes),
+      });
       setLead(updatedLead);
       setEditing(null);
       showToast("Enquiry updated.", "success");
@@ -180,6 +190,45 @@ export function LeadDetailPage() {
     setEditing(leadToForm(lead));
   }
 
+  function openNotesEditor() {
+    if (!lead) {
+      return;
+    }
+
+    setNotesDraft(bulletNoteText(lead.notes));
+    setEditingNotes(true);
+  }
+
+  function cancelNotesEdit() {
+    setEditingNotes(false);
+    setNotesDraft("");
+  }
+
+  async function handleNotesSave() {
+    if (!lead) {
+      return;
+    }
+
+    try {
+      setSavingNotes(true);
+      const updatedLead = await updateLeadNotes(
+        lead.id,
+        bulletNoteText(notesDraft),
+      );
+      setLead(updatedLead);
+      setEditingNotes(false);
+      setNotesDraft("");
+      showToast("Notes saved.", "success");
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error ? nextError.message : "Notes save failed.",
+        "error",
+      );
+    } finally {
+      setSavingNotes(false);
+    }
+  }
+
   async function handleAddRequirementType(name: string) {
     const createdRequirementType = await createLeadRequirementType(profile, name);
     setRequirementTypes((current) =>
@@ -192,7 +241,7 @@ export function LeadDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Link className="text-sm font-semibold text-[#06173f]" to="/leads">
         Back to enquiries
       </Link>
@@ -248,7 +297,7 @@ export function LeadDetailPage() {
                 ) : quotationState === "accepted" ? (
                   <PlaceholderAction>Go to Project</PlaceholderAction>
                 ) : null}
-                {quotationState === "none" ? (
+                {quotationState === "none" || quotationState === "accepted" ? (
                   !leadActionState.hasSiteSurvey && canCreateSurvey ? (
                     <Link
                       className={primaryActionClass}
@@ -274,7 +323,27 @@ export function LeadDetailPage() {
             </div>
           </div>
 
-          <DetailSection title="Enquiry Basic Details">
+          <LeadFollowupsPanel
+            leadId={lead.id}
+            defaultAssignedTo={lead.assigned_to}
+            staff={staff}
+            canCreate={canCreate}
+            canUpdate={canUpdate}
+          />
+
+          <DetailSection title="Contact Details & Address" compact>
+            <DetailItem label="Full Name" value={lead.full_name} />
+            <DetailItem label="Phone" value={lead.phone} />
+            <DetailItem label="Alternate Phone" value={lead.alternate_phone ?? "-"} />
+            <DetailItem label="Email" value={lead.email ?? "-"} />
+            <DetailItem label="Address" value={lead.address ?? "-"} />
+            <DetailItem label="City" value={lead.city ?? "-"} />
+            <DetailItem label="District" value={lead.district ?? "-"} />
+            <DetailItem label="State" value={lead.state ?? "-"} />
+            <DetailItem label="Pincode" value={lead.pincode ?? "-"} />
+          </DetailSection>
+
+          <DetailSection title="Enquiry Basics & Requirements" compact>
             <DetailItem label="Enq Code" value={formatEnquiryCode(lead.lead_code)} />
             <DetailItem
               label="Status"
@@ -297,16 +366,6 @@ export function LeadDetailPage() {
             />
             <DetailItem label="Assigned Staff" value={staffName(staff, lead.assigned_to)} />
             <DetailItem label="Created" value={formatDate(lead.created_at)} />
-          </DetailSection>
-
-          <DetailSection title="Contact Details">
-            <DetailItem label="Full Name" value={lead.full_name} />
-            <DetailItem label="Phone" value={lead.phone} />
-            <DetailItem label="Alternate Phone" value={lead.alternate_phone ?? "-"} />
-            <DetailItem label="Email" value={lead.email ?? "-"} />
-          </DetailSection>
-
-          <DetailSection title="Requirement Details">
             <DetailItem label="Requirement Type" value={labelize(lead.requirement_type)} />
             <DetailItem
               label="Estimated Load"
@@ -324,24 +383,43 @@ export function LeadDetailPage() {
             <DetailItem label="Roof Type" value={lead.roof_type ?? "-"} />
           </DetailSection>
 
-          <DetailSection title="Address">
-            <DetailItem label="Address" value={lead.address ?? "-"} />
-            <DetailItem label="City" value={lead.city ?? "-"} />
-            <DetailItem label="District" value={lead.district ?? "-"} />
-            <DetailItem label="State" value={lead.state ?? "-"} />
-            <DetailItem label="Pincode" value={lead.pincode ?? "-"} />
-          </DetailSection>
-
-          <LeadFollowupsPanel
-            leadId={lead.id}
-            defaultAssignedTo={lead.assigned_to}
-            staff={staff}
-            canCreate={canCreate}
-            canUpdate={canUpdate}
-          />
-
-          <DetailSection title="Notes">
-            <DetailItem label="Notes" value={lead.notes ?? "-"} />
+          <DetailSection title="Notes" compact>
+            <div className="sm:col-span-2">
+              {editingNotes ? (
+                <div>
+                  <textarea
+                    aria-label="Enquiry notes"
+                    className="min-h-28 w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+                    onChange={(event) => setNotesDraft(event.target.value)}
+                    placeholder="Add one note per line"
+                    value={notesDraft}
+                  />
+                  <p className="mt-2 text-xs text-slate-500">
+                    Each line is saved as a bullet point.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button onClick={cancelNotesEdit} variant="secondary">
+                      Cancel
+                    </Button>
+                    <Button
+                      disabled={savingNotes}
+                      onClick={() => void handleNotesSave()}
+                    >
+                      {savingNotes ? "Saving..." : "Save Notes"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <BulletNoteList notes={lead.notes} />
+                  {canUpdate ? (
+                    <Button onClick={openNotesEditor} variant="secondary">
+                      {lead.notes ? "Edit Notes" : "Add Notes"}
+                    </Button>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </DetailSection>
 
           <RecordLifecyclePanel
@@ -383,6 +461,20 @@ export function LeadDetailPage() {
       ) : null}
 
     </div>
+  );
+}
+
+function BulletNoteList({ notes }: { notes: string | null | undefined }) {
+  const items = noteItems(notes);
+
+  if (items.length === 0) {
+    return <p className="text-sm text-slate-500">No notes added.</p>;
+  }
+
+  return (
+    <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+      {items.map((note, index) => <li key={index}>{note}</li>)}
+    </ul>
   );
 }
 

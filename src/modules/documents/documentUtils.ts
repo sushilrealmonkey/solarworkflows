@@ -1,4 +1,4 @@
-import { requiredError } from "../crm/crmUtils";
+import { labelize, requiredError } from "../crm/crmUtils";
 import type {
   DocumentStatus,
   DocumentType,
@@ -8,19 +8,15 @@ import type {
 } from "./types";
 
 export const documentBucketName = "organization-documents";
+export const createNewDocumentTypeValue = "__create_new_document_type__";
 
 export const documentTypeOptions: DocumentType[] = [
   "aadhaar",
   "pan",
   "electricity_bill",
-  "property_document",
-  "quotation_pdf",
-  "proforma_invoice_pdf",
   "purchase_order_pdf",
-  "payment_receipt",
   "site_photo",
   "installation_photo",
-  "subsidy_document",
   "bank_loan_document",
   "agreement",
   "other",
@@ -42,15 +38,12 @@ export function emptyDocumentUploadForm(
     project_id: defaults.project_id ?? "",
     quotation_id: defaults.quotation_id ?? "",
     document_type: defaults.document_type ?? "other",
-    document_name: defaults.document_name ?? "",
     expiry_date: defaults.expiry_date ?? "",
-    notes: defaults.notes ?? "",
   };
 }
 
 export function validateDocumentUpload(values: DocumentUploadValues, file: File | null) {
   return {
-    document_name: requiredError(values.document_name, "Document name"),
     document_type: requiredError(values.document_type, "Document type"),
     file: file ? "" : "File is required.",
   };
@@ -125,8 +118,22 @@ export function uploadPayload(
 ): DocumentUploadPayload {
   return {
     ...values,
+    document_name: documentTypeName(values.document_type),
     file,
   };
+}
+
+export function documentTypeName(value: string | null | undefined) {
+  const normalized = value?.trim() ?? "";
+  return normalized ? labelize(normalized) : "";
+}
+
+export function documentTypeSlug(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
 function sanitizePathSegment(value: string) {

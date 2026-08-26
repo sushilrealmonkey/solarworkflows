@@ -113,6 +113,31 @@ npx supabase functions deploy process-trial-signups --no-verify-jwt
 Run `supabase/tests/trial_signup_notification_test.sql` after applying the
 migration.
 
+## 14-day trial outreach
+
+The `trial_outreach_enrollments`, `trial_outreach_touchpoints`, and
+`trial_outreach_interactions` tables power the behavior-based activation queue.
+Deploy `process-trial-outreach` with JWT verification disabled and set
+`TRIAL_OUTREACH_WORKER_SECRET`, `RESEND_API_KEY`,
+`TRIAL_REMINDER_FROM_EMAIL`, and `APP_BASE_URL`. Keep
+`TRIAL_OUTREACH_TEST_MODE=true` prevents provider sends while scheduling and
+queue behavior are verified. Set it to `false` only after Resend and the
+approved Meta templates are ready. Set `TRIAL_OUTREACH_ENABLED=true` so the legacy trial
+reminder worker suppresses overlapping Day 3/7/11/13/14 lifecycle messages.
+
+The migration schedules the worker every five minutes when Vault contains
+`trial_outreach_project_url` and `trial_outreach_worker_secret`. Deploy with:
+
+```powershell
+npx supabase functions deploy process-trial-outreach --no-verify-jwt
+```
+
+WhatsApp touchpoints are only queued when the recipient is verified, opted in,
+and the corresponding Meta template is active. `STOP`, invalid numbers, and
+provider failures suppress or retry future delivery without duplicating a
+touchpoint. Run `supabase/tests/trial_outreach_foundation_test.sql` after the
+migration.
+
 ## Native mobile support
 
 `mobile_devices` and `mobile_push_deliveries` are tenant-owned support tables for

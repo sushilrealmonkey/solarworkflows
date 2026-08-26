@@ -727,6 +727,22 @@ export async function updateLead(id: string, values: LeadFormValues) {
   return data as Lead;
 }
 
+export async function updateLeadNotes(id: string, notes: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("leads")
+    .update({ notes: nullable(notes) })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as Lead;
+}
+
 export async function deleteLead(id: string) {
   const client = requireSupabase();
   const { error } = await client.from("leads").delete().eq("id", id);

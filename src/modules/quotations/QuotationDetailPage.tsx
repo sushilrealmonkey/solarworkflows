@@ -15,7 +15,6 @@ import {
 } from "../crm/CrmComponents";
 import {
   formatDate,
-  formatDateTime,
   hasPermission,
   labelize,
 } from "../crm/crmUtils";
@@ -48,7 +47,6 @@ import {
 import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import {
   QuotationWorkflowPill,
-  QuotationStatusBadge,
 } from "./QuotationsPage";
 import type {
   QuotationFormValues,
@@ -404,8 +402,6 @@ export function QuotationDetailPage() {
                     quotation.site_survey?.survey_code ??
                       quotation.lead?.lead_code ??
                       quotation.customer?.customer_code,
-                    labelize(quotation.status),
-                    contact.phone,
                   ]}
                   action={
                     canUpdate && quotation.status === "created" && !quotation.archived_at ? (
@@ -421,7 +417,15 @@ export function QuotationDetailPage() {
                     ) : null
                   }
                 />
-                <QuotationStatusPill quotation={quotation} />
+                <div className="flex flex-wrap items-center gap-2">
+                  {canUpdate && !quotation.archived_at ? (
+                    <QuotationStatusSelect
+                      disabled={updatingStatus}
+                      value={quotation.status ?? "created"}
+                      onChange={setStatusTarget}
+                    />
+                  ) : null}
+                </div>
               </div>
               <div className="space-y-3 lg:max-w-md lg:shrink-0 lg:text-right">
                 <div className="lg:flex lg:justify-end">
@@ -445,15 +449,6 @@ export function QuotationDetailPage() {
                   )}
                   {workflowState !== "none" && workflowState !== "accepted" ? (
                     <QuotationWorkflowPill state={workflowState} />
-                  ) : openProjectId && canViewProjects && isQuotationProjectStatus(quotation.status) ? (
-                    <Link
-                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-                      to={`/projects/${openProjectId}`}
-                    >
-                      Open Project
-                    </Link>
-                  ) : isQuotationProjectStatus(quotation.status) ? (
-                    <PlaceholderAction>Open Project</PlaceholderAction>
                   ) : !relatedSiteSurveyId && canCreateSurvey && quotation.lead_id ? (
                     <Link
                       className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
@@ -463,20 +458,17 @@ export function QuotationDetailPage() {
                     </Link>
                   ) : !relatedSiteSurveyId ? (
                     <PlaceholderAction>Create Site Survey</PlaceholderAction>
+                  ) : openProjectId && canViewProjects && isQuotationProjectStatus(quotation.status) ? (
+                    <Link
+                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                      to={`/projects/${openProjectId}`}
+                    >
+                      Open Project
+                    </Link>
+                  ) : isQuotationProjectStatus(quotation.status) ? (
+                    <PlaceholderAction>Open Project</PlaceholderAction>
                   ) : null}
                 </div>
-                {canUpdate && !quotation.archived_at ? (
-                  <div className="flex flex-col gap-2 lg:items-end">
-                    <p className="text-sm font-medium text-slate-600">
-                      Update status of quotation with the latest updates.
-                    </p>
-                    <QuotationStatusSelect
-                      disabled={updatingStatus}
-                      value={quotation.status ?? "created"}
-                      onChange={setStatusTarget}
-                    />
-                  </div>
-                ) : null}
               </div>
             </header>
           </div>
@@ -924,21 +916,6 @@ export function QuotationDetailPage() {
   );
 }
 
-function QuotationStatusPill({
-  quotation,
-}: {
-  quotation: QuotationWithRelations;
-}) {
-  return (
-    <div className="inline-flex w-fit flex-wrap items-center gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm">
-      <span className="text-base font-semibold text-slate-950">Status</span>
-      <QuotationStatusBadge value={quotation.status} />
-      <span className="text-slate-400">/</span>
-      <span>{formatDateTime(quotationStatusUpdatedAt(quotation))}</span>
-    </div>
-  );
-}
-
 function summarizeReservations(reservations: QuotationInventoryReservation[]) {
   return reservations.reduce(
     (summary, reservation) => {
@@ -1011,10 +988,10 @@ function QuotationStatusSelect({
   disabled: boolean;
 }) {
   return (
-    <label className="inline-flex">
-      <span className="sr-only">Update quotation status</span>
+    <label className="inline-flex flex-col items-start gap-1">
+      <span className="text-base font-bold text-slate-950">Update Status</span>
       <select
-        className="min-h-10 rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-stone-50 focus:border-orange-600 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+        className="min-h-9 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-stone-50 focus:border-orange-600 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
         value={value}
         onChange={(event) => {
@@ -1057,14 +1034,6 @@ function PencilIcon() {
       />
     </svg>
   );
-}
-
-function quotationStatusUpdatedAt(quotation: QuotationWithRelations) {
-  if (isQuotationProjectStatus(quotation.status)) {
-    return quotation.accepted_at ?? quotation.updated_at;
-  }
-
-  return quotation.updated_at ?? quotation.created_at;
 }
 
 function TotalsCard({

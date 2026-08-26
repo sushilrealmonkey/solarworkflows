@@ -8,7 +8,7 @@ import {
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
-import { EpcProductImportPanel } from "./EpcProductImportPanel";
+import { ProductImportPanel } from "../product-master/ProductImportPanel";
 import {
   Badge,
   Button,
@@ -413,9 +413,10 @@ export function CompanyDetailPage() {
           ) : null}
         </div>
         {productImportOpen ? (
-          <EpcProductImportPanel
+          <ProductImportPanel
             onClose={() => setProductImportOpen(false)}
             organizationId={company.id}
+            workspaceLabel="EPC workspace"
           />
         ) : null}
       </section>

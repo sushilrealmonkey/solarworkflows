@@ -171,6 +171,7 @@ export function RecordLifecyclePanel({
   canUpdate,
   canDelete,
   compact = false,
+  iconOnlyActions = false,
   dependencyTargets,
   onChanged,
 }: {
@@ -182,6 +183,7 @@ export function RecordLifecyclePanel({
   canUpdate: boolean;
   canDelete: boolean;
   compact?: boolean;
+  iconOnlyActions?: boolean;
   dependencyTargets?: Partial<Record<string, DependencyTarget>>;
   onChanged: (action: LifecycleAction, result: unknown) => void | Promise<void>;
 }) {
@@ -270,12 +272,36 @@ export function RecordLifecyclePanel({
             ) : null}
             <div className="flex flex-wrap gap-2">
               {canUpdate ? (
-                <Button onClick={() => void open(archivedAt ? "restore" : "archive")} variant="secondary">
-                  {archivedAt ? "Restore" : "Archive"}
-                </Button>
+                iconOnlyActions ? (
+                  <button
+                    aria-label={archivedAt ? "Restore record" : "Archive record"}
+                    className={`inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 ${iconOnlyActions ? "size-8" : "size-9"}`}
+                    onClick={() => void open(archivedAt ? "restore" : "archive")}
+                    title={archivedAt ? "Restore" : "Archive"}
+                    type="button"
+                  >
+                    {archivedAt ? <RestoreIcon /> : <ArchiveIcon />}
+                  </button>
+                ) : (
+                  <Button onClick={() => void open(archivedAt ? "restore" : "archive")} variant="secondary">
+                    {archivedAt ? "Restore" : "Archive"}
+                  </Button>
+                )
               ) : null}
               {!archivedAt && canDelete ? (
-                <Button onClick={() => void open("delete")} variant="danger">Delete permanently</Button>
+                iconOnlyActions ? (
+                  <button
+                    aria-label="Delete record permanently"
+                    className={`inline-flex items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-700 shadow-sm transition-colors hover:bg-rose-100 hover:text-rose-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-300 ${iconOnlyActions ? "size-8" : "size-9"}`}
+                    onClick={() => void open("delete")}
+                    title="Delete permanently"
+                    type="button"
+                  >
+                    <TrashIcon />
+                  </button>
+                ) : (
+                  <Button onClick={() => void open("delete")} variant="danger">Delete permanently</Button>
+                )
               ) : null}
             </div>
           </div>
@@ -360,5 +386,30 @@ export function RecordLifecyclePanel({
         </Modal>
       ) : null}
     </div>
+  );
+}
+
+function ArchiveIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24">
+      <path d="M4 8.5h16M6.5 8.5v9.25A1.75 1.75 0 0 0 8.25 19.5h7.5A1.75 1.75 0 0 0 17.5 17.75V8.5M9 12.25h6M5.25 4.5h13.5l1.25 4H4l1.25-4Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function RestoreIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24">
+      <path d="M6.5 8.5h11v9.25a1.75 1.75 0 0 1-1.75 1.75h-7.5A1.75 1.75 0 0 1 6.5 17.75V8.5ZM5.25 4.5h13.5l1.25 4H4l1.25-4Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="M12 12v3m0 0 1.5-1.5M12 15l-1.5-1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24">
+      <path d="M5.5 7.5h13M9.5 4.5h5l1 3H8.5l1-3ZM8 7.5l.75 12h6.5L16 7.5M10.5 10.5v6M13.5 10.5v6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
   );
 }

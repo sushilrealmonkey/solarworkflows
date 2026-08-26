@@ -59,6 +59,7 @@ function surveyPayload(
     scheduled_date: nullable(values.scheduled_date),
     scheduled_time: nullable(values.scheduled_time),
     assigned_to: nullable(values.assigned_to),
+    google_map_link: nullable(values.google_map_link),
     address_notes: nullable(values.address_notes),
     remarks: nullable(values.remarks),
   };

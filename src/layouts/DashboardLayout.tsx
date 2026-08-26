@@ -29,7 +29,8 @@ export function DashboardLayout() {
     if (profile?.platform_role === "backend_staff") {
       return platformNavigationItems.filter((item) =>
         item.path === "/demo-bookings" ||
-        item.path === "/whatsapp-messaging",
+        item.path === "/whatsapp-messaging" ||
+        item.path === "/trial-outreach",
       );
     }
     if (profile?.is_super_admin) {
@@ -91,7 +92,8 @@ export function DashboardLayout() {
     profile?.platform_role === "backend_staff" &&
     location.pathname !== "/demo-bookings" &&
     !location.pathname.startsWith("/demo-bookings/") &&
-    location.pathname !== "/whatsapp-messaging"
+    location.pathname !== "/whatsapp-messaging" &&
+    location.pathname !== "/trial-outreach"
   ) {
     return <Navigate to="/whatsapp-messaging" replace />;
   }

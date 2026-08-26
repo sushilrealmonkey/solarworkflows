@@ -102,6 +102,7 @@ export const platformNavigationItems = [
   navigationRoute("/demo-bookings"),
   navigationRoute("/platform-staff"),
   navigationRoute("/whatsapp-messaging"),
+  navigationRoute("/trial-outreach"),
   navigationRoute("/settings"),
   navigationRoute("/billing/plans"),
 ];

@@ -1,6 +1,6 @@
 import type { SurveyCustomerSummary, SurveyLeadSummary } from "../site-surveys/types";
 
-export type DocumentType =
+export type BuiltInDocumentType =
   | "aadhaar"
   | "pan"
   | "electricity_bill"
@@ -16,6 +16,9 @@ export type DocumentType =
   | "bank_loan_document"
   | "agreement"
   | "other";
+
+// Manual uploads may use a company-specific type created from the upload form.
+export type DocumentType = BuiltInDocumentType | (string & {});
 
 export type DocumentStatus = "pending" | "verified" | "rejected" | "expired";
 
@@ -56,6 +59,7 @@ export type OrganizationDocument = {
   customer_id: string | null;
   lead_id: string | null;
   project_id: string | null;
+  site_survey_id: string | null;
   quotation_id: string | null;
   proforma_invoice_id: string | null;
   invoice_id: string | null;
@@ -99,11 +103,10 @@ export type DocumentUploadValues = {
   project_id: string;
   quotation_id: string;
   document_type: DocumentType;
-  document_name: string;
   expiry_date: string;
-  notes: string;
 };
 
 export type DocumentUploadPayload = DocumentUploadValues & {
+  document_name: string;
   file: File;
 };

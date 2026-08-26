@@ -28,6 +28,7 @@ export function emptySurveyForm(): SiteSurveyFormValues {
     shadow_free_area_sqft: "",
     latitude: "",
     longitude: "",
+    google_map_link: "",
     address_notes: "",
     recommended_capacity_kw: "",
     sanctioned_load_kw: "",
@@ -48,6 +49,7 @@ export function surveyToForm(survey: SiteSurvey): SiteSurveyFormValues {
     shadow_free_area_sqft: numberToInput(survey.shadow_free_area_sqft),
     latitude: numberToInput(survey.latitude),
     longitude: numberToInput(survey.longitude),
+    google_map_link: survey.google_map_link ?? "",
     address_notes: survey.address_notes ?? "",
     recommended_capacity_kw: numberToInput(survey.recommended_capacity_kw),
     sanctioned_load_kw: numberToInput(survey.sanctioned_load_kw),
@@ -75,6 +77,23 @@ export function normalizeTimeInput(value: string | null | undefined) {
   }
 
   return value.slice(0, 5);
+}
+
+export function safeHttpUrl(value: string | null | undefined) {
+  const trimmed = value?.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "http:" || url.protocol === "https:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function formatSurveyTime(value: string | null | undefined) {

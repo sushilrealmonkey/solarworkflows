@@ -799,8 +799,8 @@ export function ProjectStatusSelect({
   disabled: boolean;
 }) {
   return (
-    <label className="inline-flex">
-      <span className="sr-only">Update project status</span>
+    <label className="inline-flex flex-col items-start gap-1">
+      <span className="text-base font-bold text-slate-950">Update Status</span>
       <select
         className="min-h-9 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-stone-50 focus:border-orange-600 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}

@@ -27,6 +27,7 @@ const routeModulePrefixes: Array<[string, string]> = [
   ["/today", "assistant"],
   ["/dashboard", "dashboard"],
   ["/demo-bookings", "demo_bookings"],
+  ["/trial-outreach", "trial_outreach"],
   ["/reports", "reports"],
   ["/settings", "settings"],
   ["/billing/plans", "settings"],
@@ -57,6 +58,13 @@ export const routes: AppRoute[] = [
     label: "WhatsApp Outreach",
     moduleKey: "whatsapp_messaging",
     description: "WhatsApp template sending and delivery monitoring for authorized platform staff.",
+    superAdminOnly: true,
+  },
+  {
+    path: "/trial-outreach",
+    label: "Trial Outreach",
+    moduleKey: "trial_outreach",
+    description: "Behavior-based trial activation queue, touchpoints, and assisted setup follow-up.",
     superAdminOnly: true,
   },
   {

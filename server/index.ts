@@ -26,6 +26,10 @@ import {
   SIGNUP_AVAILABILITY_PATH,
 } from "./modules/auth/availability.js";
 import { handleMobileApiRequest, isMobileApiPath } from "./modules/mobile-api/handler.js";
+import {
+  handleTrialOutreachRequest,
+  isTrialOutreachPath,
+} from "./modules/trial-outreach/index.js";
 
 const WHATSAPP_WEBHOOK_PATH = "/api/webhooks/whatsapp";
 const MAX_WEBHOOK_BODY_BYTES = 1_000_000;
@@ -395,6 +399,21 @@ const server = createServer(async (request, response) => {
 
     if (isWhatsAppAdminPath(requestUrl.pathname)) {
       await handleWhatsAppAdminApi(request, response, requestUrl);
+      return;
+    }
+
+    if (isTrialOutreachPath(requestUrl.pathname)) {
+      const requestInit: RequestInit = {
+        method: request.method,
+        headers: toFetchHeaders(request.headers),
+      };
+      if (request.method === "POST" || request.method === "PUT") {
+        requestInit.body = await readRequestBody(request);
+      }
+      await sendFetchResponse(
+        await handleTrialOutreachRequest(new Request(requestUrl, requestInit)),
+        response,
+      );
       return;
     }
 

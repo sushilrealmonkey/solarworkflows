@@ -57,6 +57,7 @@ import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
 import { DemoBookingsPage } from "../modules/demo-bookings/DemoBookingsPage";
 import { DemoBookingDetailPage } from "../modules/demo-bookings/DemoBookingDetailPage";
 import { WhatsAppMessagingPage } from "../modules/whatsapp-messaging/WhatsAppMessagingPage";
+import { TrialOutreachPage } from "../modules/trial-outreach/TrialOutreachPage";
 import { PlatformStaffPage } from "../modules/platform-staff/PlatformStaffPage";
 import {
   SettingsPage,
@@ -118,6 +119,7 @@ export default function App() {
             path="/whatsapp-messaging"
             element={<WhatsAppMessagingPage />}
           />
+          <Route path="/trial-outreach" element={<TrialOutreachPage />} />
           <Route path="/dashboard" element={<RoleScopedDashboardPage />} />
           <Route
             path="/today"
@@ -213,6 +215,7 @@ export default function App() {
                   "/companies/:id",
                   "/demo-bookings",
                   "/whatsapp-messaging",
+                  "/trial-outreach",
                   "/customers/project-based",
                   "/customers/b2b-direct",
                   "/leads",

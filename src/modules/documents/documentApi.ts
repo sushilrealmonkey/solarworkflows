@@ -146,7 +146,7 @@ export async function uploadDocument(
       file_size: payload.file.size,
       mime_type: payload.file.type || null,
       expiry_date: nullable(payload.expiry_date),
-      notes: nullable(payload.notes),
+      notes: null,
       uploaded_by: profile?.id ?? null,
       status: "pending",
     })

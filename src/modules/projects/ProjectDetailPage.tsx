@@ -25,7 +25,6 @@ import {
   hasPermission,
   labelize,
   requiredError,
-  staffName,
 } from "../crm/crmUtils";
 import { fetchStaffOptions } from "../crm/crmApi";
 import type { StaffOption } from "../crm/types";
@@ -42,7 +41,6 @@ import {
 import {
   filterInstallationVendors,
   formatKw,
-  formatTeamDisplay,
   getProjectContact,
   projectToForm,
 } from "./projectUtils";
@@ -608,52 +606,61 @@ export function ProjectDetailPage() {
 
       {project && contact ? (
         <>
-          <div className="flex flex-col gap-4 border-b border-stone-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
-            <header className="min-w-0 space-y-3">
-              <RecordTitle
-                recordType="Project"
-                name={project.project_name ?? contact.customerName ?? "Project"}
-                action={
-                  canUpdate && !project.archived_at ? (
-                    <button
-                      aria-label="Edit project"
-                      className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
-                      onClick={openEditForm}
-                      title="Edit project"
-                      type="button"
-                    >
-                      <PencilIcon />
-                    </button>
-                  ) : null
-                }
-                meta={[
-                  project.project_code ?? "Project",
-                  project.quotation?.quotation_code ??
-                    project.site_survey?.survey_code ??
-                    project.lead?.lead_code,
-                  labelize(project.project_status),
-                  contact.phone,
-                ]}
-              />
-              <div className="flex flex-wrap items-center gap-2">
-                {canUpdate && !project.archived_at ? (
-                  <ProjectStatusSelect
-                    disabled={updatingStatus}
-                    value={project.project_status ?? "created"}
-                    onChange={setStatusTarget}
-                  />
+          <div className="border-b border-stone-200 pb-5">
+            <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-3">
+                <RecordTitle
+                  recordType="Project"
+                  name={project.project_name ?? contact.customerName ?? "Project"}
+                  action={
+                    canUpdate && !project.archived_at ? (
+                      <button
+                        aria-label="Edit project"
+                        className="inline-flex size-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-stone-50 hover:text-slate-950"
+                        onClick={openEditForm}
+                        title="Edit project"
+                        type="button"
+                      >
+                        <PencilIcon />
+                      </button>
+                    ) : null
+                  }
+                  meta={[
+                    project.project_code ?? "Project",
+                    project.quotation?.quotation_code ??
+                      project.site_survey?.survey_code ??
+                      project.lead?.lead_code,
+                  ]}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  {canUpdate && !project.archived_at ? (
+                    <ProjectStatusSelect
+                      disabled={updatingStatus}
+                      value={project.project_status ?? "created"}
+                      onChange={setStatusTarget}
+                    />
+                  ) : null}
+                </div>
+                {canAssign && !project.archived_at ? (
+                  <ProjectFieldAssignments projectId={project.id} />
                 ) : null}
+              </div>
+              <div className="lg:max-w-md lg:shrink-0">
+                <NextStepSection
+                  canCreateInvoice={canCreateInvoice && !hasActiveProjectInvoice}
+                  canCreateDocument={canCreateDocument}
+                  canCreateInventory={canCreateInventory}
+                  onCreateInvoice={openProjectInvoiceForm}
+                  onUploadDocument={openDocumentForm}
+                  onAddMaterialIssue={openMaterialIssueForm}
+                />
               </div>
             </header>
           </div>
 
-          {canAssign && !project.archived_at ? (
-            <ProjectFieldAssignments projectId={project.id} />
-          ) : null}
-
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
             <div className="space-y-6">
-              <DetailSection title="Customer Details">
+              <DetailSection compact title="Customer & Installation Details">
                 <DetailItem
                   label="Customer Name"
                   value={project.customer?.full_name ?? contact.customerName}
@@ -664,9 +671,17 @@ export function ProjectDetailPage() {
                   value={project.customer?.email ?? project.lead?.email ?? "-"}
                 />
                 <DetailItem label="Lead" value={leadLink(project)} />
+                <DetailItem
+                  label="Address"
+                  value={project.installation_address ?? contact.address ?? "-"}
+                />
+                <DetailItem label="City" value={project.city ?? "-"} />
+                <DetailItem label="District" value={project.district ?? "-"} />
+                <DetailItem label="State" value={project.state ?? "-"} />
+                <DetailItem label="Pincode" value={project.pincode ?? "-"} />
               </DetailSection>
 
-              <DetailSection title="Project Details">
+              <DetailSection compact title="Project & Workflow Details">
                 <DetailItem
                   label="Priority"
                   value={<PriorityBadge value={project.priority} />}
@@ -682,31 +697,6 @@ export function ProjectDetailPage() {
                 />
                 <DetailItem label="Created" value={formatDate(project.created_at)} />
                 <DetailItem label="Notes" value={project.notes ?? "-"} />
-              </DetailSection>
-
-              <DetailSection title="Installation Address">
-                <DetailItem
-                  label="Address"
-                  value={project.installation_address ?? contact.address ?? "-"}
-                />
-                <DetailItem label="City" value={project.city ?? "-"} />
-                <DetailItem label="District" value={project.district ?? "-"} />
-                <DetailItem label="State" value={project.state ?? "-"} />
-                <DetailItem label="Pincode" value={project.pincode ?? "-"} />
-              </DetailSection>
-
-              <DetailSection title="Assigned Team">
-                <DetailItem
-                  label="Project Manager"
-                  value={staffName(staff, project.assigned_project_manager)}
-                />
-                <DetailItem
-                  label="Installation Team"
-                  value={formatTeamDisplay(project.assigned_installation_team)}
-                />
-              </DetailSection>
-
-              <DetailSection title="Linked Workflow">
                 <DetailItem label="Quotation" value={quotationLink(project)} />
                 <DetailItem label="Site Survey" value={surveyLink(project)} />
                 <DetailItem
@@ -718,19 +708,10 @@ export function ProjectDetailPage() {
             </div>
 
             <aside className="space-y-6">
-              <NextStepSection
-                canCreateInvoice={canCreateInvoice && !hasActiveProjectInvoice}
-                canCreateDocument={canCreateDocument}
-                canCreateInventory={canCreateInventory}
-                onCreateInvoice={openProjectInvoiceForm}
-                onUploadDocument={openDocumentForm}
-                onAddMaterialIssue={openMaterialIssueForm}
-              />
-
               {canViewPayments && paymentSummary ? (
-                <section className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+                <section className="h-fit rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between xl:flex-col xl:items-stretch">
-                    <h2 className="text-base font-semibold text-slate-950">
+                    <h2 className="text-sm font-semibold text-slate-950">
                       Payment Details
                     </h2>
                     <div className="flex flex-wrap gap-2">
@@ -745,66 +726,68 @@ export function ProjectDetailPage() {
                       </Link>
                     </div>
                   </div>
-                  <div className="mt-4">
-                    <PaymentSummaryCards className="grid gap-3" summary={paymentSummary} />
+                  <div className="mt-3">
+                    <PaymentSummaryCards compact className="grid gap-2" summary={paymentSummary} />
                   </div>
                 </section>
               ) : null}
             </aside>
           </div>
 
-          {canViewInvoices ? (
-            <ProjectInvoicesSection
-              invoices={invoices}
-              invoicePdfUrls={invoicePdfUrls}
-              canCreate={canCreateInvoice && !hasActiveProjectInvoice}
-              onCreate={openProjectInvoiceForm}
-            />
-          ) : null}
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
+            {canViewDocuments ? (
+              <section className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-950">
+                      Documents
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Project permits, site photos, agreements, subsidy files, and handover documents.
+                    </p>
+                  </div>
+                  {canCreateDocument ? (
+                    <Button onClick={openDocumentForm}>Upload Document</Button>
+                  ) : null}
+                </div>
+                {documents.length > 0 ? (
+                  <div className="mt-4">
+                    <DocumentsCollection
+                      compact
+                      documents={documents}
+                      canUpdate={canUpdateDocument}
+                      canDelete={canDeleteDocument}
+                      onLifecycleChanged={(document, action) => {
+                        setDocuments((current) =>
+                          current.filter((entry) => entry.id !== document.id),
+                        );
+                        showToast(
+                          action === "delete" ? "Document permanently deleted." : "Document archived.",
+                          "success",
+                        );
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="mt-4">
+                    <EmptyState
+                      title="No project documents uploaded"
+                      description="Upload permits, site photos, agreements, subsidy files, and handover documents as they become available."
+                    />
+                  </div>
+                )}
+              </section>
+            ) : null}
 
-          {canViewDocuments ? (
-            <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-slate-950">
-                    Documents
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Project permits, site photos, agreements, subsidy files, and handover documents.
-                  </p>
-                </div>
-                {canCreateDocument ? (
-                  <Button onClick={openDocumentForm}>Upload Document</Button>
-                ) : null}
-              </div>
-              {documents.length > 0 ? (
-                <div className="mt-4">
-                  <DocumentsCollection
-                    compact
-                    documents={documents}
-                    canUpdate={canUpdateDocument}
-                    canDelete={canDeleteDocument}
-                    onLifecycleChanged={(document, action) => {
-                      setDocuments((current) =>
-                        current.filter((entry) => entry.id !== document.id),
-                      );
-                      showToast(
-                        action === "delete" ? "Document permanently deleted." : "Document archived.",
-                        "success",
-                      );
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="mt-4">
-                  <EmptyState
-                    title="No project documents uploaded"
-                    description="Upload permits, site photos, agreements, subsidy files, and handover documents as they become available."
-                  />
-                </div>
-              )}
-            </section>
-          ) : null}
+            {canViewInvoices ? (
+              <ProjectInvoicesSection
+                invoices={invoices}
+                invoicePdfUrls={invoicePdfUrls}
+                canCreate={canCreateInvoice && !hasActiveProjectInvoice}
+                onCreate={openProjectInvoiceForm}
+              />
+            ) : null}
+          </div>
 
           {canViewInventory ? (
             <ProjectMaterialsSection
@@ -963,7 +946,7 @@ function NextStepSection({
   }
 
   return (
-    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <h2 className="text-base font-semibold text-slate-950">Next Step</h2>
       <div className="mt-4 grid gap-2">
         {canCreateInvoice ? (
@@ -1013,7 +996,7 @@ function ProjectInvoicesSection({
   const paginatedInvoices = invoicePagination.pageItems;
 
   return (
-    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+    <section className="h-fit rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-slate-950">Tax Invoices</h2>
@@ -1033,91 +1016,36 @@ function ProjectInvoicesSection({
           />
         </div>
       ) : (
-        <>
-          <div className="mt-4 hidden overflow-hidden rounded-lg border border-stone-200 lg:block">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Invoice</th>
-                  <th className="px-4 py-3">Invoice Date</th>
-                  <th className="px-4 py-3">Due Date</th>
-                  <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3">Paid</th>
-                  <th className="px-4 py-3">Balance</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Download</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {paginatedInvoices.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {invoice.invoice_code ?? "Invoice"}
-                    </td>
-                    <td className="px-4 py-3">{formatDate(invoice.invoice_date)}</td>
-                    <td className="px-4 py-3">{formatDate(invoice.due_date)}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatMoney(invoice.total_amount)}
-                    </td>
-                    <td className="px-4 py-3">{formatMoney(invoice.amount_paid)}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-950">
-                      {formatMoney(invoice.balance_due)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <InvoiceStatusBadge value={invoice.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <DownloadInvoiceAction url={invoicePdfUrls[invoice.id]} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-4 grid gap-3 lg:hidden">
-            {paginatedInvoices.map((invoice) => (
-              <article
-                key={invoice.id}
-                className="rounded-lg border border-stone-200 bg-white p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {formatDate(invoice.invoice_date)}
-                    </p>
-                    <h3 className="mt-1 text-sm font-semibold text-slate-950">
-                      {invoice.invoice_code ?? "Invoice"}
-                    </h3>
-                  </div>
-                  <InvoiceStatusBadge value={invoice.status} />
+        <div className="mt-4 space-y-3">
+          {paginatedInvoices.map((invoice) => (
+            <article
+              key={invoice.id}
+              className="rounded-lg border border-stone-200 bg-stone-50/60 p-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {formatDate(invoice.invoice_date)}
+                  </p>
+                  <h3 className="mt-1 truncate text-sm font-semibold text-slate-950">
+                    {invoice.invoice_code ?? "Invoice"}
+                  </h3>
                 </div>
-                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <ProjectInvoiceCardItem
-                    label="Total"
-                    value={formatMoney(invoice.total_amount)}
-                  />
-                  <ProjectInvoiceCardItem
-                    label="Balance"
-                    value={formatMoney(invoice.balance_due)}
-                  />
-                  <ProjectInvoiceCardItem
-                    label="Paid"
-                    value={formatMoney(invoice.amount_paid)}
-                  />
-                  <ProjectInvoiceCardItem
-                    label="Due"
-                    value={formatDate(invoice.due_date)}
-                  />
-                </dl>
-                <div className="mt-4">
-                  <DownloadInvoiceAction url={invoicePdfUrls[invoice.id]} />
-                </div>
-              </article>
-            ))}
-          </div>
+                <InvoiceStatusBadge value={invoice.status} />
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <ProjectInvoiceCardItem label="Total" value={formatMoney(invoice.total_amount)} />
+                <ProjectInvoiceCardItem label="Balance" value={formatMoney(invoice.balance_due)} />
+                <ProjectInvoiceCardItem label="Paid" value={formatMoney(invoice.amount_paid)} />
+                <ProjectInvoiceCardItem label="Due" value={formatDate(invoice.due_date)} />
+              </dl>
+              <div className="mt-4">
+                <DownloadInvoiceAction url={invoicePdfUrls[invoice.id]} />
+              </div>
+            </article>
+          ))}
           <TablePagination label="project invoices" pagination={invoicePagination} />
-        </>
+        </div>
       )}
     </section>
   );

@@ -33,9 +33,11 @@ export function PaymentStatusBadge({
 export function PaymentSummaryCards({
   summary,
   className = "grid gap-3 sm:grid-cols-2 xl:grid-cols-3",
+  compact = false,
 }: {
   summary: PaymentProjectSummary;
   className?: string;
+  compact?: boolean;
 }) {
   const cards = [
     {
@@ -69,12 +71,12 @@ export function PaymentSummaryCards({
       {cards.map((card) => (
         <article
           key={card.label}
-          className="rounded-lg border border-stone-200 bg-stone-50 p-4"
+          className={`rounded-lg border border-stone-200 bg-stone-50 ${compact ? "p-3" : "p-4"}`}
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {card.label}
           </p>
-          <div className="mt-2 text-lg font-semibold tracking-normal text-slate-950">
+          <div className={`${compact ? "mt-1 text-base" : "mt-2 text-lg"} font-semibold tracking-normal text-slate-950`}>
             {card.value}
           </div>
         </article>

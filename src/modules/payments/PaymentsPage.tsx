@@ -14,7 +14,6 @@ import { ArchiveScopeFilter } from "../lifecycle/ArchiveScopeFilter";
 import type { ArchiveScope } from "../lifecycle/types";
 import {
   AccessDenied,
-  Badge,
   Button,
   EmptyState,
   LoadingSkeleton,
@@ -39,7 +38,7 @@ import {
   fetchPaymentProjects,
   fetchPayments,
 } from "./paymentApi";
-import { PaymentFormModal } from "./PaymentComponents";
+import { PaymentFormModal, PaymentStatusBadge } from "./PaymentComponents";
 import {
   emptyPaymentForm,
   paymentModeOptions,
@@ -278,7 +277,7 @@ export function PaymentsPage() {
                   <th className="px-4 py-3">Source</th>
                   <th className="px-4 py-3">Mode</th>
                   <th className="px-4 py-3">Total</th>
-                  <th className="px-4 py-3">Receipt Status</th>
+                  <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
@@ -316,7 +315,7 @@ export function PaymentsPage() {
                         {formatMoney(payment.amount)}
                       </td>
                       <td className="px-4 py-3">
-                        <PaymentReceiptStatus receiptUrl={payment.receipt_url} />
+                        <PaymentStatusBadge value={payment.status} />
                       </td>
                     </tr>
                   );
@@ -352,7 +351,7 @@ export function PaymentsPage() {
                           "-"} / {paymentContextLabel(payment)}
                       </p>
                     </div>
-                    <PaymentReceiptStatus receiptUrl={payment.receipt_url} showLabel />
+                    <PaymentStatusBadge value={payment.status} />
                   </div>
                   <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                     <PaymentCardItem
@@ -408,22 +407,5 @@ function PaymentCardItem({ label, value }: { label: string; value: string }) {
       <dt className="text-xs text-slate-500">{label}</dt>
       <dd className="font-medium text-slate-900">{value}</dd>
     </div>
-  );
-}
-
-function PaymentReceiptStatus({
-  receiptUrl,
-  showLabel = false,
-}: {
-  receiptUrl: string | null | undefined;
-  showLabel?: boolean;
-}) {
-  const available = Boolean(receiptUrl);
-  const status = available ? "Available" : "Pending";
-
-  return (
-    <Badge tone={available ? "green" : "amber"}>
-      {showLabel ? `Receipt ${status}` : status}
-    </Badge>
   );
 }

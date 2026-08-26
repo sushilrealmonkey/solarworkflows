@@ -4,7 +4,6 @@ import {
   Button,
   Modal,
   SelectInput,
-  TextArea,
   TextInput,
 } from "../crm/CrmComponents";
 import { formatDate, labelize } from "../crm/crmUtils";
@@ -12,8 +11,9 @@ import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
 import type { LifecycleAction } from "../lifecycle/types";
 import { useAuth } from "../../app/AuthProvider";
 import {
-  documentRelatedLabel,
+  createNewDocumentTypeValue,
   documentTypeOptions,
+  documentTypeSlug,
   fileSizeLabel,
 } from "./documentUtils";
 import type {
@@ -44,8 +44,14 @@ export function DocumentUploadModal({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [dragging, setDragging] = useState(false);
-  const update = (key: keyof DocumentUploadValues, value: string) =>
-    setValues({ ...values, [key]: value });
+  const [customDocumentType, setCustomDocumentType] = useState<string | null>(null);
+
+  function updateDocumentType(value: string) {
+    setValues({
+      ...values,
+      document_type: value,
+    });
+  }
 
   function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
@@ -61,26 +67,47 @@ export function DocumentUploadModal({
       submitLabel="Upload Document"
       submitting={saving}
     >
-      <SelectInput
-        label="Document Type"
-        value={values.document_type}
-        onChange={(value) => update("document_type", value)}
-        options={documentTypeOptions.map((value) => ({
-          value,
-          label: labelize(value),
-        }))}
-      />
-      {errors.document_type ? (
-        <p className="-mt-3 text-xs text-rose-700">{errors.document_type}</p>
-      ) : null}
-      <TextInput
-        label="Document Name"
-        value={values.document_name}
-        onChange={(value) => update("document_name", value)}
-        error={errors.document_name}
-        required
-      />
-      <div className="md:col-span-2">
+      <div className="space-y-2">
+        <SelectInput
+          label="Document Type"
+          value={customDocumentType !== null ? createNewDocumentTypeValue : values.document_type}
+          onChange={(value) => {
+            if (value === createNewDocumentTypeValue) {
+              setCustomDocumentType("");
+              updateDocumentType("");
+              return;
+            }
+
+            setCustomDocumentType(null);
+            updateDocumentType(value);
+          }}
+          options={[
+            ...documentTypeOptions.map((value) => ({
+              value,
+              label: labelize(value),
+            })),
+            {
+              value: createNewDocumentTypeValue,
+              label: "Create new document type",
+            },
+          ]}
+        />
+        {customDocumentType !== null ? (
+          <TextInput
+            label="New Document Type"
+            value={customDocumentType}
+            onChange={(value) => {
+              setCustomDocumentType(value);
+              updateDocumentType(documentTypeSlug(value));
+            }}
+            error={errors.document_type}
+            required
+          />
+        ) : errors.document_type ? (
+          <p className="text-xs text-rose-700">{errors.document_type}</p>
+        ) : null}
+      </div>
+      <div>
         <input
           ref={inputRef}
           className="sr-only"
@@ -88,7 +115,7 @@ export function DocumentUploadModal({
           onChange={(event) => setFile(event.target.files?.item(0) ?? null)}
         />
         <div
-          className={`rounded-xl border border-dashed p-5 text-center transition-colors ${
+          className={`rounded-lg border border-dashed p-3 text-center transition-colors ${
             dragging
               ? "border-orange-600 bg-orange-50"
               : errors.file
@@ -108,7 +135,7 @@ export function DocumentUploadModal({
           <p className="mt-1 text-xs text-slate-500">
             {file ? fileSizeLabel(file.size) : "or choose a file from your device"}
           </p>
-          <div className="mt-4">
+          <div className="mt-3">
             <Button
               onClick={() => inputRef.current?.click()}
               type="button"
@@ -120,11 +147,6 @@ export function DocumentUploadModal({
         </div>
         {errors.file ? <p className="mt-1 text-xs text-rose-700">{errors.file}</p> : null}
       </div>
-      <TextArea
-        label="Notes"
-        value={values.notes}
-        onChange={(value) => update("notes", value)}
-      />
     </Modal>
   );
 }
@@ -154,80 +176,26 @@ export function DocumentsCollection({
 
   return (
     <>
-      <div className="hidden overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm 2xl:block">
-        <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-            <tr>
-              <th className="px-4 py-3">Document</th>
-              <th className="px-4 py-3">Type</th>
-              {!compact ? <th className="px-4 py-3">Related</th> : null}
-              <th className="px-4 py-3">Uploaded By</th>
-              <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-stone-100">
-            {paginatedDocuments.map((document) => (
-              <tr key={document.id}>
-                <td className="px-4 py-3">
-                  <div className="font-semibold text-slate-950">
-                    {document.document_name}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {fileSizeLabel(document.file_size)}
-                  </div>
-                </td>
-                <td className="px-4 py-3">{labelize(document.document_type)}</td>
-                {!compact ? (
-                  <td className="px-4 py-3">{documentRelatedLabel(document)}</td>
-                ) : null}
-                <td className="px-4 py-3">{profileName(document.uploaded_by_profile)}</td>
-                <td className="px-4 py-3">{formatDate(document.created_at)}</td>
-                <td className="px-4 py-3">
-                  <DocumentActions
-                    document={document}
-                    canUpdate={canUpdate}
-                    canDelete={canDelete}
-                    onLifecycleChanged={onLifecycleChanged}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid gap-3 2xl:hidden">
+      <div className={compact ? "grid grid-cols-2 gap-3 sm:grid-cols-4" : "grid gap-4 sm:grid-cols-2 lg:grid-cols-3"}>
         {paginatedDocuments.map((document) => (
           <article
             key={document.id}
-            className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"
+            className={`flex h-full min-w-0 flex-col overflow-hidden border border-stone-200 bg-white shadow-sm ${compact ? "rounded-lg" : "rounded-xl"}`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {labelize(document.document_type)}
-                </p>
-                <h2 className="mt-1 text-base font-semibold text-slate-950">
+            <DocumentThumbnail document={document} />
+            <div className={`flex min-h-0 flex-1 flex-col ${compact ? "p-3" : "p-4"}`}>
+              <div className="min-w-0">
+                <h2 className={`mt-1 break-words font-semibold text-slate-950 ${compact ? "text-sm" : "text-base"}`}>
                   {document.document_name}
                 </h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  {documentRelatedLabel(document)}
-                </p>
               </div>
+              <dl className={`grid grid-cols-2 text-sm ${compact ? "mt-3 gap-2 text-xs" : "mt-4 gap-3"}`}>
+                <DocumentCardItem label="Created" value={formatShortDate(document.created_at)} />
+              </dl>
             </div>
-            <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-              <DocumentCardItem
-                label="Uploaded By"
-                value={profileName(document.uploaded_by_profile)}
-              />
-              <DocumentCardItem
-                label="Created"
-                value={formatDate(document.created_at)}
-              />
-            </dl>
-            <div className="mt-4">
+            <div className={`mt-auto border-t border-stone-100 ${compact ? "px-3 py-2" : "px-4 py-3"}`}>
               <DocumentActions
+                compact={compact}
                 document={document}
                 canUpdate={canUpdate}
                 canDelete={canDelete}
@@ -243,11 +211,13 @@ export function DocumentsCollection({
 }
 
 function DocumentActions({
+  compact = false,
   document,
   canUpdate,
   canDelete,
   onLifecycleChanged,
 }: {
+  compact?: boolean;
   document: OrganizationDocumentWithRelations;
   canUpdate: boolean;
   canDelete: boolean;
@@ -266,35 +236,111 @@ function DocumentActions({
     !isProSource ||
     !subscription ||
     subscription.capability_access?.["documents.pro_sources"] === "full";
+  const downloadUrl = proSourceWriteAllowed
+    ? document.preview_url ?? document.file_url
+    : null;
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {document.preview_url && proSourceWriteAllowed ? (
+    <div className={`flex items-center justify-end ${compact ? "gap-1" : "gap-2"}`}>
+      {downloadUrl ? (
         <a
-          className="inline-flex min-h-9 items-center rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-stone-50"
-          href={document.preview_url}
+          aria-label={`Download ${document.document_name}`}
+          className={`inline-flex shrink-0 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 text-white shadow-sm transition-colors hover:bg-orange-700 ${compact ? "size-8" : "size-9"}`}
+          download
+          href={downloadUrl}
           rel="noreferrer"
           target="_blank"
+          title="Download"
         >
-          Preview File
+          <DownloadIcon />
         </a>
-      ) : isProSource && !proSourceWriteAllowed ? (
-        <span className="inline-flex min-h-9 items-center rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-sm font-semibold text-orange-800">
-          Upgrade to Pro to preview
-        </span>
-      ) : null}
+      ) : (
+        <button
+          aria-label="Download unavailable"
+          className={`inline-flex shrink-0 cursor-not-allowed items-center justify-center rounded-lg border border-stone-200 bg-stone-50 text-slate-400 ${compact ? "size-8" : "size-9"}`}
+          disabled
+          title={isProSource && !proSourceWriteAllowed ? "Upgrade to Pro to download" : "Download unavailable"}
+          type="button"
+        >
+          <DownloadIcon />
+        </button>
+      )}
       <RecordLifecyclePanel
         archiveReason={document.archive_reason}
         archivedAt={document.archived_at}
         canDelete={canDelete && proSourceWriteAllowed}
         canUpdate={canUpdate && proSourceWriteAllowed}
         compact
+        iconOnlyActions
         moduleKey="documents"
         onChanged={(action) => onLifecycleChanged(document, action)}
         recordId={document.id}
         recordLabel={document.document_name}
       />
     </div>
+  );
+}
+
+function DocumentThumbnail({
+  document,
+}: {
+  document: OrganizationDocumentWithRelations;
+}) {
+  const fileName = document.file_path.split("/").pop() ?? document.document_name;
+  const extension = fileName.includes(".")
+    ? fileName.split(".").pop()?.toLowerCase()
+    : "";
+  const mimeType = document.mime_type?.toLowerCase() ?? "";
+  const isImage =
+    mimeType.startsWith("image/") ||
+    ["jpg", "jpeg", "png", "webp", "gif", "avif"].includes(extension ?? "");
+  const isPdf = mimeType === "application/pdf" || extension === "pdf";
+
+  return (
+    <div className="relative aspect-[16/10] overflow-hidden bg-stone-100">
+      {document.preview_url && isImage ? (
+        <img
+          alt={`${document.document_name} preview`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          src={document.preview_url}
+        />
+      ) : document.preview_url && isPdf ? (
+        <iframe
+          className="pointer-events-none h-[175%] w-full origin-top-left scale-[0.58]"
+          loading="lazy"
+          src={`${document.preview_url}#toolbar=0&navpanes=0&scrollbar=0`}
+          title={`${document.document_name} preview`}
+        />
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500">
+          <FileIcon />
+          <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+            {extension || "File"}
+          </span>
+        </div>
+      )}
+      <span className="absolute bottom-2 left-2 rounded-md bg-slate-950/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+        {isImage ? "Image" : isPdf ? "PDF" : extension || "File"}
+      </span>
+    </div>
+  );
+}
+
+function DownloadIcon() {
+  return (
+    <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24">
+      <path d="M12 4v10m0 0 3.5-3.5M12 14 8.5 10.5M5 19.5h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function FileIcon() {
+  return (
+    <svg aria-hidden="true" className="size-10" fill="none" viewBox="0 0 24 24">
+      <path d="M7 3.75h6.25L18 8.5v11.75a.75.75 0 0 1-.75.75h-10.5a.75.75 0 0 1-.75-.75V4.5A.75.75 0 0 1 7 3.75Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+      <path d="M13 3.75V8.5h4.75M9 12h6M9 15h6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
+    </svg>
   );
 }
 
@@ -307,15 +353,7 @@ function DocumentCardItem({ label, value }: { label: string; value: string }) {
   );
 }
 
-function profileName(
-  profile:
-    | {
-        full_name: string | null;
-        phone: string | null;
-        email: string | null;
-      }
-    | null
-    | undefined,
-) {
-  return profile?.full_name ?? profile?.email ?? profile?.phone ?? "-";
+function formatShortDate(value: string | null) {
+  const [day, month, year] = formatDate(value).split("/");
+  return day && month && year ? `${day}/${month}/${year.slice(-2)}` : "-";
 }

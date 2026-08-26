@@ -51,6 +51,8 @@ import {
 } from "./dashboardApi";
 import { TrialBanner } from "../billing/TrialBanner";
 import { GettingStartedChecklist } from "./GettingStartedChecklist";
+import { fetchTrialOutreachDashboard } from "../trial-outreach/trialOutreachApi";
+import type { TrialOutreachDashboard } from "../trial-outreach/types";
 
 export function DashboardPage() {
   const { profile } = useAuth();
@@ -2328,6 +2330,7 @@ function TenantDashboard() {
 
 function PlatformDashboard() {
   const [snapshot, setSnapshot] = useState<PlatformDashboardSnapshot | null>(null);
+  const [trialOutreach, setTrialOutreach] = useState<TrialOutreachDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -2335,8 +2338,12 @@ function PlatformDashboard() {
     try {
       setLoading(true);
       setError(null);
-      const nextSnapshot = await fetchPlatformDashboardSnapshot();
+      const [nextSnapshot, nextTrialOutreach] = await Promise.all([
+        fetchPlatformDashboardSnapshot(),
+        fetchTrialOutreachDashboard(),
+      ]);
       setSnapshot(nextSnapshot);
+      setTrialOutreach(nextTrialOutreach);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -2378,6 +2385,11 @@ function PlatformDashboard() {
       label: "Pending admin setup",
       value: snapshot?.pendingAdminSetupCount ?? 0,
       to: "/companies?tab=invites",
+    },
+    {
+      label: "Trials without first value",
+      value: Number(trialOutreach?.no_first_value_count ?? 0),
+      to: "/trial-outreach?state=never_started",
     },
   ] satisfies Array<{ label: string; value: ReactNode; to?: string }>;
 
@@ -2450,6 +2462,20 @@ function PlatformDashboard() {
             loading={loading}
             title="Subscription risk"
             to="/companies?tab=clients&status=subscription_risk"
+          />
+          <AttentionCard
+            count={Number(trialOutreach?.calls_due_today_count ?? 0)}
+            description="Call tasks due today for clients who still need activation help."
+            loading={loading}
+            title="Calls due today"
+            to="/trial-outreach?due=true"
+          />
+          <AttentionCard
+            count={Number(trialOutreach?.no_first_value_count ?? 0)}
+            description="Active trials that have not reached the first-value milestone."
+            loading={loading}
+            title="Trial activation gap"
+            to="/trial-outreach"
           />
         </div>
       </section>

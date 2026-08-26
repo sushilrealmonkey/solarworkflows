@@ -41,6 +41,7 @@ import {
   ProductFormModal,
   ProductStatusBadge,
 } from "./ProductMasterComponents";
+import { ProductImportPanel } from "./ProductImportPanel";
 import type {
   Product,
   ProductCategory,
@@ -75,6 +76,7 @@ export function ProductMasterPage() {
     status: "",
   });
   const [productForm, setProductForm] = useState<ProductFormState | null>(null);
+  const [productImportOpen, setProductImportOpen] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveAlert, setSaveAlert] = useState<{
@@ -89,6 +91,8 @@ export function ProductMasterPage() {
     "product_master",
     "create",
   );
+  const organizationId = profile?.organization_id;
+  const canImport = canCreate && Boolean(organizationId);
 
   async function loadData() {
     if (!canView) {
@@ -245,9 +249,28 @@ export function ProductMasterPage() {
           description="Manage the central catalog used across inventory, purchases, quotations, projects, and reports."
         />
         {canCreate ? (
-          <Button onClick={openCreateForm}>Add Product or Material</Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {canImport ? (
+              <Button
+                onClick={() => setProductImportOpen(true)}
+                variant="secondary"
+              >
+                Upload products
+              </Button>
+            ) : null}
+            <Button onClick={openCreateForm}>Add Product or Material</Button>
+          </div>
         ) : null}
       </div>
+
+      {canImport && productImportOpen && organizationId ? (
+        <ProductImportPanel
+          onClose={() => setProductImportOpen(false)}
+          onImported={loadData}
+          organizationId={organizationId}
+          workspaceLabel="workspace"
+        />
+      ) : null}
 
       <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 

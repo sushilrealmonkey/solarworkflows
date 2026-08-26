@@ -27,6 +27,7 @@ Deno.serve(async (request) => {
     requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
     { auth: { persistSession: false } },
   );
+  const trialOutreachEnabled = Deno.env.get("TRIAL_OUTREACH_ENABLED") !== "false";
   const now = Date.now();
   const { data: trials, error } = await service
     .from("company_subscriptions")
@@ -39,6 +40,20 @@ Deno.serve(async (request) => {
   let sent = 0;
   let whatsappQueued = 0;
   for (const trial of (trials ?? []) as unknown as TrialRow[]) {
+    if (trialOutreachEnabled) {
+      const { data: enrollment, error: enrollmentError } = await service
+        .from("trial_outreach_enrollments")
+        .select("status")
+        .eq("company_id", trial.company_id)
+        .maybeSingle();
+      if (enrollmentError) {
+        console.error("Trial outreach enrollment lookup failed", enrollmentError.message);
+      } else if (enrollment) {
+        // The outreach worker owns trial lifecycle touches when enabled. This
+        // prevents the legacy day-7/day-3/day-1 messages from duplicating them.
+        continue;
+      }
+    }
     const endsAt = new Date(trial.trial_ends_at).getTime();
     const days = Math.max(0, Math.ceil((endsAt - now) / 86400000));
     const milestone = days <= 0 ? "expired" : days <= 1 ? "day_1" : days <= 3 ? "day_3" : days <= 7 ? "day_7" : null;

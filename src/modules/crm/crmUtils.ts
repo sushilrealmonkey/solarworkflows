@@ -177,6 +177,19 @@ export function labelize(value: string | null | undefined) {
     .join(" ");
 }
 
+export function noteItems(value: string | null | undefined) {
+  return (value ?? "")
+    .split(/\r?\n/)
+    .map((note) => note.replace(/^\s*(?:[-*•]\s*)+/, "").trim())
+    .filter(Boolean);
+}
+
+export function bulletNoteText(value: string | null | undefined) {
+  return noteItems(value)
+    .map((note) => "• " + note)
+    .join("\n");
+}
+
 export function staffName(staff: StaffOption[], staffId: string | null) {
   if (!staffId) {
     return "Unassigned";

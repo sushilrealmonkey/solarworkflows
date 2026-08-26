@@ -33,6 +33,7 @@ import {
   uploadSiteSurveyDocument,
   uploadSiteSurveyPhoto,
 } from "./siteSurveyApi";
+import { SiteSurveyMapLinkButton } from "./SiteSurveyMapLinkButton";
 import {
   formatCustomerAddress,
   formatLeadAddress,
@@ -290,6 +291,7 @@ export function SiteSurveyDetailPage() {
             <div className="space-y-3">
               <NextStepLabel />
               <div className="flex flex-wrap gap-2">
+                <SiteSurveyMapLinkButton survey={survey} />
                 {canUpdate && !survey.archived_at ? (
                   <SurveyStatusSelect
                     disabled={updatingStatus}

@@ -40,6 +40,7 @@ export type SiteSurvey = {
   site_photos: SiteSurveyFile[] | null;
   latitude: number | null;
   longitude: number | null;
+  google_map_link: string | null;
   address_notes: string | null;
   recommended_capacity_kw: number | null;
   sanctioned_load_kw: number | null;
@@ -130,6 +131,7 @@ export type FieldSurvey = {
   phase_type: string | null;
   latitude: number | null;
   longitude: number | null;
+  google_map_link: string | null;
   address_notes: string | null;
   remarks: string | null;
   site_photos: SiteSurveyFile[];
@@ -161,6 +163,7 @@ export type SiteSurveyFormValues = {
   shadow_free_area_sqft: string;
   latitude: string;
   longitude: string;
+  google_map_link: string;
   address_notes: string;
   recommended_capacity_kw: string;
   sanctioned_load_kw: string;

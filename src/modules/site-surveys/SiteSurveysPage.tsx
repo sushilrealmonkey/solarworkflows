@@ -49,6 +49,7 @@ import {
   updateSiteSurvey,
   updateSiteSurveyStatus,
 } from "./siteSurveyApi";
+import { SiteSurveyMapLinkButton } from "./SiteSurveyMapLinkButton";
 import {
   formatLeadAddress,
   formatSurveyTime,
@@ -731,6 +732,13 @@ export function SiteSurveyFormModal({
             value={values.address_notes}
             onChange={(value) => update("address_notes", value)}
           />
+          <TextInput
+            label="Google Map Link"
+            value={values.google_map_link}
+            onChange={(value) => update("google_map_link", value)}
+            type="url"
+            inputMode="url"
+          />
           <TextArea
             label="Remarks"
             value={values.remarks}
@@ -768,6 +776,13 @@ export function SiteSurveyFormModal({
             value={values.longitude}
             onChange={(value) => update("longitude", value)}
             type="number"
+          />
+          <TextInput
+            label="Google Map Link"
+            value={values.google_map_link}
+            onChange={(value) => update("google_map_link", value)}
+            type="url"
+            inputMode="url"
           />
           <TextInput
             label="Recommended Capacity (kW)"
@@ -831,6 +846,7 @@ function SurveyNextStepActions({
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
+      <SiteSurveyMapLinkButton survey={survey} className="w-full" />
       {workflowState !== "none" && workflowState !== "accepted" ? (
         <SiteSurveyQuotationApprovalPill state={workflowState} />
       ) : workflowState === "accepted" && canViewProjects ? (
