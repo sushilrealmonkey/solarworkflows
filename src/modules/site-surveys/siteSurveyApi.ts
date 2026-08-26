@@ -349,14 +349,12 @@ async function addFieldSurveyFileUrls(surveys: FieldSurvey[]) {
   const client = requireSupabase();
   return Promise.all(surveys.map(async (survey) => ({
     ...survey,
-    site_photos: await Promise.all((survey.site_photos ?? []).map(async (photo) => {
-      const filePath = photo.file_path ?? storagePathFromUrl(photo.url);
-      if (!filePath) return photo;
-      const { data } = await client.storage
-        .from(siteSurveyUploadBucket)
-        .createSignedUrl(filePath, 60 * 10);
-      return { ...photo, url: data?.signedUrl ?? photo.url };
-    })),
+    site_photos: await signSurveyFiles(client, survey.site_photos ?? []),
+    survey_documents: await signSurveyFiles(client, survey.survey_documents ?? []),
+    electricity_bill_url: await signSurveyDocumentUrl(
+      client,
+      survey.electricity_bill_url,
+    ),
   })));
 }
 
@@ -374,7 +372,9 @@ export async function uploadSiteSurveyPhoto(
   const photos = Array.isArray(survey.site_photos) ? survey.site_photos : [];
   const { data, error } = await requireSupabase()
     .from("site_surveys")
-    .update({ site_photos: [...photos, uploadedFile] })
+    .update({
+      site_photos: [...photos.map(normalizeSurveyFileForStorage), uploadedFile],
+    })
     .eq("id", survey.id)
     .select(surveySelect)
     .single();
@@ -398,9 +398,17 @@ export async function uploadSiteSurveyDocument(
     file,
     "documents",
   );
+  const documents = Array.isArray(survey.survey_documents)
+    ? survey.survey_documents
+    : [];
   const { data, error } = await requireSupabase()
     .from("site_surveys")
-    .update({ electricity_bill_url: uploadedFile.file_path ?? uploadedFile.url })
+    .update({
+      survey_documents: [
+        ...documents.map(normalizeSurveyFileForStorage),
+        uploadedFile,
+      ],
+    })
     .eq("id", survey.id)
     .select(surveySelect)
     .single();
@@ -463,6 +471,13 @@ async function uploadSiteSurveyFile(
   } satisfies SiteSurveyFile;
 }
 
+function normalizeSurveyFileForStorage(file: SiteSurveyFile) {
+  return {
+    ...file,
+    url: file.file_path ?? file.url,
+  };
+}
+
 async function addSurveyFileUrls(surveys: SiteSurveyWithRelations[]) {
   const client = requireSupabase();
 
@@ -486,23 +501,62 @@ async function addSurveyFileUrls(surveys: SiteSurveyWithRelations[]) {
           };
         }),
       );
-      const documentPath = storagePathFromUrl(survey.electricity_bill_url);
-      let electricityBillUrl = survey.electricity_bill_url;
-
-      if (documentPath) {
-        const { data } = await client.storage
-          .from(siteSurveyUploadBucket)
-          .createSignedUrl(documentPath, 60 * 10);
-        electricityBillUrl = data?.signedUrl ?? survey.electricity_bill_url;
-      }
+      const surveyDocuments = await signSurveyFiles(
+        client,
+        survey.survey_documents ?? [],
+      );
+      const electricityBillUrl = await signSurveyDocumentUrl(
+        client,
+        survey.electricity_bill_url,
+      );
 
       return {
         ...survey,
         site_photos: sitePhotos,
+        survey_documents: surveyDocuments,
         electricity_bill_url: electricityBillUrl,
       };
     }),
   );
+}
+
+async function signSurveyFiles(
+  client: NonNullable<typeof supabase>,
+  files: SiteSurveyFile[],
+) {
+  return Promise.all(
+    files.map(async (file) => {
+      const filePath = file.file_path ?? storagePathFromUrl(file.url);
+      if (!filePath) {
+        return file;
+      }
+
+      const { data } = await client.storage
+        .from(siteSurveyUploadBucket)
+        .createSignedUrl(filePath, 60 * 10);
+
+      return {
+        ...file,
+        file_path: filePath,
+        url: data?.signedUrl ?? file.url,
+      };
+    }),
+  );
+}
+
+async function signSurveyDocumentUrl(
+  client: NonNullable<typeof supabase>,
+  url: string | null,
+) {
+  const documentPath = storagePathFromUrl(url);
+  if (!documentPath) {
+    return url;
+  }
+
+  const { data } = await client.storage
+    .from(siteSurveyUploadBucket)
+    .createSignedUrl(documentPath, 60 * 10);
+  return data?.signedUrl ?? url;
 }
 
 async function attachSurveyProjectIds(

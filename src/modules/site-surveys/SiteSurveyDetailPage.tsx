@@ -50,6 +50,7 @@ import {
 import type {
   SiteSurveyFormValues,
   SiteSurveyStatus,
+  SiteSurveyFile,
   SiteSurveyWithRelations,
   SurveyLeadSummary,
 } from "./types";
@@ -213,18 +214,26 @@ export function SiteSurveyDetailPage() {
   }
 
   async function handleDocumentUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.item(0) ?? null;
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
 
-    if (!survey || !file) {
+    if (!survey || files.length === 0) {
       return;
     }
 
     try {
       setUploadingDocument(true);
-      const nextSurvey = await uploadSiteSurveyDocument(profile, survey, file);
+      let nextSurvey = survey;
+      for (const file of files) {
+        nextSurvey = await uploadSiteSurveyDocument(profile, nextSurvey, file);
+      }
       setSurvey(nextSurvey);
-      showToast("Survey document uploaded.", "success");
+      showToast(
+        files.length === 1
+          ? "Survey document uploaded."
+          : `${files.length} survey documents uploaded.`,
+        "success",
+      );
     } catch (nextError) {
       showToast(
         nextError instanceof Error
@@ -239,6 +248,7 @@ export function SiteSurveyDetailPage() {
 
   const contact = survey ? getSurveyContact(survey) : null;
   const workflowState = survey ? surveyQuotationWorkflowState(survey) : "none";
+  const surveyDocuments = survey ? getSurveyDocuments(survey) : [];
 
   return (
     <div className="space-y-6">
@@ -259,114 +269,130 @@ export function SiteSurveyDetailPage() {
 
       {survey && contact ? (
         <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <RecordTitle
-              recordType="Site Survey"
-              name={contact.name}
-              meta={[
-                survey.survey_code ?? "Site Survey",
-                survey.customer?.customer_code ??
-                  survey.lead?.lead_code ??
-                  contact.sourceLabel,
-                labelize(survey.survey_status),
-                contact.phone,
-              ]}
-              action={
-                canUpdate && !survey.archived_at ? (
-                  <button
-                    aria-label="Edit site survey"
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
-                    onClick={() => {
-                      setFormErrors({});
-                      setEditing(surveyToForm(survey));
-                    }}
-                    title="Edit site survey"
-                    type="button"
-                  >
-                    <PencilIcon />
-                  </button>
-                ) : null
-              }
-            />
-            <div className="space-y-3">
-              <NextStepLabel />
-              <div className="flex flex-wrap gap-2">
-                <SiteSurveyMapLinkButton survey={survey} />
-                {canUpdate && !survey.archived_at ? (
-                  <SurveyStatusSelect
-                    disabled={updatingStatus}
-                    value={survey.survey_status ?? "scheduled"}
-                    onChange={setStatusTarget}
-                  />
-                ) : null}
-                {workflowState !== "none" && workflowState !== "accepted" ? (
-                  <SiteSurveyQuotationApprovalPill state={workflowState} />
-                ) : workflowState === "accepted" && canViewProjects ? (
-                  <Link
-                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-                    to={survey.project_id ? `/projects/${survey.project_id}` : "/projects"}
-                  >
-                    Go to Project
-                  </Link>
-                ) : !surveyHasQuotation(survey) && canCreateQuotation ? (
-                  <Link
-                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-                    to={`/quotations?new=1&siteSurveyId=${survey.id}`}
-                  >
-                    Create Quotation
-                  </Link>
-                ) : surveyHasQuotation(survey) ? (
-                  <PlaceholderAction>Go to Project</PlaceholderAction>
-                ) : (
-                  <PlaceholderAction>Create Quotation</PlaceholderAction>
-                )}
+          <div>
+            <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 space-y-3">
+                <RecordTitle
+                  recordType="Site Survey"
+                  name={contact.name}
+                  meta={[
+                    survey.survey_code ?? "Site Survey",
+                    survey.customer?.customer_code ??
+                      survey.lead?.lead_code ??
+                      contact.sourceLabel,
+                    contact.phone,
+                  ]}
+                  action={
+                    canUpdate && !survey.archived_at ? (
+                      <button
+                        aria-label="Edit site survey"
+                        className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-stone-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
+                        onClick={() => {
+                          setFormErrors({});
+                          setEditing(surveyToForm(survey));
+                        }}
+                        title="Edit site survey"
+                        type="button"
+                      >
+                        <PencilIcon />
+                      </button>
+                    ) : null
+                  }
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  {canUpdate && !survey.archived_at ? (
+                    <SurveyStatusSelect
+                      disabled={updatingStatus}
+                      showLabel
+                      value={survey.survey_status ?? "scheduled"}
+                      onChange={setStatusTarget}
+                    />
+                  ) : null}
+                </div>
               </div>
-            </div>
+              <div className="space-y-3 lg:max-w-md lg:shrink-0 lg:text-right">
+                <div className="lg:flex lg:justify-end">
+                  <NextStepLabel />
+                </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <SiteSurveyMapLinkButton survey={survey} />
+                  {workflowState !== "none" && workflowState !== "accepted" ? (
+                    <SiteSurveyQuotationApprovalPill state={workflowState} />
+                  ) : workflowState === "accepted" && canViewProjects ? (
+                    <Link
+                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                      to={survey.project_id ? `/projects/${survey.project_id}` : "/projects"}
+                    >
+                      Go to Project
+                    </Link>
+                  ) : !surveyHasQuotation(survey) && canCreateQuotation ? (
+                    <Link
+                      className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                      to={`/quotations?new=1&siteSurveyId=${survey.id}`}
+                    >
+                      Create Quotation
+                    </Link>
+                  ) : surveyHasQuotation(survey) ? (
+                    <PlaceholderAction>Go to Project</PlaceholderAction>
+                  ) : (
+                    <PlaceholderAction>Create Quotation</PlaceholderAction>
+                  )}
+                </div>
+              </div>
+            </header>
           </div>
 
-          <DetailSection title="Enquiry and Customer Details">
-            <DetailItem label="Source" value={contact.sourceLabel} />
-            <DetailItem label="Name" value={contact.name} />
-            <DetailItem label="Phone" value={contact.phone} />
-            <DetailItem label="Enquiry" value={leadLink(survey)} />
-            <DetailItem label="Customer" value={customerLink(survey)} />
-            <DetailItem
-              label="Contact Email"
-              value={survey.customer?.email ?? survey.lead?.email ?? "-"}
-            />
-            <DetailItem
-              label="Address"
-              value={
-                survey.customer
-                  ? formatCustomerAddress(survey.customer) || "-"
-                  : survey.lead
-                    ? formatLeadAddress(survey.lead) || "-"
-                    : "-"
-              }
-            />
-          </DetailSection>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DetailSection compact title="Enquiry and Customer Details">
+              <DetailItem label="Source" value={contact.sourceLabel} />
+              <DetailItem label="Name" value={contact.name} />
+              <DetailItem label="Phone" value={contact.phone} />
+              <DetailItem label="Enquiry" value={leadLink(survey)} />
+              <DetailItem label="Customer" value={customerLink(survey)} />
+              <DetailItem
+                label="Contact Email"
+                value={survey.customer?.email ?? survey.lead?.email ?? "-"}
+              />
+              <div className="sm:col-span-2">
+                <DetailItem
+                  label="Address"
+                  value={
+                    survey.customer
+                      ? formatCustomerAddress(survey.customer) || "-"
+                      : survey.lead
+                        ? formatLeadAddress(survey.lead) || "-"
+                        : "-"
+                  }
+                />
+              </div>
+            </DetailSection>
 
-          <DetailSection title="Schedule Details">
-            <DetailItem
-              label="Scheduled Date"
-              value={formatDate(survey.scheduled_date)}
-            />
-            <DetailItem
-              label="Scheduled Time"
-              value={formatSurveyTime(survey.scheduled_time)}
-            />
-            <DetailItem
-              label="Assigned Staff"
-              value={staffName(staff, survey.assigned_to)}
-            />
-            <DetailItem
-              label="Completed At"
-              value={formatDateTime(survey.completed_at)}
-            />
-            <DetailItem label="Created" value={formatDate(survey.created_at)} />
-          </DetailSection>
+            <DetailSection compact title="Schedule Details">
+              <DetailItem
+                label="Scheduled Date"
+                value={formatDate(survey.scheduled_date)}
+              />
+              <DetailItem
+                label="Scheduled Time"
+                value={formatSurveyTime(survey.scheduled_time)}
+              />
+              <DetailItem
+                label="Assigned Staff"
+                value={staffName(staff, survey.assigned_to)}
+              />
+              <DetailItem
+                label="Completed At"
+                value={formatDateTime(survey.completed_at)}
+              />
+              <DetailItem label="Created" value={formatDate(survey.created_at)} />
+            </DetailSection>
+          </div>
 
-          <DetailSection title="Technical Survey Data">
+          <DetailSection
+            compact
+            gridClassName="sm:grid-cols-3 lg:grid-cols-4"
+            title="Technical Survey Data"
+          >
             <DetailItem label="Roof Type" value={survey.roof_type ?? "-"} />
             <DetailItem
               label="Roof Area"
@@ -407,8 +433,12 @@ export function SiteSurveyDetailPage() {
               label="Longitude"
               value={survey.longitude === null ? "-" : survey.longitude}
             />
-            <DetailItem label="Address Notes" value={survey.address_notes ?? "-"} />
-            <DetailItem label="Remarks" value={survey.remarks ?? "-"} />
+            <div className="sm:col-span-3 lg:col-span-4">
+              <DetailItem label="Address Notes" value={survey.address_notes ?? "-"} />
+            </div>
+            <div className="sm:col-span-3 lg:col-span-4">
+              <DetailItem label="Remarks" value={survey.remarks ?? "-"} />
+            </div>
           </DetailSection>
 
           <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
@@ -434,6 +464,7 @@ export function SiteSurveyDetailPage() {
                     <input
                       className="sr-only"
                       type="file"
+                      multiple
                       disabled={uploadingDocument}
                       onChange={handleDocumentUpload}
                     />
@@ -448,27 +479,10 @@ export function SiteSurveyDetailPage() {
                 {survey.site_photos && survey.site_photos.length > 0 ? (
                   <div className="mt-2 grid gap-3 sm:grid-cols-2">
                     {survey.site_photos.map((photo) => (
-                      <a
-                        className="block overflow-hidden rounded-lg border border-stone-200 bg-stone-50"
-                        href={photo.url}
+                      <SurveyFileCard
+                        file={photo}
                         key={`${photo.url}-${photo.uploaded_at ?? photo.name}`}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        <img
-                          alt={photo.name}
-                          className="h-36 w-full object-cover"
-                          src={photo.url}
-                        />
-                        <div className="p-2">
-                          <p className="truncate text-sm font-medium text-slate-900">
-                            {photo.name}
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            {fileSizeLabel(photo.size)}
-                          </p>
-                        </div>
-                      </a>
+                      />
                     ))}
                   </div>
                 ) : (
@@ -479,21 +493,28 @@ export function SiteSurveyDetailPage() {
               </div>
 
               <div>
-                <p className="text-sm font-medium text-slate-700">
-                  Survey Document
-                </p>
-                {survey.electricity_bill_url ? (
-                  <a
-                    className="mt-2 inline-flex min-h-10 items-center justify-center rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-stone-50"
-                    href={survey.electricity_bill_url}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    Open {surveyDocumentName(survey)}
-                  </a>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-700">
+                    Survey Documents
+                  </p>
+                  {surveyDocuments.length > 0 ? (
+                    <span className="text-xs text-slate-500">
+                      {surveyDocuments.length}
+                    </span>
+                  ) : null}
+                </div>
+                {surveyDocuments.length > 0 ? (
+                  <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                    {surveyDocuments.map((file) => (
+                      <SurveyFileCard
+                        file={file}
+                        key={`${file.url}-${file.uploaded_at ?? file.name}`}
+                      />
+                    ))}
+                  </div>
                 ) : (
                   <p className="mt-2 text-sm text-slate-500">
-                    No survey document uploaded.
+                    No survey documents uploaded.
                   </p>
                 )}
               </div>
@@ -588,6 +609,115 @@ function fileSizeLabel(size: number | null | undefined) {
   }
 
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function SurveyFileCard({ file }: { file: SiteSurveyFile }) {
+  const extension = fileExtension(file.name || file.url);
+  const mimeType = file.mime_type?.toLowerCase() ?? "";
+  const isImage =
+    mimeType.startsWith("image/") ||
+    ["jpg", "jpeg", "png", "webp", "gif", "avif"].includes(extension);
+  const isPdf = mimeType === "application/pdf" || extension === "pdf";
+
+  return (
+    <a
+      className="block overflow-hidden rounded-lg border border-stone-200 bg-stone-50 transition-shadow hover:shadow-sm"
+      href={file.url}
+      rel="noreferrer"
+      target="_blank"
+    >
+      <div className="relative h-36 overflow-hidden bg-stone-100">
+        {isImage ? (
+          <img
+            alt={`${file.name} preview`}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            src={file.url}
+          />
+        ) : isPdf ? (
+          <iframe
+            className="pointer-events-none h-[175%] w-full origin-top-left scale-[0.58]"
+            loading="lazy"
+            src={`${file.url}#toolbar=0&navpanes=0&scrollbar=0`}
+            title={`${file.name} preview`}
+          />
+        ) : (
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-slate-500">
+            <SurveyFileIcon />
+            <span className="text-xs font-semibold uppercase tracking-[0.18em]">
+              {extension || "File"}
+            </span>
+          </div>
+        )}
+        <span className="absolute bottom-2 left-2 rounded-md bg-slate-950/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-white">
+          {isImage ? "Image" : isPdf ? "PDF" : extension || "File"}
+        </span>
+      </div>
+      <div className="p-2">
+        <p className="truncate text-sm font-medium text-slate-900" title={file.name}>
+          {file.name}
+        </p>
+        <p className="text-xs text-slate-500">{fileSizeLabel(file.size)}</p>
+      </div>
+    </a>
+  );
+}
+
+function SurveyFileIcon() {
+  return (
+    <svg aria-hidden="true" className="size-10" fill="none" viewBox="0 0 24 24">
+      <path
+        d="M7 3.75h6.25L18 8.5v11.75a.75.75 0 0 1-.75.75h-10.5a.75.75 0 0 1-.75-.75V4.5A.75.75 0 0 1 7 3.75Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M13 3.75V8.5h4.75M9 12h6M9 15h6"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function fileExtension(value: string) {
+  const fileName = value.split("?")[0]?.split("/").pop() ?? "";
+  return fileName.includes(".") ? fileName.split(".").pop()?.toLowerCase() ?? "" : "";
+}
+
+function getSurveyDocuments(survey: SiteSurveyWithRelations): SiteSurveyFile[] {
+  const documents = Array.isArray(survey.survey_documents)
+    ? survey.survey_documents
+    : [];
+
+  if (!survey.electricity_bill_url) {
+    return documents;
+  }
+
+  const legacyDocumentIsPresent = documents.some(
+    (document) =>
+      document.url === survey.electricity_bill_url ||
+      document.file_path === survey.electricity_bill_url,
+  );
+
+  if (legacyDocumentIsPresent) {
+    return documents;
+  }
+
+  return [
+    {
+      name: surveyDocumentName(survey),
+      url: survey.electricity_bill_url,
+      mime_type: fileExtension(survey.electricity_bill_url) === "pdf"
+        ? "application/pdf"
+        : undefined,
+    },
+    ...documents,
+  ];
 }
 
 function surveyHasQuotation(survey: SiteSurveyWithRelations) {

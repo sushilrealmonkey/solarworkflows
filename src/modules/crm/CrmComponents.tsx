@@ -479,10 +479,12 @@ export function DetailSection({
   title,
   children,
   compact = false,
+  gridClassName = "sm:grid-cols-2",
 }: {
   title: string;
   children: ReactNode;
   compact?: boolean;
+  gridClassName?: string;
 }) {
   const sectionSpacing = compact ? "p-4" : "p-5";
   const gridSpacing = compact ? "mt-3 gap-3" : "mt-4 gap-4";
@@ -494,7 +496,7 @@ export function DetailSection({
       }
     >
       <h2 className="text-base font-semibold text-slate-950">{title}</h2>
-      <div className={"grid sm:grid-cols-2 " + gridSpacing}>{children}</div>
+      <div className={`grid ${gridClassName} ${gridSpacing}`}>{children}</div>
     </section>
   );
 }

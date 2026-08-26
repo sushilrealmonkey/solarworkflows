@@ -38,6 +38,7 @@ export type SiteSurvey = {
   shadow_free_area_sqft: number | null;
   electricity_bill_url: string | null;
   site_photos: SiteSurveyFile[] | null;
+  survey_documents: SiteSurveyFile[] | null;
   latitude: number | null;
   longitude: number | null;
   google_map_link: string | null;
@@ -135,6 +136,7 @@ export type FieldSurvey = {
   address_notes: string | null;
   remarks: string | null;
   site_photos: SiteSurveyFile[];
+  survey_documents: SiteSurveyFile[];
   electricity_bill_url: string | null;
   created_at: string | null;
   updated_at: string | null;
