@@ -1,4 +1,7 @@
-import { getServerSupabaseClient } from "../whatsapp/persistence.js";
+import {
+  getServerSupabaseClient,
+  getServerSupabaseClientForUser,
+} from "../whatsapp/persistence.js";
 
 const ROOT = "/api/trial-outreach";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -41,7 +44,7 @@ export function isTrialOutreachPath(pathname: string) {
 
 export async function handleTrialOutreachRequest(request: Request) {
   try {
-    const profile = await requirePlatformAccess(request);
+    const { profile, token } = await requirePlatformAccess(request);
     const url = new URL(request.url);
     const segments = url.pathname.split("/").filter(Boolean).slice(2);
 
@@ -49,7 +52,7 @@ export async function handleTrialOutreachRequest(request: Request) {
       return ok(await queue(url));
     }
     if (url.pathname === `${ROOT}/dashboard` && request.method === "GET") {
-      return ok(await dashboard());
+      return ok(await dashboard(token));
     }
     if (url.pathname === `${ROOT}/staff` && request.method === "GET") {
       return ok(await staff());
@@ -106,7 +109,14 @@ async function requirePlatformAccess(request: Request) {
   if (error || !profile || profile.status !== "active" || (profile.is_super_admin !== true && profile.platform_role !== "backend_staff")) {
     throw new TrialOutreachApiError(403, "Trial outreach access required");
   }
-  return profile as { id: string; is_super_admin: boolean; platform_role: string | null };
+  return {
+    token,
+    profile: profile as {
+      id: string;
+      is_super_admin: boolean;
+      platform_role: string | null;
+    },
+  };
 }
 
 async function queue(url: URL) {
@@ -209,8 +219,8 @@ async function company(companyId: string) {
   return { snapshot, touchpoints: touchpointResult.data ?? [], interactions: interactionResult.data ?? [] };
 }
 
-async function dashboard() {
-  const client = getServerSupabaseClient();
+async function dashboard(accessToken: string) {
+  const client = getServerSupabaseClientForUser(accessToken);
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);

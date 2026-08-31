@@ -9,6 +9,7 @@ import type {
 } from "./payload.js";
 
 const SUPABASE_URL_ENV_NAME = "SUPABASE_URL";
+const SUPABASE_ANON_KEY_ENV_NAME = "SUPABASE_ANON_KEY";
 const SUPABASE_SERVICE_ROLE_KEY_ENV_NAME = "SUPABASE_SERVICE_ROLE_KEY";
 
 interface PersistInboundWhatsAppMessageRow {
@@ -84,6 +85,31 @@ export function getServerSupabaseClient(): SupabaseClient {
   });
 
   return serverSupabaseClient;
+}
+
+export function getServerSupabaseClientForUser(
+  accessToken: string,
+): SupabaseClient {
+  const url =
+    process.env[SUPABASE_URL_ENV_NAME] ?? process.env.VITE_SUPABASE_URL;
+  const anonKey =
+    process.env[SUPABASE_ANON_KEY_ENV_NAME] ?? process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
+    throw new Error(
+      `${SUPABASE_URL_ENV_NAME} and ${SUPABASE_ANON_KEY_ENV_NAME} must be configured`,
+    );
+  }
+
+  return createClient(url, anonKey, {
+    global: {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
 }
 
 export async function persistInboundWhatsAppMessage(
