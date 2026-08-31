@@ -1,4 +1,5 @@
 import { supabase } from "../../services/supabaseClient";
+import { isJwtIssuedAtFutureMessage } from "../../services/supabaseFetch";
 import type { UserProfile } from "../../app/AuthProvider";
 import type { CompanyOnboardingProgress, OnboardingStep } from "./types";
 
@@ -16,7 +17,7 @@ export async function fetchCurrentCompanyOnboardingProgress() {
   );
 
   if (error) {
-    throw new Error(error.message);
+    throw new Error(mapOnboardingRpcError(error.message));
   }
 
   return data as CompanyOnboardingProgress | null;
@@ -46,7 +47,7 @@ export async function fetchCurrentCompanyState(profile: UserProfile | null) {
     "get_current_onboarding_company_state",
   );
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mapOnboardingRpcError(error.message));
   return typeof data === "string" ? data : "";
 }
 
@@ -60,7 +61,7 @@ export async function updateCurrentCompanyState(
     { new_state: state },
   );
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(mapOnboardingRpcError(error.message));
   return typeof data === "string" ? data : "";
 }
 
@@ -86,7 +87,7 @@ async function runProgressRpc(
     : await client.rpc(functionName);
 
   if (result.error) {
-    throw new Error(result.error.message);
+    throw new Error(mapOnboardingRpcError(result.error.message));
   }
 
   if (!result.data) {
@@ -94,4 +95,12 @@ async function runProgressRpc(
   }
 
   return result.data as CompanyOnboardingProgress;
+}
+
+function mapOnboardingRpcError(message: string) {
+  if (isJwtIssuedAtFutureMessage(message)) {
+    return "The workspace service is still synchronizing. Please try again in a moment.";
+  }
+
+  return message || "Onboarding could not be loaded. Please try again.";
 }
