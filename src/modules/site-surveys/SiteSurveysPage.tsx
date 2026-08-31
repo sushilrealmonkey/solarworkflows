@@ -49,7 +49,6 @@ import {
   updateSiteSurvey,
   updateSiteSurveyStatus,
 } from "./siteSurveyApi";
-import { SiteSurveyMapLinkButton } from "./SiteSurveyMapLinkButton";
 import {
   formatLeadAddress,
   formatSurveyTime,
@@ -846,7 +845,6 @@ function SurveyNextStepActions({
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <SiteSurveyMapLinkButton survey={survey} className="w-full" />
       {workflowState !== "none" && workflowState !== "accepted" ? (
         <SiteSurveyQuotationApprovalPill state={workflowState} />
       ) : workflowState === "accepted" && canViewProjects ? (
@@ -894,14 +892,18 @@ export function SurveyStatusSelect({
   value,
   onChange,
   disabled,
+  showLabel = false,
 }: {
   value: SiteSurveyStatus;
   onChange: (status: SiteSurveyStatus) => void;
   disabled: boolean;
+  showLabel?: boolean;
 }) {
   return (
-    <label className="inline-flex">
-      <span className="sr-only">Update survey status</span>
+    <label className={showLabel ? "inline-flex flex-col items-start gap-1" : "inline-flex"}>
+      <span className={showLabel ? "text-base font-bold text-slate-950" : "sr-only"}>
+        Update Status
+      </span>
       <select
         className="min-h-9 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-stone-50 focus:border-orange-600 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
         disabled={disabled}
