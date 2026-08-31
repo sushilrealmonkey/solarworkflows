@@ -2338,18 +2338,34 @@ function PlatformDashboard() {
     try {
       setLoading(true);
       setError(null);
-      const [nextSnapshot, nextTrialOutreach] = await Promise.all([
+      const [snapshotResult, trialOutreachResult] = await Promise.allSettled([
         fetchPlatformDashboardSnapshot(),
         fetchTrialOutreachDashboard(),
       ]);
-      setSnapshot(nextSnapshot);
-      setTrialOutreach(nextTrialOutreach);
-    } catch (nextError) {
-      setError(
-        nextError instanceof Error
-          ? nextError.message
-          : "Unable to load platform dashboard.",
-      );
+
+      const errors: string[] = [];
+
+      if (snapshotResult.status === "fulfilled") {
+        setSnapshot(snapshotResult.value);
+      } else {
+        errors.push(
+          snapshotResult.reason instanceof Error
+            ? snapshotResult.reason.message
+            : "Unable to load platform dashboard.",
+        );
+      }
+
+      if (trialOutreachResult.status === "fulfilled") {
+        setTrialOutreach(trialOutreachResult.value);
+      } else {
+        errors.push(
+          trialOutreachResult.reason instanceof Error
+            ? `Trial outreach: ${trialOutreachResult.reason.message}`
+            : "Trial outreach: Unable to load trial outreach metrics.",
+        );
+      }
+
+      if (errors.length > 0) setError(errors.join(" "));
     } finally {
       setLoading(false);
     }
