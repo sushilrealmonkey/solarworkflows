@@ -1,8 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { env } from "../config/env";
-import { fetchWithJwtFutureRetry } from "./supabaseFetch";
+import {
+  fetchWithJwtFutureRetry,
+  registerSupabaseSessionRefresh,
+} from "./supabaseFetch";
 
-export const supabase =
+const configuredSupabase =
   env.supabaseUrl && env.supabaseAnonKey
     ? createClient(env.supabaseUrl, env.supabaseAnonKey, {
         global: {
@@ -15,3 +18,12 @@ export const supabase =
         },
       })
     : null;
+
+if (configuredSupabase) {
+  registerSupabaseSessionRefresh(async () => {
+    const { data, error } = await configuredSupabase.auth.refreshSession();
+    return error ? null : data.session?.access_token ?? null;
+  });
+}
+
+export const supabase = configuredSupabase;

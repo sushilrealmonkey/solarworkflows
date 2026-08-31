@@ -25,7 +25,7 @@ type OnboardingContextValue = {
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
 export function OnboardingGate() {
-  const { status, errorMessage, profile } = useAuth();
+  const { status, errorMessage, profile, refresh } = useAuth();
   const location = useLocation();
   const [progress, setProgress] = useState<CompanyOnboardingProgress | null>(null);
   const [resolvedCompanyId, setResolvedCompanyId] = useState<string | null>(null);
@@ -126,6 +126,7 @@ export function OnboardingGate() {
     return (
       <OnboardingErrorScreen
         message={errorMessage ?? "Your workspace access could not be loaded."}
+        onRetry={() => void refresh()}
       />
     );
   }

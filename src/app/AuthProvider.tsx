@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { supabase } from "../services/supabaseClient";
+import { isJwtIssuedAtFutureMessage } from "../services/supabaseFetch";
 import { fetchSubscriptionAccess } from "../modules/billing/billingApi";
 import type { SubscriptionAccess } from "../modules/billing/types";
 
@@ -185,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (profileError) {
-        setErrorMessage(profileError.message);
+        setErrorMessage(mapAuthProviderError(profileError.message));
         setStatus("error");
         return;
       }
@@ -351,8 +352,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { data } = await supabase.auth.getSession();
-    await loadUserContext(data.session);
+    try {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        setErrorMessage(mapAuthProviderError(error.message));
+        setStatus("error");
+        return;
+      }
+
+      await loadUserContext(data.session);
+    } catch (error) {
+      setErrorMessage(
+        mapAuthProviderError(
+          error instanceof Error
+            ? error.message
+            : "Your workspace access could not be loaded.",
+        ),
+      );
+      setStatus("error");
+    }
   }, [loadUserContext]);
 
   const signOut = useCallback(async () => {
@@ -458,4 +477,12 @@ export function useAuth() {
   }
 
   return context;
+}
+
+function mapAuthProviderError(message: string) {
+  if (isJwtIssuedAtFutureMessage(message)) {
+    return "The workspace service is still synchronizing. Please try again in a moment.";
+  }
+
+  return message || "Your workspace access could not be loaded.";
 }
