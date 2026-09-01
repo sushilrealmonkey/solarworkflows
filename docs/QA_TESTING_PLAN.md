@@ -82,7 +82,11 @@ dummy workflow data for default testing.
 | Scenario | Action | Expected result |
 | --- | --- | --- |
 | Trial access | Use a tenant with an unexpired trial. | All configured modules and Bizlee AI are available, subject to role permissions. |
-| Core catalogue | Open Billing & Plans. | Core shows ₹899 monthly, ₹9,889 yearly, and three total seats; Pro shows ₹1,499 monthly, ₹16,489 yearly, and unlimited seats. |
+| Core catalogue | Open Billing & Plans. | Core shows ₹899 + 18% GST = ₹1,060.82 monthly and ₹9,889 + 18% GST = ₹11,669.02 yearly; Pro shows ₹1,499 + 18% GST = ₹1,768.82 monthly and ₹16,489 + 18% GST = ₹19,457.02 yearly. |
+| Checkout review | Click Choose Core or Choose Pro as a company administrator. | A Bizlee review popup opens before Razorpay, prefills signup customer details, allows edits, and shows the server-verified GST-inclusive price. |
+| Checkout coupon | Enter a configured valid or invalid coupon in the review popup. | A valid coupon is checked server-side and shows the discounted payable amount; an invalid or unconfigured coupon cannot continue to Razorpay. |
+| Checkout customer details | Edit the customer name and mobile number in the review popup, then continue. | The edited values are validated and passed to Razorpay prefill/notification details without changing tenant authorization. |
+| Subscription invoice | Complete a successful Razorpay payment. | The webhook uses the received payment amount, splits taxable value/GST at 18%, stores the Razorpay GST invoice link when available, and retains a branded PDF copy with Realmonkey and Bizlee logos. |
 | Core full modules | As a Core user, create/update a project-based customer, enquiry, survey, BOM template, quotation, project, or project payment. | The action succeeds only when the user's role also grants it. |
 | Core read-only history | Open B2B sales, inventory, vendors, purchases, proformas, or invoices. | A read-only upgrade dialog appears; choosing history shows records with write, delete, export, PDF, dispatch, and receive actions disabled. |
 | Core capability guard | Attempt a direct API/database write for a B2B customer, commercial payment, commercial document, or inventory operation. | Database enforcement rejects the write even if the UI is bypassed. |

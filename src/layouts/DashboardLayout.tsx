@@ -11,6 +11,7 @@ import { useAuth } from "../app/AuthProvider";
 import { PortalLogo, PortalLogoIcon } from "../components/PortalBrand";
 import { SubscriptionNotice } from "../modules/billing/SubscriptionNotice";
 import { NotificationBell } from "../modules/notifications/NotificationBell";
+import { BizleeMascotLauncher } from "../modules/assistant/BizleeMascotLauncher";
 
 const linkBase =
   "group flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-colors";
@@ -144,6 +145,10 @@ export function DashboardLayout() {
             collapsed={sidebarCollapsed}
             items={visibleNavigationItems}
           />
+          <BizleeMascotLauncher
+            placement="sidebar"
+            sidebarCollapsed={sidebarCollapsed}
+          />
           <button
             aria-label={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
             aria-pressed={sidebarCollapsed}
@@ -273,6 +278,7 @@ export function DashboardLayout() {
           <Outlet />
         </main>
       </div>
+      <BizleeMascotLauncher />
     </div>
   );
 }
@@ -467,6 +473,7 @@ function navigationIconId(item: NavigationItem) {
   if (item.path === "/product-sales") return "b2b_sales";
   if (item.path === "/invoice-payments") return "finance";
   if (item.path === "/stock-purchasing") return "stock";
+  if (item.path === "/expense-management") return "finance";
   if (item.path === "/masters") return "product_master";
 
   const exactRouteIcons: Record<string, string> = {
@@ -481,7 +488,9 @@ function navigationIconId(item: NavigationItem) {
     "/products-materials/categories": "categories",
     "/products-materials/catalog-library": "catalog",
     "/inventory": "inventory",
+    "/suppliers": "vendors",
     "/vendors": "vendors",
+    "/expenses": "finance",
     "/purchases": "purchases",
     "/proforma-invoices": "proforma_invoices",
     "/invoices": "invoices",

@@ -18,7 +18,9 @@ const routeModulePrefixes: Array<[string, string]> = [
   ["/quotations", "quotations"],
   ["/projects", "projects"],
   ["/payments", "payments"],
+  ["/expenses", "expenses"],
   ["/inventory", "inventory"],
+  ["/suppliers", "vendors"],
   ["/purchases", "purchases"],
   ["/vendors", "vendors"],
   ["/invoices", "invoices"],
@@ -161,10 +163,22 @@ export const routes: AppRoute[] = [
     description: "Solar stock, equipment, and material tracking will live here.",
   },
   {
+    path: "/expenses",
+    label: "Expenses",
+    moduleKey: "expenses",
+    description: "Vendor expenses, dues, paid entries, receipts, and project references.",
+  },
+  {
     path: "/vendors",
+    label: "Vendors",
+    moduleKey: "vendors",
+    description: "Vendor records, categories, contacts, and expense history.",
+  },
+  {
+    path: "/suppliers",
     label: "Suppliers",
     moduleKey: "vendors",
-    description: "Supplier records and procurement contacts will live here.",
+    description: "Supplier records used for purchasing, purchase orders, and stock receipts.",
   },
   {
     path: "/purchases",

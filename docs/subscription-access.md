@@ -6,10 +6,10 @@ environment.
 
 ## Plans
 
-| Plan | Monthly | Yearly | Seats | Access summary |
-| --- | ---: | ---: | ---: | --- |
-| Bizlee Core | ₹899 | ₹9,889 | 3 total active or invited users | Core solar workflows are writable; commercial modules remain visible as read-only history; Bizlee AI is locked. |
-| Bizlee Pro | ₹1,499 | ₹16,489 | Unlimited | All configured modules and capabilities are writable, subject to role permissions. |
+| Plan | Monthly base | Monthly payable | Yearly base | Yearly payable | Seats | Access summary |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Bizlee Core | ₹899 | ₹1,060.82 | ₹9,889 | ₹11,669.02 | 3 total active or invited users | Core solar workflows are writable; commercial modules remain visible as read-only history; Bizlee AI is locked. |
+| Bizlee Pro | ₹1,499 | ₹1,768.82 | ₹16,489 | ₹19,457.02 | Unlimited | All configured modules and capabilities are writable, subject to role permissions. |
 
 The yearly prices are explicit catalogue values, not client-side monthly-price
 calculations. Trialing and grandfathered workspaces receive full access. Expired
@@ -62,12 +62,27 @@ the user's live Supabase Auth sessions.
 - New workspaces receive a full-feature trial.
 - Company admins choose monthly or yearly Core/Pro plans on `/billing/plans`.
 - `create-razorpay-subscription` validates the selected catalogue price and
-  blocks Core checkout when occupied seats exceed the Core limit. An optional
-  server-side discount-code mapping can link an eligible Razorpay Subscription
-  Offer without exposing the offer ID in the browser.
-- Razorpay webhooks update subscription state and create tenant-visible GST
-  subscription invoices. `verify-razorpay-subscription` handles post-checkout
-  verification.
+  verifies that the selected Razorpay plan charges the catalogue price plus
+  GST @ 18%, and blocks Core checkout when occupied seats exceed the Core limit.
+  An optional server-side discount-code mapping can link an eligible Razorpay
+  Subscription Offer without exposing the offer ID in the browser. The
+  checkout review popup validates the coupon through the same function and
+  shows the discounted GST-inclusive amount before opening Razorpay. Configure
+  the server-only `RAZORPAY_LIVE_DISCOUNT_TYPE` (`percentage` or `flat`) and
+  `RAZORPAY_LIVE_DISCOUNT_VALUE` (percentage points or paise) alongside the
+  code and offer ID so the preview matches the Razorpay offer.
+- The web checkout puts the `UPI AutoPay` payment block first and retains
+  other Razorpay-supported recurring methods as a fallback. The customer
+  authorises the mandate in their UPI application; the plan activates only
+  after Razorpay's verified webhook event. UPI AutoPay is offered only when
+  the payable subscription amount is at most ₹15,000; checkout falls back to
+  Razorpay's other eligible recurring methods above that amount.
+- Razorpay webhooks read the received payment amount, split its GST-inclusive
+  total into taxable value and GST, and create tenant-visible invoices. When
+  Razorpay has already issued a matching 18% GST invoice, its hosted invoice
+  link is stored and used as the primary customer-facing action. A branded
+  Realmonkey/Bizlee PDF copy is also retained for WhatsApp document delivery.
+  `verify-razorpay-subscription` handles post-checkout verification.
 - Cancellation is scheduled through `cancel-razorpay-subscription`; access
   follows the effective subscription period and status.
 - Trial and subscription notification workers use the tenant notification queue.

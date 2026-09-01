@@ -256,7 +256,7 @@ export async function fetchFieldProject(id: string) {
 
 export async function updateFieldProjectStatus(
   id: string,
-  status: "installation_in_progress" | "installation_completed",
+  status: "installation_completed",
 ) {
   const { data, error } = await requireSupabase().rpc(
     "update_field_project_status",

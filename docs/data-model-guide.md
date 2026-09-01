@@ -132,6 +132,12 @@ price, GST, bill number, vendor, and received date. Normal inventory staff acces
 batch history through staff-safe RPCs that omit cost fields unless the user has
 `product_pricing:view`.
 
+Inventory also supports direct stock-in entries for material received without a
+purchase order. The `add_inventory_stock` RPC creates a non-PO batch and an
+append-only `stock_in` ledger row atomically, using `reference_type =
+'manual_stock_in'`. It does not change opening stock or Product Master pricing;
+stock mistakes continue to use the correction or reversal workflows.
+
 Generated quotation, proforma invoice, invoice, and purchase order PDFs are
 stored through the same `documents` metadata and organization document storage
 flow. Quotation detail pages use `quotation_pdf` documents for stored previews

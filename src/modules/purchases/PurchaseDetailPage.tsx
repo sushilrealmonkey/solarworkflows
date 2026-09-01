@@ -489,7 +489,7 @@ export function PurchaseDetailPage() {
                     order.vendor ? (
                       <Link
                         className="font-semibold text-[#06173f]"
-                        to={`/vendors/${order.vendor_id}`}
+                        to={`/suppliers/${order.vendor_id}`}
                       >
                         {order.vendor.vendor_name}
                       </Link>

@@ -34,7 +34,7 @@ function nullable(value: string) {
 
 const purchaseOrderSelect = `
   *,
-  vendor:vendors(id, vendor_code, vendor_name, contact_person, phone, email, gst_number, address_line_1, address_line_2, city, district, state, pincode),
+  vendor:suppliers!purchase_orders_vendor_id_fkey(id, vendor_code:supplier_code, vendor_name:supplier_name, contact_person, phone, email, gst_number, address_line_1, address_line_2, city, district, state, pincode),
   creator:users_profile!purchase_orders_created_by_fkey(id, full_name, email, phone),
   items:purchase_order_items(
     *,

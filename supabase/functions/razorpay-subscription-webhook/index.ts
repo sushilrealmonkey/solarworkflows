@@ -3,12 +3,20 @@ import {
   PDFDocument,
   StandardFonts,
   rgb,
+  type PDFFont,
+  type PDFImage,
+  type PDFPage,
 } from "https://esm.sh/pdf-lib@1.17.1";
 import {
   isTerminalCheckoutEvent,
   subscriptionWebhookAction,
   type SubscriptionWebhookAction,
 } from "./subscription-state.ts";
+import {
+  isGstInvoice,
+  splitInclusiveGst,
+  type RazorpayInvoice,
+} from "./invoice.ts";
 
 type RazorpayEntity = {
   id?: string;
@@ -29,6 +37,15 @@ type RazorpayPaymentEntity = {
   amount?: number;
   currency?: string;
   invoice_id?: string;
+  order_id?: string;
+  email?: string;
+  contact?: string;
+  description?: string;
+  method?: string;
+  status?: string;
+  captured?: boolean;
+  tax?: number;
+  notes?: Record<string, string>;
   created_at?: number;
 };
 
@@ -229,18 +246,35 @@ async function createAndSendSubscriptionInvoice(
     throw new Error("Charged subscription payment metadata is incomplete");
   }
 
-  const taxable = Math.round((gross! * 100) / 118);
-  const gst = gross! - taxable;
-  const { data: company } = await service
-    .from("companies")
-    .select("company_name")
-    .eq("id", input.companyId)
-    .single();
-  const { data: buyer } = await service
-    .from("organization_settings")
-    .select("company_name, gst_number, address, organizations!inner(company_id)")
-    .eq("organizations.company_id", input.companyId)
-    .maybeSingle();
+  const breakdown = splitInclusiveGst(gross!);
+  const [companyResult, buyerResult, razorpayInvoice] = await Promise.all([
+    service
+      .from("companies")
+      .select("company_name")
+      .eq("id", input.companyId)
+      .single(),
+    service
+      .from("organization_settings")
+      .select("company_name, gst_number, address, organizations!inner(company_id)")
+      .eq("organizations.company_id", input.companyId)
+      .maybeSingle(),
+    input.payment?.invoice_id
+      ? fetchRazorpayInvoice(input.payment.invoice_id)
+      : Promise.resolve(null),
+  ]);
+  if (companyResult.error) throw new Error(companyResult.error.message);
+  if (buyerResult.error) throw new Error(buyerResult.error.message);
+
+  const company = companyResult.data;
+  const buyer = buyerResult.data;
+  const providerInvoiceIsUsable = Boolean(
+    razorpayInvoice &&
+    isGstInvoice(razorpayInvoice) &&
+    razorpayInvoice.gross_amount === gross &&
+    razorpayInvoice.taxable_amount === breakdown.taxableAmountPaise &&
+    razorpayInvoice.tax_amount === breakdown.gstAmountPaise &&
+    (!razorpayInvoice.payment_id || razorpayInvoice.payment_id === paymentId),
+  );
 
   const sellerGstin = requiredEnv("BILLING_GSTIN").toUpperCase();
   const buyerGstin = buyer?.gst_number?.trim().toUpperCase() ?? null;
@@ -249,21 +283,30 @@ async function createAndSendSubscriptionInvoice(
     /^\d{2}/.test(buyerGstin) &&
     buyerGstin.slice(0, 2) === sellerGstin.slice(0, 2),
   );
-  const cgst = intraState ? Math.floor(gst / 2) : 0;
-  const sgst = intraState ? gst - cgst : 0;
+  const cgst = intraState
+    ? Math.floor(breakdown.gstAmountPaise / 2)
+    : 0;
+  const sgst = intraState ? breakdown.gstAmountPaise - cgst : 0;
   const invoiceRecord = {
     company_id: input.companyId,
     razorpay_payment_id: paymentId,
     razorpay_subscription_id: input.subscription.id!,
     razorpay_invoice_id: input.payment?.invoice_id ?? null,
+    invoice_source: providerInvoiceIsUsable ? "razorpay" : "custom",
+    razorpay_invoice_number: providerInvoiceIsUsable
+      ? razorpayInvoice?.invoice_number?.trim() || null
+      : null,
+    razorpay_invoice_url: providerInvoiceIsUsable
+      ? razorpayInvoice?.short_url?.trim() || null
+      : null,
     plan_key: input.planKey,
     billing_period: input.billingPeriod,
     gross_amount_paise: gross,
-    taxable_amount_paise: taxable,
-    gst_amount_paise: gst,
+    taxable_amount_paise: breakdown.taxableAmountPaise,
+    gst_amount_paise: breakdown.gstAmountPaise,
     cgst_amount_paise: cgst,
     sgst_amount_paise: sgst,
-    igst_amount_paise: intraState ? 0 : gst,
+    igst_amount_paise: intraState ? 0 : breakdown.gstAmountPaise,
     seller_legal_name: requiredEnv("BILLING_LEGAL_NAME"),
     seller_gstin: sellerGstin,
     seller_address: requiredEnv("BILLING_ADDRESS"),
@@ -315,6 +358,9 @@ async function createAndSendSubscriptionInvoice(
     p_idempotency_key: `razorpay-invoice:${paymentId}`,
     p_payload: {
       invoice_number: existing.invoice_number,
+      invoice_source: existing.invoice_source ?? "custom",
+      razorpay_invoice_number: existing.razorpay_invoice_number ?? null,
+      razorpay_invoice_url: existing.razorpay_invoice_url ?? null,
       amount: formatRupees(gross),
       payment_date: formatDate(new Date(existing.paid_at)),
       invoice_pdf_bucket: existing.pdf_bucket,
@@ -326,76 +372,238 @@ async function createAndSendSubscriptionInvoice(
   if (queueError) throw new Error(`Could not queue invoice notification: ${queueError.message}`);
 }
 
+async function fetchRazorpayInvoice(invoiceId: string): Promise<RazorpayInvoice | null> {
+  if (!/^inv_[A-Za-z0-9]+$/.test(invoiceId)) return null;
+
+  try {
+    return await razorpayRequest(
+      `/v1/invoices/${encodeURIComponent(invoiceId)}`,
+      undefined,
+      "GET",
+    ) as RazorpayInvoice;
+  } catch (error) {
+    // A provider invoice is an enhancement. If it cannot be fetched, keep the
+    // payment traceable and use the branded PDF fallback below.
+    console.error("Unable to fetch Razorpay invoice", {
+      invoiceId,
+      message: safeMessage(error),
+    });
+    return null;
+  }
+}
+
+async function razorpayRequest(
+  path: string,
+  body?: Record<string, unknown>,
+  method = "POST",
+) {
+  const credentials = btoa(
+    `${requiredEnv("RAZORPAY_KEY_ID")}:${requiredEnv("RAZORPAY_KEY_SECRET")}`,
+  );
+  const response = await fetch(`https://api.razorpay.com${path}`, {
+    method,
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(8_000),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      typeof payload?.error?.description === "string"
+        ? payload.error.description
+        : `Razorpay invoice request failed (${response.status})`,
+    );
+  }
+  return payload as Record<string, unknown>;
+}
+
 async function renderSubscriptionInvoice(invoice: Record<string, unknown>) {
   const document = await PDFDocument.create();
   const page = document.addPage([595.28, 841.89]);
   const regular = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
   const navy = rgb(0.025, 0.09, 0.25);
+  const orange = rgb(0.96, 0.38, 0.05);
+  const softOrange = rgb(1, 0.96, 0.92);
+  const softBlue = rgb(0.95, 0.97, 0.99);
+  const border = rgb(0.84, 0.87, 0.91);
   const muted = rgb(0.38, 0.43, 0.5);
   const money = (paise: unknown) =>
-    `INR ${(Number(paise) / 100).toLocaleString("en-IN", {
+    `Rs. ${(Number(paise) / 100).toLocaleString("en-IN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
-  const text = (value: unknown, x: number, y: number, size = 10, font = regular) =>
-    page.drawText(String(value ?? "-").replace(/[^\x20-\x7E]/g, " "), {
-      x, y, size, font, color: navy,
-    });
+  const text = (
+    value: unknown,
+    x: number,
+    y: number,
+    size = 10,
+    font = regular,
+    color = navy,
+    align: "left" | "right" = "left",
+  ) => drawAlignedText(page, value, x, y, size, font, color, align);
+  const label = (value: string, x: number, y: number) =>
+    text(value, x, y, 8, bold, muted);
+  const value = (item: unknown, x: number, y: number, size = 10) =>
+    drawFittedText(page, item, x, y, 145, size, regular, navy);
 
-  page.drawRectangle({ x: 0, y: 760, width: 595.28, height: 82, color: navy });
-  page.drawText("TAX INVOICE", { x: 390, y: 795, size: 22, font: bold, color: rgb(1, 1, 1) });
-  page.drawText(String(invoice.seller_legal_name), {
-    x: 42, y: 802, size: 18, font: bold, color: rgb(1, 1, 1),
-  });
-  page.drawText(`GSTIN: ${invoice.seller_gstin}`, {
-    x: 42, y: 780, size: 9, font: regular, color: rgb(0.9, 0.92, 0.96),
-  });
-  text("Invoice number", 42, 720, 9, bold);
-  text(invoice.invoice_number, 42, 703, 11);
-  text("Invoice date", 230, 720, 9, bold);
-  text(formatDate(new Date(String(invoice.issued_at))), 230, 703, 11);
-  text("Payment reference", 400, 720, 9, bold);
-  text(invoice.razorpay_payment_id, 400, 703, 8);
-  page.drawLine({ start: { x: 42, y: 680 }, end: { x: 553, y: 680 }, thickness: 1, color: rgb(0.85, 0.87, 0.9) });
-  text("BILLED TO", 42, 650, 9, bold);
-  text(invoice.buyer_legal_name, 42, 630, 13, bold);
-  if (invoice.buyer_gstin) text(`GSTIN: ${invoice.buyer_gstin}`, 42, 612, 9);
-  text("DESCRIPTION", 42, 555, 9, bold);
-  text("TAXABLE VALUE", 340, 555, 9, bold);
-  text("GST", 470, 555, 9, bold);
-  page.drawRectangle({ x: 42, y: 515, width: 511, height: 30, color: rgb(0.96, 0.97, 0.98) });
+  const [realmonkeyBytes, bizleeBytes] = await Promise.all([
+    readAsset("assets/realmonkey-logo.png"),
+    readAsset("assets/bizlee-logo.png"),
+  ]);
+  const realmonkeyLogo = realmonkeyBytes
+    ? await document.embedPng(realmonkeyBytes)
+    : null;
+  const bizleeLogo = bizleeBytes ? await document.embedPng(bizleeBytes) : null;
+
+  page.drawRectangle({ x: 0, y: 830, width: 595.28, height: 12, color: orange });
+  page.drawRectangle({ x: 0, y: 0, width: 595.28, height: 6, color: orange });
+  if (realmonkeyLogo) {
+    drawLogo(page, realmonkeyLogo, 42, 775, 208, 42);
+  } else {
+    text(invoice.seller_legal_name, 42, 795, 18, bold);
+  }
+  text("TAX INVOICE", 553, 805, 20, bold, navy, "right");
+  text("Bizlee subscription · GST @ 18% included", 553, 784, 8, regular, muted, "right");
+  page.drawLine({ start: { x: 42, y: 755 }, end: { x: 553, y: 755 }, thickness: 1, color: border });
+
+  label("Invoice number", 42, 724);
+  value(invoice.invoice_number, 42, 706);
+  label("Invoice date", 205, 724);
+  value(formatDate(new Date(String(invoice.issued_at))), 205, 706);
+  label("Payment reference", 370, 724);
+  drawFittedText(page, invoice.razorpay_payment_id, 370, 706, 183, 9, regular, navy);
+
+  page.drawRectangle({ x: 42, y: 618, width: 511, height: 58, color: softBlue });
+  text("BILLED TO", 56, 658, 8, bold, muted);
+  drawFittedText(page, invoice.buyer_legal_name, 56, 638, 270, 13, bold, navy);
+  if (invoice.buyer_gstin) text(`GSTIN: ${invoice.buyer_gstin}`, 56, 624, 8, regular, muted);
+  label("FROM", 370, 658);
+  drawFittedText(page, invoice.seller_legal_name, 370, 640, 165, 9, bold, navy);
+  drawFittedText(page, `GSTIN: ${invoice.seller_gstin}`, 370, 626, 165, 8, regular, muted);
+
+  text("ITEM", 42, 584, 8, bold, muted);
+  text("TAXABLE VALUE", 340, 584, 8, bold, muted);
+  text("GST", 470, 584, 8, bold, muted);
+  page.drawRectangle({ x: 42, y: 494, width: 511, height: 76, color: softOrange });
+  if (bizleeLogo) drawLogo(page, bizleeLogo, 56, 529, 88, 26);
   text(
-    `${invoice.plan_key === "starter" ? "Bizlee Core" : "Bizlee Pro"} - ${String(invoice.billing_period)}`,
-    50,
-    526,
+    `${invoice.plan_key === "starter" ? "Bizlee Core" : "Bizlee Pro"} subscription`,
+    156,
+    548,
     10,
+    bold,
   );
-  text(money(invoice.taxable_amount_paise), 340, 526, 10);
-  text("18%", 470, 526, 10);
-  text("Taxable amount", 340, 470, 10);
-  text(money(invoice.taxable_amount_paise), 470, 470, 10);
-  text("GST @ 18%", 340, 445, 10);
-  text(money(invoice.gst_amount_paise), 470, 445, 10);
-  let taxY = 420;
+  text("Product by Realmonkey", 156, 532, 8, regular, muted);
+  text(formatBillingPeriod(invoice.billing_period), 156, 516, 8, regular, muted);
+  text(money(invoice.taxable_amount_paise), 340, 534, 10);
+  text("18%", 470, 534, 10);
+
+  label("Taxable amount", 340, 458);
+  text(money(invoice.taxable_amount_paise), 470, 458, 10);
+  label("GST @ 18%", 340, 436);
+  text(money(invoice.gst_amount_paise), 470, 436, 10);
+  let taxY = 414;
   if (Number(invoice.cgst_amount_paise) > 0) {
-    text("CGST @ 9%", 340, taxY, 9);
+    label("CGST @ 9%", 340, taxY);
     text(money(invoice.cgst_amount_paise), 470, taxY, 9);
-    taxY -= 22;
-    text("SGST @ 9%", 340, taxY, 9);
+    taxY -= 20;
+    label("SGST @ 9%", 340, taxY);
     text(money(invoice.sgst_amount_paise), 470, taxY, 9);
   } else {
-    text("IGST @ 18%", 340, taxY, 9);
+    label("IGST @ 18%", 340, taxY);
     text(money(invoice.igst_amount_paise), 470, taxY, 9);
   }
-  page.drawLine({ start: { x: 340, y: 370 }, end: { x: 553, y: 370 }, thickness: 1, color: muted });
-  text("TOTAL PAID", 340, 340, 12, bold);
-  text(money(invoice.gross_amount_paise), 470, 340, 12, bold);
-  text(`SAC: ${invoice.sac_code ?? "-"}`, 42, 470, 9);
-  text("Payment status: PAID", 42, 445, 10, bold);
-  text(String(invoice.seller_address), 42, 105, 8);
-  text("This is a computer-generated invoice.", 42, 75, 8);
+  page.drawLine({ start: { x: 340, y: 362 }, end: { x: 553, y: 362 }, thickness: 1, color: border });
+  text("TOTAL PAID", 340, 334, 12, bold);
+  text(money(invoice.gross_amount_paise), 553, 334, 12, bold, navy, "right");
+  text("Payment status: PAID", 42, 416, 9, bold, rgb(0.05, 0.45, 0.28));
+  text(`SAC: ${invoice.sac_code ?? "-"}`, 42, 398, 9, regular, muted);
+  if (invoice.razorpay_invoice_number) {
+    text(`Razorpay invoice: ${invoice.razorpay_invoice_number}`, 42, 380, 8, regular, muted);
+  }
+
+  page.drawRectangle({ x: 42, y: 90, width: 511, height: 74, color: softBlue });
+  text("ISSUER DETAILS", 56, 143, 8, bold, muted);
+  drawFittedText(page, invoice.seller_address, 56, 124, 465, 8, regular, navy);
+  text("This computer-generated invoice is issued against the captured Razorpay payment.", 56, 106, 8, regular, muted);
+  text("Thank you for choosing Bizlee.", 553, 28, 8, bold, navy, "right");
   return await document.save();
+}
+
+function drawLogo(
+  page: PDFPage,
+  image: PDFImage,
+  x: number,
+  y: number,
+  maxWidth: number,
+  maxHeight: number,
+) {
+  const dimensions = image.scaleToFit(maxWidth, maxHeight);
+  page.drawImage(image, {
+    x,
+    y: y + maxHeight - dimensions.height,
+    width: dimensions.width,
+    height: dimensions.height,
+  });
+}
+
+async function readAsset(path: string) {
+  try {
+    return await Deno.readFile(new URL(`./${path}`, import.meta.url));
+  } catch (error) {
+    console.error("Unable to load invoice asset", { path, message: safeMessage(error) });
+    return null;
+  }
+}
+
+function drawFittedText(
+  page: PDFPage,
+  item: unknown,
+  x: number,
+  y: number,
+  maxWidth: number,
+  size: number,
+  font: PDFFont,
+  color: ReturnType<typeof rgb>,
+  align: "left" | "right" = "left",
+) {
+  const content = safePdfText(item);
+  let fittedSize = size;
+  while (fittedSize > 6 && font.widthOfTextAtSize(content, fittedSize) > maxWidth) {
+    fittedSize -= 0.5;
+  }
+  drawAlignedText(page, content, x, y, fittedSize, font, color, align);
+}
+
+function drawAlignedText(
+  page: PDFPage,
+  value: unknown,
+  x: number,
+  y: number,
+  size: number,
+  font: PDFFont,
+  color: ReturnType<typeof rgb>,
+  align: "left" | "right" = "left",
+) {
+  const content = safePdfText(value);
+  const textX = align === "right"
+    ? x - font.widthOfTextAtSize(content, size)
+    : x;
+  page.drawText(content, { x: textX, y, size, font, color });
+}
+
+function safePdfText(value: unknown) {
+  return String(value ?? "-").replace(/[^\x20-\x7E]/g, " ");
+}
+
+function formatBillingPeriod(value: unknown) {
+  return String(value ?? "monthly").toLowerCase() === "yearly"
+    ? "Annual billing"
+    : "Monthly billing";
 }
 
 function resolvePlan(entity: RazorpayEntity | undefined) {

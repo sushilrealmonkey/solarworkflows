@@ -87,14 +87,47 @@ export async function fetchOrganizationSettings() {
 }
 
 export async function fetchSubscriptionInvoices() {
-  const { data, error } = await requireSupabase()
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("subscription_invoices")
+    .select(
+      "id, invoice_number, plan_key, billing_period, gross_amount_paise, taxable_amount_paise, gst_amount_paise, gst_rate, paid_at, pdf_path, invoice_source, razorpay_invoice_number, razorpay_invoice_url",
+    )
+    .order("paid_at", { ascending: false });
+
+  if (!error) {
+    return (data ?? []) as SubscriptionInvoice[];
+  }
+
+  // Keep older deployments readable until the Razorpay invoice-link migration
+  // has reached their database. The modern query is used automatically once
+  // those columns exist.
+  if (!isMissingRazorpayInvoiceColumnsError(error.message)) {
+    throw new Error(error.message);
+  }
+
+  const legacy = await client
     .from("subscription_invoices")
     .select(
       "id, invoice_number, plan_key, billing_period, gross_amount_paise, taxable_amount_paise, gst_amount_paise, gst_rate, paid_at, pdf_path",
     )
     .order("paid_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as SubscriptionInvoice[];
+  if (legacy.error) throw new Error(legacy.error.message);
+
+  return (legacy.data ?? []).map((invoice) => ({
+    ...invoice,
+    invoice_source: "custom",
+    razorpay_invoice_number: null,
+    razorpay_invoice_url: null,
+  })) as SubscriptionInvoice[];
+}
+
+function isMissingRazorpayInvoiceColumnsError(message: string) {
+  return (
+    message.includes("column subscription_invoices.invoice_source does not exist") ||
+    message.includes("column subscription_invoices.razorpay_invoice_number does not exist") ||
+    message.includes("column subscription_invoices.razorpay_invoice_url does not exist")
+  );
 }
 
 export async function openSubscriptionInvoice(filePath: string) {

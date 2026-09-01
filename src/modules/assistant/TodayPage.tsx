@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
+import mascotUrl from "../../assets/mascots/bizlee-solar-mascot.png";
 import { PageLoader } from "../../components/PageLoader";
+import { hasPermission } from "../crm/crmUtils";
+import { NotificationPreferencesSection } from "../settings/NotificationPreferencesSection";
 import { fetchDailyBrief } from "./assistantApi";
 import { AssistantChat, useAssistantChat } from "./AssistantChat";
 import { BriefCard } from "./BriefCard";
 import type { BriefResponse } from "./types";
 
 export function TodayPage() {
-  const { profile } = useAuth();
+  const { profile, permissions } = useAuth();
   const [brief, setBrief] = useState<BriefResponse | null>(null);
   const [briefLoading, setBriefLoading] = useState(true);
   const [briefRefreshing, setBriefRefreshing] = useState(false);
@@ -51,18 +54,37 @@ export function TodayPage() {
   }
 
   const firstName = profile?.full_name?.split(" ")[0];
+  const canManageNotificationSettings = hasPermission(
+    profile,
+    permissions,
+    "settings",
+    "update",
+  );
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
-            {firstName ? `Good day, ${firstName}` : "Today"}
-          </h1>
-          <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
-            {brief?.brief.headline ??
-              "Your assistant reads today's business data and flags what needs attention."}
-          </p>
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <div
+            aria-hidden="true"
+            className="bizlee-greeting-mascot relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-100 via-white to-blue-100 shadow-[0_10px_22px_rgba(15,36,91,0.16)] ring-1 ring-orange-200/80 sm:h-20 sm:w-20"
+          >
+            <img
+              alt=""
+              className="bizlee-mascot-image relative z-10 h-20 w-20 max-w-none object-contain sm:h-24 sm:w-24"
+              draggable={false}
+              src={mascotUrl}
+            />
+          </div>
+          <div className="min-w-0 space-y-1">
+            <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
+              {firstName ? `Good day, ${firstName}` : "Today"}
+            </h1>
+            <p className="max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
+              {brief?.brief.headline ??
+                "Your assistant reads today's business data and flags what needs attention."}
+            </p>
+          </div>
         </div>
         <button
           type="button"
@@ -73,6 +95,10 @@ export function TodayPage() {
           {briefRefreshing ? "Refreshing…" : "Refresh"}
         </button>
       </header>
+
+      {canManageNotificationSettings ? (
+        <NotificationPreferencesSection hideWhenConfigured />
+      ) : null}
 
       {briefLoading ? (
         <div className="space-y-3">

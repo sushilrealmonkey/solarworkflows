@@ -30,7 +30,7 @@ export const mobileApi = {
   registerFieldSurveyEvidence: (id: string, kind: "photo" | "document", evidence: Record<string, unknown>) => api(`/field/site-surveys/${encodeURIComponent(id)}/evidence`, { method: "POST", body: JSON.stringify({ kind, evidence }) }),
   fieldProjects: () => api<{ data: Array<Record<string, unknown>> }>("/field/projects"),
   fieldProject: (id: string) => api<{ data: Record<string, unknown> | null }>(`/field/projects/${encodeURIComponent(id)}`),
-  updateFieldProjectStatus: (id: string, status: "installation_in_progress" | "installation_completed") => api(`/field/projects/${encodeURIComponent(id)}/status`, { method: "POST", body: JSON.stringify({ status }) }),
+  updateFieldProjectStatus: (id: string, status: "installation_completed") => api(`/field/projects/${encodeURIComponent(id)}/status`, { method: "POST", body: JSON.stringify({ status }) }),
 };
 
 export function hasMobilePermission(context: SessionContext | null, module: MobileModuleKey, action: MobileActionKey = "view") {

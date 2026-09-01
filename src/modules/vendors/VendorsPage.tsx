@@ -26,8 +26,11 @@ import {
 } from "../crm/CrmComponents";
 import { hasPermission, labelize } from "../crm/crmUtils";
 import {
+  createVendorCategory,
   createVendor,
+  fetchVendorCategories,
   fetchVendors,
+  updateVendorCategory,
   updateVendor,
 } from "./vendorApi";
 import {
@@ -35,13 +38,17 @@ import {
   validateVendorForm,
   vendorStatusOptions,
   vendorToForm,
-  vendorTypeOptions,
 } from "./vendorUtils";
-import type { Vendor, VendorFormValues, VendorStatus } from "./types";
+import type {
+  Vendor,
+  VendorCategory,
+  VendorFormValues,
+  VendorStatus,
+} from "./types";
 
 type VendorFilters = {
   search: string;
-  type: string;
+  category: string;
   status: string;
 };
 
@@ -56,17 +63,19 @@ export function VendorsPage() {
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [categories, setCategories] = useState<VendorCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<VendorFilters>({
     search: "",
-    type: "",
+    category: "",
     status: "",
   });
   const [formState, setFormState] = useState<VendorFormState | null>(null);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
 
   const canView = hasPermission(profile, permissions, "vendors", "view");
   const canCreate = hasPermission(profile, permissions, "vendors", "create");
@@ -81,10 +90,15 @@ export function VendorsPage() {
     try {
       setLoading(true);
       setError(null);
-      setVendors(await fetchVendors(profile, archiveScope));
+      const [nextVendors, nextCategories] = await Promise.all([
+        fetchVendors(profile, archiveScope),
+        fetchVendorCategories(profile),
+      ]);
+      setVendors(nextVendors);
+      setCategories(nextCategories);
     } catch (nextError) {
       setError(
-        nextError instanceof Error ? nextError.message : "Unable to load suppliers.",
+        nextError instanceof Error ? nextError.message : "Unable to load vendors.",
       );
     } finally {
       setLoading(false);
@@ -112,10 +126,11 @@ export function VendorsPage() {
         ]
           .filter(Boolean)
           .some((value) => value?.toLowerCase().includes(search));
-      const matchesType = !filters.type || vendor.vendor_type === filters.type;
+      const matchesCategory =
+        !filters.category || vendor.category_id === filters.category;
       const matchesStatus = !filters.status || vendor.status === filters.status;
 
-      return matchesSearch && matchesType && matchesStatus;
+      return matchesSearch && matchesCategory && matchesStatus;
     });
   }, [vendors, filters]);
 
@@ -125,7 +140,7 @@ export function VendorsPage() {
   if (!canView) {
     return (
       <AccessDenied
-        title="Suppliers are not available"
+        title="Vendors are not available"
         description="Your role needs vendors:view access to open this module."
       />
     );
@@ -181,16 +196,16 @@ export function VendorsPage() {
       setSaving(true);
       if (formState.mode === "create") {
         await createVendor(profile, formState.values);
-        showToast("Supplier created.", "success");
+        showToast("Vendor created.", "success");
       } else if (formState.vendor) {
         await updateVendor(formState.vendor.id, formState.values);
-        showToast("Supplier updated.", "success");
+        showToast("Vendor updated.", "success");
       }
       setFormState(null);
       await loadData();
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Supplier save failed.",
+        nextError instanceof Error ? nextError.message : "Vendor save failed.",
         "error",
       );
     } finally {
@@ -202,30 +217,38 @@ export function VendorsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <PageHeader
-          title="Suppliers"
-          description="Manage suppliers, installers, transporters, and service partners."
+          title="Vendors"
+          description="Manage day-to-day service partners, contractors, and expense payees."
         />
-        {canCreate ? <Button onClick={openCreateForm}>Add Supplier</Button> : null}
+        <div className="flex flex-wrap gap-2">
+          {canUpdate ? (
+            <Button onClick={() => setCategoryManagerOpen(true)} variant="secondary">
+              Manage Categories
+            </Button>
+          ) : null}
+          {canCreate ? <Button onClick={openCreateForm}>Add Vendor</Button> : null}
+        </div>
       </div>
 
       <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <VendorMetricCard label="Total Suppliers" value={vendors.length} />
+        <VendorMetricCard
+          label="Total Vendors"
+          value={vendors.length}
+        />
         <VendorMetricCard
           label="Active"
           value={vendors.filter((vendor) => vendor.status === "active").length}
         />
         <VendorMetricCard
-          label="Suppliers"
-          value={
-            vendors.filter((vendor) => vendor.vendor_type === "supplier").length
-          }
+          label="Categories"
+          value={categories.filter((category) => category.is_active).length}
         />
         <VendorMetricCard
-          label="Contractors"
+          label="Due Terms Set"
           value={
-            vendors.filter((vendor) => vendor.vendor_type === "contractor").length
+            vendors.filter((vendor) => vendor.payment_terms_days != null).length
           }
         />
       </section>
@@ -233,20 +256,22 @@ export function VendorsPage() {
       <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
         <SearchInput
           className="block"
-          placeholder="Search supplier, contact, phone, or GST"
+          placeholder="Search vendor, contact, phone, or GST"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
         />
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <SelectInput
-            label="Supplier Type"
-            value={filters.type}
-            onChange={(type) => setFilters((current) => ({ ...current, type }))}
+            label="Vendor Category"
+            value={filters.category}
+            onChange={(category) =>
+              setFilters((current) => ({ ...current, category }))
+            }
             options={[
-              { value: "", label: "All types" },
-              ...vendorTypeOptions.map((value) => ({
-                value,
-                label: labelize(value),
+              { value: "", label: "All categories" },
+              ...categories.map((category) => ({
+                value: category.id,
+                label: category.name,
               })),
             ]}
           />
@@ -266,12 +291,12 @@ export function VendorsPage() {
       </section>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load suppliers" description={error} /> : null}
+      {error ? <EmptyState title="Could not load vendors" description={error} /> : null}
       {!loading && !error && filteredVendors.length === 0 ? (
         <EmptyState
-          title="No suppliers found"
-          description="Add suppliers to support purchasing and procurement tracking."
-          action={canCreate ? <Button onClick={openCreateForm}>Add Supplier</Button> : null}
+          title="No vendors found"
+          description="Add vendors to start tracking day-to-day expenses and purchasing contacts."
+          action={canCreate ? <Button onClick={openCreateForm}>Add Vendor</Button> : null}
         />
       ) : null}
 
@@ -282,11 +307,11 @@ export function VendorsPage() {
               <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Code</th>
-                  <th className="px-4 py-3">Supplier</th>
+                  <th className="px-4 py-3">Vendor</th>
                   <th className="px-4 py-3">Contact</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">GST</th>
-                  <th className="px-4 py-3">Type</th>
+                  <th className="px-4 py-3">Category</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
@@ -307,7 +332,7 @@ export function VendorsPage() {
                     <td className="px-4 py-3">{vendor.contact_person ?? "-"}</td>
                     <td className="px-4 py-3">{vendor.phone ?? "-"}</td>
                     <td className="px-4 py-3">{vendor.gst_number ?? "-"}</td>
-                    <td className="px-4 py-3">{labelize(vendor.vendor_type)}</td>
+                    <td className="px-4 py-3">{vendor.category?.name ?? "-"}</td>
                     <td className="px-4 py-3">
                       <VendorStatusBadge value={vendor.status} />
                     </td>
@@ -330,7 +355,7 @@ export function VendorsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {vendor.vendor_code ?? "Supplier"}
+                      {vendor.vendor_code ?? "Vendor"}
                     </p>
                     <h2 className="mt-1 text-base font-semibold text-slate-950">
                       {vendor.vendor_name}
@@ -342,7 +367,7 @@ export function VendorsPage() {
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <VendorStatusBadge value={vendor.status} />
-                  <Badge tone="blue">{labelize(vendor.vendor_type)}</Badge>
+                  <Badge tone="blue">{vendor.category?.name ?? "Uncategorized"}</Badge>
                 </div>
                 <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
@@ -352,9 +377,9 @@ export function VendorsPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs text-slate-500">Type</dt>
+                    <dt className="text-xs text-slate-500">Category</dt>
                     <dd className="font-medium text-slate-900">
-                      {labelize(vendor.vendor_type)}
+                      {vendor.category?.name ?? "-"}
                     </dd>
                   </div>
                   <div>
@@ -390,13 +415,13 @@ export function VendorsPage() {
               </article>
             ))}
           </div>
-          <TablePagination label="suppliers" pagination={vendorPagination} />
+          <TablePagination label="vendors" pagination={vendorPagination} />
         </>
       ) : null}
 
       {formState ? (
         <VendorFormModal
-          title={formState.mode === "create" ? "Add Supplier" : "Edit Supplier"}
+          title={formState.mode === "create" ? "Add Vendor" : "Edit Vendor"}
           values={formState.values}
           setValues={(values) =>
             setFormState((current) => (current ? { ...current, values } : current))
@@ -405,6 +430,37 @@ export function VendorsPage() {
           onClose={() => setFormState(null)}
           onSubmit={handleSubmit}
           saving={saving}
+          categories={categories}
+          onCreateCategory={async (name) => {
+            const category = await createVendorCategory(profile, name);
+            setCategories((current) =>
+              [...current, category].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            return category;
+          }}
+        />
+      ) : null}
+
+      {categoryManagerOpen ? (
+        <CategoryManagerModal
+          categories={categories}
+          onClose={() => setCategoryManagerOpen(false)}
+          onCreate={async (name) => {
+            const category = await createVendorCategory(profile, name);
+            setCategories((current) =>
+              [...current, category].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            showToast("Vendor category added.", "success");
+          }}
+          onUpdate={async (category, values) => {
+            const updated = await updateVendorCategory(category.id, values);
+            setCategories((current) =>
+              current
+                .map((item) => (item.id === updated.id ? updated : item))
+                .sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            showToast("Vendor category updated.", "success");
+          }}
         />
       ) : null}
 
@@ -437,6 +493,8 @@ export function VendorFormModal({
   onClose,
   onSubmit,
   saving,
+  categories,
+  onCreateCategory,
 }: {
   title: string;
   values: VendorFormValues;
@@ -445,20 +503,48 @@ export function VendorFormModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
+  categories: VendorCategory[];
+  onCreateCategory: (name: string) => Promise<VendorCategory>;
 }) {
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [categoryName, setCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const update = (key: keyof VendorFormValues, value: string) =>
     setValues({ ...values, [key]: value });
+
+  async function handleCreateCategory() {
+    if (!categoryName.trim()) {
+      setCategoryError("Enter a category name.");
+      return;
+    }
+
+    try {
+      setCategorySaving(true);
+      setCategoryError(null);
+      const category = await onCreateCategory(categoryName);
+      update("category_id", category.id);
+      setCategoryName("");
+      setAddingCategory(false);
+    } catch (error) {
+      setCategoryError(
+        error instanceof Error ? error.message : "Category could not be added.",
+      );
+    } finally {
+      setCategorySaving(false);
+    }
+  }
 
   return (
     <Modal
       title={title}
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Save Supplier"
+      submitLabel="Save Vendor"
       submitting={saving}
     >
       <TextInput
-        label="Supplier Name"
+        label="Vendor Name"
         value={values.vendor_name}
         onChange={(value) => update("vendor_name", value)}
         error={errors.vendor_name}
@@ -487,6 +573,55 @@ export function VendorFormModal({
         inputMode="email"
         type="email"
       />
+      <div>
+        <SelectInput
+          label="Vendor Category"
+          value={values.category_id}
+          onChange={(value) => {
+            if (value === "__add_category__") {
+              setAddingCategory(true);
+              return;
+            }
+            update("category_id", value);
+          }}
+          options={[
+            { value: "", label: "Select category" },
+            ...categories
+              .filter(
+                (category) => category.is_active || category.id === values.category_id,
+              )
+              .map((category) => ({ value: category.id, label: category.name })),
+            { value: "__add_category__", label: "+ Add new category" },
+          ]}
+        />
+        {errors.category_id ? (
+          <p className="mt-1 text-xs text-rose-700">{errors.category_id}</p>
+        ) : null}
+        {addingCategory ? (
+          <div className="mt-3 rounded-lg border border-orange-100 bg-orange-50 p-3">
+            <TextInput
+              label="New Category Name"
+              value={categoryName}
+              onChange={setCategoryName}
+              error={categoryError ?? undefined}
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button onClick={() => void handleCreateCategory()} disabled={categorySaving}>
+                {categorySaving ? "Adding..." : "Add Category"}
+              </Button>
+              <Button
+                onClick={() => {
+                  setAddingCategory(false);
+                  setCategoryError(null);
+                }}
+                variant="secondary"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+      </div>
       <TextInput
         label="GST Number"
         value={values.gst_number}
@@ -498,15 +633,6 @@ export function VendorFormModal({
         onChange={(value) => update("pan_number", value)}
       />
       <SelectInput
-        label="Supplier Type"
-        value={values.vendor_type}
-        onChange={(value) => update("vendor_type", value as VendorFormValues["vendor_type"])}
-        options={vendorTypeOptions.map((value) => ({
-          value,
-          label: labelize(value),
-        }))}
-      />
-      <SelectInput
         label="Status"
         value={values.status}
         onChange={(value) => update("status", value as VendorFormValues["status"])}
@@ -514,6 +640,30 @@ export function VendorFormModal({
           value,
           label: labelize(value),
         }))}
+      />
+      <SelectInput
+        label="Preferred Payment Method"
+        value={values.preferred_payment_method}
+        onChange={(value) => update("preferred_payment_method", value)}
+        options={[
+          { value: "", label: "Not specified" },
+          { value: "cash", label: "Cash" },
+          { value: "upi", label: "UPI" },
+          { value: "bank_transfer", label: "Bank Transfer" },
+          { value: "cheque", label: "Cheque" },
+          { value: "card", label: "Card" },
+          { value: "other", label: "Other" },
+        ]}
+      />
+      <TextInput
+        label="Payment Terms (Days)"
+        value={values.payment_terms_days}
+        onChange={(value) => update("payment_terms_days", value)}
+        error={errors.payment_terms_days}
+        type="number"
+        min={0}
+        max={365}
+        step={1}
       />
       <TextInput
         label="City"
@@ -550,6 +700,140 @@ export function VendorFormModal({
         value={values.notes}
         onChange={(value) => update("notes", value)}
       />
+    </Modal>
+  );
+}
+
+function CategoryManagerModal({
+  categories,
+  onClose,
+  onCreate,
+  onUpdate,
+}: {
+  categories: VendorCategory[];
+  onClose: () => void;
+  onCreate: (name: string) => Promise<void>;
+  onUpdate: (
+    category: VendorCategory,
+    values: { name: string; is_active: boolean },
+  ) => Promise<void>;
+}) {
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function createCategory() {
+    if (!newName.trim()) {
+      setError("Enter a category name.");
+      return;
+    }
+    try {
+      setBusyId("new");
+      setError(null);
+      await onCreate(newName);
+      setNewName("");
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Category could not be added.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function saveCategory(category: VendorCategory, isActive = category.is_active) {
+    const nextName = editingId === category.id ? editingName : category.name;
+    if (!nextName.trim()) {
+      setError("Category name is required.");
+      return;
+    }
+    try {
+      setBusyId(category.id);
+      setError(null);
+      await onUpdate(category, { name: nextName, is_active: isActive });
+      setEditingId(null);
+    } catch (value) {
+      setError(value instanceof Error ? value.message : "Category could not be updated.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Modal
+      title="Manage Vendor Categories"
+      onClose={onClose}
+      onSubmit={(event) => event.preventDefault()}
+      submitLabel="Done"
+      submitting={false}
+      hideSubmit
+      maxWidthClass="sm:max-w-2xl"
+    >
+      <div className="md:col-span-2 rounded-lg border border-stone-200 bg-stone-50 p-4">
+        <TextInput label="New Category" value={newName} onChange={setNewName} />
+        <div className="mt-3">
+          <Button onClick={() => void createCategory()} disabled={busyId === "new"}>
+            {busyId === "new" ? "Adding..." : "Add Category"}
+          </Button>
+        </div>
+      </div>
+      {error ? (
+        <p className="md:col-span-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {error}
+        </p>
+      ) : null}
+      <div className="md:col-span-2 divide-y divide-stone-100 rounded-lg border border-stone-200">
+        {categories.map((category) => (
+          <div key={category.id} className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 flex-1">
+              {editingId === category.id ? (
+                <TextInput label="Category Name" value={editingName} onChange={setEditingName} />
+              ) : (
+                <div>
+                  <p className="font-medium text-slate-950">{category.name}</p>
+                  <p className="text-xs text-slate-500">
+                    {category.is_active ? "Available in forms" : "Inactive"}
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {editingId === category.id ? (
+                <>
+                  <Button
+                    onClick={() => void saveCategory(category)}
+                    disabled={busyId === category.id}
+                  >
+                    Save
+                  </Button>
+                  <Button onClick={() => setEditingId(null)} variant="secondary">
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    onClick={() => {
+                      setEditingId(category.id);
+                      setEditingName(category.name);
+                    }}
+                    variant="secondary"
+                  >
+                    Rename
+                  </Button>
+                  <Button
+                    onClick={() => void saveCategory(category, !category.is_active)}
+                    variant="secondary"
+                    disabled={busyId === category.id}
+                  >
+                    {category.is_active ? "Deactivate" : "Activate"}
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </Modal>
   );
 }

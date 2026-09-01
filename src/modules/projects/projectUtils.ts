@@ -4,24 +4,13 @@ import type {
   Project,
   ProjectFormValues,
   ProjectPriority,
-  ProjectStatus,
   ProjectWithRelations,
 } from "./types";
 
-export const projectStatusOptions: ProjectStatus[] = [
-  "created",
-  "material_pending",
-  "material_dispatched",
-  "installation_scheduled",
-  "installation_in_progress",
-  "installation_completed",
-  "inspection_pending",
-  "inspection_completed",
-  "net_metering_pending",
-  "commissioned",
-  "cancelled",
-  "on_hold",
-];
+export {
+  projectStatusOptions,
+  projectStatusTone,
+} from "./projectWorkflow";
 
 export const projectPriorityOptions: ProjectPriority[] = [
   "low",
@@ -218,36 +207,6 @@ export function getProjectContact(project: ProjectWithRelations) {
     phone: project.customer?.phone ?? project.lead?.phone ?? "-",
     address: project.customer ? formatCustomerAddress(project.customer) : "",
   };
-}
-
-export function projectStatusTone(value: string | null | undefined) {
-  if (value === "commissioned" || value === "inspection_completed") {
-    return "green" as const;
-  }
-
-  if (value === "cancelled") {
-    return "red" as const;
-  }
-
-  if (
-    value === "material_pending" ||
-    value === "material_dispatched" ||
-    value === "inspection_pending" ||
-    value === "net_metering_pending" ||
-    value === "on_hold"
-  ) {
-    return "amber" as const;
-  }
-
-  if (
-    value === "installation_scheduled" ||
-    value === "installation_in_progress" ||
-    value === "installation_completed"
-  ) {
-    return "blue" as const;
-  }
-
-  return "neutral" as const;
 }
 
 export function priorityTone(value: string | null | undefined) {

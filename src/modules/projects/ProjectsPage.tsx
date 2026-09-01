@@ -48,11 +48,16 @@ import {
   parseTeamInput,
   priorityTone,
   projectPriorityOptions,
-  projectStatusOptions,
-  projectStatusTone,
   projectTypeOptions,
   teamVendorAssignmentInput,
 } from "./projectUtils";
+import {
+  projectExceptionStatusOptions,
+  projectExecutionStatusOptions,
+  projectStatusLabel,
+  projectStatusOptions,
+  projectStatusTone,
+} from "./projectWorkflow";
 import type {
   ProjectFormValues,
   ProjectStatus,
@@ -213,8 +218,8 @@ export function ProjectsPage() {
           options={[
             { value: "", label: "All statuses" },
             ...projectStatusOptions.map((value) => ({
-              value,
-              label: labelize(value),
+              value: value.value,
+              label: value.label,
             })),
           ]}
         />
@@ -572,9 +577,9 @@ export function ProjectFormModal({
         label="Project Status"
         value={values.project_status}
         onChange={(value) => update("project_status", value as ProjectStatus)}
-        options={projectStatusOptions.map((value) => ({
-          value,
-          label: labelize(value),
+        options={projectStatusOptions.map((option) => ({
+          value: option.value,
+          label: option.label,
         }))}
       />
       <SelectInput
@@ -782,7 +787,7 @@ export function ProjectStatusBadge({
 }: {
   value: string | null | undefined;
 }) {
-  return <Badge tone={projectStatusTone(value)}>{labelize(value)}</Badge>;
+  return <Badge tone={projectStatusTone(value)}>{projectStatusLabel(value)}</Badge>;
 }
 
 export function PriorityBadge({ value }: { value: string | null | undefined }) {
@@ -807,11 +812,20 @@ export function ProjectStatusSelect({
         value={value}
         onChange={(event) => onChange(event.target.value as ProjectStatus)}
       >
-        {projectStatusOptions.map((status) => (
-          <option key={status} value={status}>
-            {labelize(status)}
-          </option>
-        ))}
+        <optgroup label="Execution steps">
+          {projectExecutionStatusOptions.map((status) => (
+            <option key={status.value} value={status.value}>
+              {status.label}
+            </option>
+          ))}
+        </optgroup>
+        <optgroup label="Other statuses">
+          {projectExceptionStatusOptions.map((status) => (
+            <option key={status.value} value={status.value}>
+              {status.label}
+            </option>
+          ))}
+        </optgroup>
       </select>
     </label>
   );

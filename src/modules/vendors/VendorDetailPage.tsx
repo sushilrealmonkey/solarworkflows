@@ -5,6 +5,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
 import {
   AccessDenied,
+  Badge,
   Button,
   DetailItem,
   DetailSection,
@@ -13,17 +14,13 @@ import {
 } from "../crm/CrmComponents";
 import {
   formatDate,
-  hasAdminPricingAccess,
   hasPermission,
   labelize,
 } from "../crm/crmUtils";
 import {
-  PurchaseOrdersSection,
-} from "../purchases/PurchasesPage";
-import { fetchPurchaseOrders } from "../purchases/purchaseApi";
-import type { PurchaseOrderWithRelations } from "../purchases/types";
-import {
+  createVendorCategory,
   fetchVendor,
+  fetchVendorCategories,
   updateVendor,
 } from "./vendorApi";
 import {
@@ -32,18 +29,21 @@ import {
   vendorToForm,
 } from "./vendorUtils";
 import { VendorFormModal, VendorStatusBadge } from "./VendorsPage";
-import type { Vendor, VendorFormValues } from "./types";
+import type { Vendor, VendorCategory, VendorFormValues } from "./types";
 import { RecordLifecyclePanel } from "../lifecycle/RecordLifecyclePanel";
+import { fetchExpenses } from "../expenses/expenseApi";
+import type { VendorExpenseWithRelations } from "../expenses/types";
+import { formatExpenseCurrency, todayInputValue } from "../expenses/expenseUtils";
 
 export function VendorDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { profile, permissions, roleNames } = useAuth();
+  const listPath = "/vendors";
+  const { profile, permissions, organization } = useAuth();
   const { showToast } = useToast();
   const [vendor, setVendor] = useState<Vendor | null>(null);
-  const [purchaseOrders, setPurchaseOrders] = useState<
-    PurchaseOrderWithRelations[]
-  >([]);
+  const [expenses, setExpenses] = useState<VendorExpenseWithRelations[]>([]);
+  const [categories, setCategories] = useState<VendorCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<VendorFormValues | null>(null);
@@ -53,13 +53,7 @@ export function VendorDetailPage() {
   const canView = hasPermission(profile, permissions, "vendors", "view");
   const canUpdate = hasPermission(profile, permissions, "vendors", "update");
   const canDelete = hasPermission(profile, permissions, "vendors", "delete");
-  const canViewPurchases = hasPermission(profile, permissions, "inventory", "view");
-  const canViewPricing = hasAdminPricingAccess(
-    profile,
-    permissions,
-    roleNames,
-    "view",
-  );
+  const canViewExpenses = hasPermission(profile, permissions, "expenses", "view");
 
   async function loadVendor() {
     if (!canView || !id) {
@@ -70,19 +64,17 @@ export function VendorDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextVendor, nextPurchaseOrders] = await Promise.all([
+      const [nextVendor, nextExpenses, nextCategories] = await Promise.all([
         fetchVendor(profile, id),
-        canViewPurchases
-          ? fetchPurchaseOrders(profile, { vendorId: id }, {
-              includePricing: canViewPricing,
-            })
-          : Promise.resolve([]),
+        canViewExpenses ? fetchExpenses(profile, { vendorId: id }) : Promise.resolve([]),
+        fetchVendorCategories(profile),
       ]);
       setVendor(nextVendor);
-      setPurchaseOrders(nextPurchaseOrders);
+      setExpenses(nextExpenses);
+      setCategories(nextCategories);
     } catch (nextError) {
       setError(
-        nextError instanceof Error ? nextError.message : "Unable to load supplier.",
+        nextError instanceof Error ? nextError.message : "Unable to load vendor.",
       );
     } finally {
       setLoading(false);
@@ -93,13 +85,13 @@ export function VendorDetailPage() {
     void loadVendor();
     // loadVendor closes over current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, canViewPurchases, canViewPricing, id, profile?.id]);
+  }, [canView, canViewExpenses, id, profile?.id]);
 
   if (!canView) {
     return (
       <AccessDenied
-        title="Supplier details are not available"
-        description="Your role needs vendors:view access to open supplier details."
+        title="Vendor details are not available"
+        description="Your role needs vendors:view access to open vendor details."
       />
     );
   }
@@ -122,11 +114,11 @@ export function VendorDetailPage() {
       setSaving(true);
       await updateVendor(vendor.id, editing);
       setEditing(null);
-      showToast("Supplier updated.", "success");
+      showToast("Vendor updated.", "success");
       await loadVendor();
     } catch (nextError) {
       showToast(
-        nextError instanceof Error ? nextError.message : "Supplier update failed.",
+        nextError instanceof Error ? nextError.message : "Vendor update failed.",
         "error",
       );
     } finally {
@@ -136,16 +128,16 @@ export function VendorDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link className="text-sm font-semibold text-[#06173f]" to="/vendors">
-        Back to suppliers
+      <Link className="text-sm font-semibold text-[#06173f]" to={listPath}>
+        Back to vendors
       </Link>
 
       {loading ? <LoadingSkeleton /> : null}
-      {error ? <EmptyState title="Could not load supplier" description={error} /> : null}
+      {error ? <EmptyState title="Could not load vendor" description={error} /> : null}
       {!loading && !error && !vendor ? (
         <EmptyState
-          title="Supplier not found"
-          description="This supplier may have been deleted or is outside your organization access."
+          title="Vendor not found"
+          description="This vendor may have been deleted or is outside your company access."
         />
       ) : null}
 
@@ -154,9 +146,7 @@ export function VendorDetailPage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <PageHeader
               title={vendor.vendor_name}
-              description={`${vendor.vendor_code ?? "Supplier"} / ${labelize(
-                vendor.vendor_type,
-              )}`}
+              description={`${vendor.vendor_code ?? "Vendor"} / ${vendor.category?.name ?? "Uncategorized"}`}
             />
             <div className="flex flex-wrap gap-2">
               {canUpdate && !vendor.archived_at ? (
@@ -167,19 +157,28 @@ export function VendorDetailPage() {
                   }}
                   variant="secondary"
                 >
-                  Edit Supplier
+                  Edit Vendor
                 </Button>
               ) : null}
             </div>
           </div>
 
-          <DetailSection title="Supplier Details">
-            <DetailItem label="Supplier Code" value={vendor.vendor_code ?? "-"} />
+          <DetailSection title="Vendor Details">
+            <DetailItem label="Vendor Code" value={vendor.vendor_code ?? "-"} />
             <DetailItem label="Status" value={<VendorStatusBadge value={vendor.status} />} />
-            <DetailItem label="Supplier Type" value={labelize(vendor.vendor_type)} />
+            <DetailItem label="Category" value={vendor.category?.name ?? "-"} />
+            <DetailItem label="Preferred Payment" value={labelize(vendor.preferred_payment_method)} />
+            <DetailItem label="Payment Terms" value={vendor.payment_terms_days == null ? "-" : `${vendor.payment_terms_days} days`} />
             <DetailItem label="Created" value={formatDate(vendor.created_at)} />
             <DetailItem label="Notes" value={vendor.notes ?? "-"} />
           </DetailSection>
+
+          {canViewExpenses ? (
+            <VendorExpensesSection
+              currency={organization.currency}
+              expenses={expenses}
+            />
+          ) : null}
 
           <DetailSection title="Contact">
             <DetailItem label="Contact Person" value={vendor.contact_person ?? "-"} />
@@ -197,15 +196,6 @@ export function VendorDetailPage() {
             />
           </DetailSection>
 
-          {canViewPurchases ? (
-            <PurchaseOrdersSection
-              orders={purchaseOrders}
-              canReceive={false}
-              showPricing={canViewPricing}
-              emptyTitle="No purchase orders for this supplier"
-            />
-          ) : null}
-
           <RecordLifecyclePanel
             archiveReason={vendor.archive_reason}
             archivedAt={vendor.archived_at}
@@ -214,11 +204,11 @@ export function VendorDetailPage() {
             moduleKey="vendors"
             onChanged={async (action) => {
               if (action === "delete") {
-                showToast("Supplier permanently deleted.", "success");
-                navigate("/vendors");
+                showToast("Vendor permanently deleted.", "success");
+                navigate(listPath);
                 return;
               }
-              showToast(action === "archive" ? "Supplier archived." : "Supplier restored.", "success");
+              showToast(action === "archive" ? "Vendor archived." : "Vendor restored.", "success");
               await loadVendor();
             }}
             recordId={vendor.id}
@@ -229,16 +219,80 @@ export function VendorDetailPage() {
 
       {editing ? (
         <VendorFormModal
-          title="Edit Supplier"
+          title="Edit Vendor"
           values={editing}
           setValues={setEditing}
           errors={formErrors}
           onClose={() => setEditing(null)}
           onSubmit={handleEditSubmit}
           saving={saving}
+          categories={categories}
+          onCreateCategory={async (name) => {
+            const category = await createVendorCategory(profile, name);
+            setCategories((current) =>
+              [...current, category].sort((a, b) => a.name.localeCompare(b.name)),
+            );
+            return category;
+          }}
         />
       ) : null}
 
     </div>
+  );
+}
+
+function VendorExpensesSection({
+  expenses,
+  currency,
+}: {
+  expenses: VendorExpenseWithRelations[];
+  currency: string;
+}) {
+  const paid = expenses
+    .filter((expense) => expense.payment_status === "paid")
+    .reduce((total, expense) => total + Number(expense.amount || 0), 0);
+  const due = expenses
+    .filter((expense) => expense.payment_status === "due")
+    .reduce((total, expense) => total + Number(expense.amount || 0), 0);
+
+  return (
+    <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-950">Expense History</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Paid {formatExpenseCurrency(paid, currency)} · Outstanding {formatExpenseCurrency(due, currency)}
+          </p>
+        </div>
+        <Link className="text-sm font-semibold text-[#06173f]" to="/expenses">
+          Open expenses
+        </Link>
+      </div>
+      {expenses.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-600">No expenses recorded for this vendor.</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr><th className="py-2 pr-4">Date</th><th className="py-2 pr-4">Purpose</th><th className="py-2 pr-4">Amount</th><th className="py-2 pr-4">Status</th><th className="py-2">Due / Paid</th></tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {expenses.slice(0, 10).map((expense) => {
+                const overdue = expense.payment_status === "due" && Boolean(expense.due_date && expense.due_date < todayInputValue());
+                return (
+                  <tr key={expense.id}>
+                    <td className="whitespace-nowrap py-3 pr-4">{formatDate(expense.expense_date)}</td>
+                    <td className="py-3 pr-4">{expense.description}</td>
+                    <td className="whitespace-nowrap py-3 pr-4 font-semibold">{formatExpenseCurrency(expense.amount, currency)}</td>
+                    <td className="py-3 pr-4"><Badge tone={expense.payment_status === "paid" ? "green" : overdue ? "red" : "amber"}>{overdue ? "Overdue" : labelize(expense.payment_status)}</Badge></td>
+                    <td className="whitespace-nowrap py-3">{formatDate(expense.payment_status === "paid" ? expense.paid_date : expense.due_date)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }

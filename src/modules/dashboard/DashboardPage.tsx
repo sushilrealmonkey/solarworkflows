@@ -29,6 +29,7 @@ import { formatStock } from "../inventory/inventoryUtils";
 import type { InventoryItem } from "../inventory/types";
 import type { PaymentWithRelations } from "../payments/types";
 import { formatKw } from "../projects/projectUtils";
+import { projectStatusOptions } from "../projects/projectWorkflow";
 import type { PurchaseOrderWithRelations } from "../purchases/types";
 import { getSurveyContact } from "../site-surveys/surveyUtils";
 import type { SiteSurveyWithRelations } from "../site-surveys/types";
@@ -495,15 +496,9 @@ function buildEpcDashboardModel(
     },
   ];
 
-  const projectStageRows = [
-    stageRow("Site Survey Pending", ["created"], projects),
-    stageRow("Design / Proposal", ["inspection_pending"], projects),
-    stageRow("Material Procurement", ["material_pending"], projects),
-    stageRow("Installation Scheduled", ["installation_scheduled"], projects),
-    stageRow("Installation In Progress", ["installation_in_progress"], projects),
-    stageRow("Net Metering / DISCOM", ["net_metering_pending"], projects),
-    stageRow("Handover Pending", ["inspection_completed"], projects),
-  ];
+  const projectStageRows = projectStatusOptions.map(({ label, value }) =>
+    stageRow(label, [value], projects),
+  );
   const monthlyRows = buildMonthlyRows(
     quotations,
     projects,
@@ -1052,21 +1047,41 @@ function OverduePanel({
   currencyFormatter: Intl.NumberFormat;
 }) {
   const alerts = [
-    [`${overdueFollowups} Enquiry follow-ups overdue`, "/leads"],
-    [`${pendingSurveyReports} site survey reports pending`, "/site-surveys"],
-    [`${currencyFormatter.format(overdueAmount)} payment overdue`, "/payments"],
-    [`${delayedProjects} installation/project delayed`, "/projects"],
-  ];
+    {
+      label: `${overdueFollowups} Enquiry follow-ups overdue`,
+      to: "/leads",
+      value: overdueFollowups,
+    },
+    {
+      label: `${pendingSurveyReports} site survey reports pending`,
+      to: "/site-surveys",
+      value: pendingSurveyReports,
+    },
+    {
+      label: `${currencyFormatter.format(overdueAmount)} payment overdue`,
+      to: "/payments",
+      value: overdueAmount,
+    },
+    {
+      label: `${delayedProjects} installation/project delayed`,
+      to: "/projects",
+      value: delayedProjects,
+    },
+  ].filter(({ value }) => value > 0);
+
+  if (!loading && alerts.length === 0) {
+    return null;
+  }
 
   return (
     <AdminPanel title="Overdue & Alerts">
       {loading ? <LoadingRows count={4} /> : null}
       {!loading ? (
         <div className="space-y-2">
-          {alerts.map(([label, to]) => (
+          {alerts.map(({ label, to }) => (
             <div
               className="flex items-center justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2.5 text-xs font-semibold text-slate-700 sm:text-sm"
-              key={label}
+              key={to}
             >
               <span>{label}</span>
               <Link

@@ -76,10 +76,8 @@ export function FieldProjectDetailPage() {
   useEffect(() => { void load(); }, [id]);
 
   const nextStatus = project?.project_status === "installation_scheduled"
-    ? "installation_in_progress"
-    : project?.project_status === "installation_in_progress"
-      ? "installation_completed"
-      : null;
+    ? "installation_completed"
+    : null;
 
   async function updateStatus() {
     if (!project || !nextStatus) return;

@@ -13,6 +13,9 @@ export type SubscriptionInvoice = {
   gst_rate: number;
   paid_at: string;
   pdf_path: string | null;
+  invoice_source: "custom" | "razorpay";
+  razorpay_invoice_number: string | null;
+  razorpay_invoice_url: string | null;
 };
 
 export function BillingInvoicesSection() {
@@ -87,13 +90,29 @@ export function BillingInvoicesSection() {
                 <span className="font-semibold text-slate-950">
                   {money(invoice.gross_amount_paise)}
                 </span>
-                <Button
-                  disabled={!invoice.pdf_path || downloading === invoice.id}
-                  onClick={() => void download(invoice)}
-                  variant="secondary"
-                >
-                  {downloading === invoice.id ? "Opening..." : "Download PDF"}
-                </Button>
+                {invoice.razorpay_invoice_url ? (
+                  <a
+                    className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                    href={invoice.razorpay_invoice_url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Open Razorpay invoice
+                  </a>
+                ) : null}
+                {invoice.pdf_path ? (
+                  <Button
+                    disabled={downloading === invoice.id}
+                    onClick={() => void download(invoice)}
+                    variant={invoice.razorpay_invoice_url ? "secondary" : "primary"}
+                  >
+                    {downloading === invoice.id
+                      ? "Opening..."
+                      : invoice.razorpay_invoice_url
+                        ? "Download branded copy"
+                        : "Download GST invoice"}
+                  </Button>
+                ) : null}
               </div>
             </article>
           ))}

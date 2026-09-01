@@ -4,6 +4,7 @@ import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   InventoryItem,
   InventoryBatch,
+  InventoryAddStockFormValues,
   InventoryItemFormValues,
   InventoryCatalogProduct,
   InventoryMasterOption,
@@ -13,6 +14,7 @@ import type {
   InventoryOpeningBalanceResult,
   InventoryProjectOption,
   InventoryStockCorrectionValues,
+  InventoryStockAddResult,
   InventoryTransaction,
   InventoryTransactionWithRelations,
 } from "./types";
@@ -48,6 +50,15 @@ function numberValue(value: string, fallback = 0) {
   return Number.isFinite(nextValue) ? nextValue : fallback;
 }
 
+function optionalNumberValue(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const nextValue = Number(value);
+  return Number.isFinite(nextValue) ? nextValue : null;
+}
+
 function itemPayload(values: InventoryItemFormValues) {
   return {
     minimum_stock: numberValue(values.minimum_alert),
@@ -59,7 +70,7 @@ const inventoryTransactionSelect = `
   *,
   item:inventory_items(id, item_code, item_name, unit, current_stock, minimum_stock),
   project:projects(id, project_code, project_name),
-  supplier:vendors!inventory_transactions_vendor_id_fkey(id, vendor_name),
+  supplier:suppliers!inventory_transactions_vendor_id_fkey(id, vendor_name:supplier_name),
   creator:users_profile!inventory_transactions_created_by_fkey(id, full_name, email, phone)
 `;
 
@@ -532,6 +543,28 @@ export async function correctInventoryStock(
   }
 
   return data as InventoryTransaction;
+}
+
+export async function addInventoryStock(
+  values: InventoryAddStockFormValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("add_inventory_stock", {
+    target_item_id: values.item_id,
+    add_quantity: numberValue(values.quantity),
+    stock_date: values.stock_date,
+    target_vendor_id: nullable(values.vendor_id),
+    stock_bill_no: nullable(values.bill_no),
+    unit_purchase_price: optionalNumberValue(values.unit_purchase_price),
+    stock_gst_percent: optionalNumberValue(values.gst_percent),
+    stock_notes: nullable(values.notes),
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as InventoryStockAddResult;
 }
 
 export async function fetchInventoryTransactions(

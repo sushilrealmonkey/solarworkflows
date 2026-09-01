@@ -680,7 +680,7 @@ export async function fetchDashboardPurchaseOrders(profile: UserProfile | null) 
     .select(
       `
       *,
-      vendor:vendors(id, vendor_code, vendor_name, contact_person, phone, email)
+      vendor:suppliers!purchase_orders_vendor_id_fkey(id, vendor_code:supplier_code, vendor_name:supplier_name, contact_person, phone, email)
     `,
     )
     .in("status", ["draft", "ordered", "partially_received"])

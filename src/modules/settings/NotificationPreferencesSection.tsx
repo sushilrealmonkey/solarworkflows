@@ -17,7 +17,13 @@ import type {
 
 const dailySummaryKey: NotificationPreferenceKey = "requested_daily_summary";
 
-export function NotificationPreferencesSection({ readOnly = false }: { readOnly?: boolean }) {
+export function NotificationPreferencesSection({
+  readOnly = false,
+  hideWhenConfigured = false,
+}: {
+  readOnly?: boolean;
+  hideWhenConfigured?: boolean;
+}) {
   const { organization, refresh } = useAuth();
   const { showToast } = useToast();
   const [settings, setSettings] = useState<NotificationSettings | null>(null);
@@ -129,6 +135,18 @@ export function NotificationPreferencesSection({ readOnly = false }: { readOnly?
       setSaving(false);
     }
   }
+
+  const dailyPreference = settings?.preferences.find(
+    (item) => item.notification_type === dailySummaryKey,
+  );
+  const isConfigured = Boolean(
+    settings?.profile_phone_verified &&
+      settings.recipient?.verification_status === "verified" &&
+      dailyPreference?.is_enabled &&
+      dailyPreference.delivery_time,
+  );
+
+  if (hideWhenConfigured && (loading || isConfigured)) return null;
 
   return (
     <section className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">

@@ -46,6 +46,9 @@ import { InventoryDetailPage } from "../modules/inventory/InventoryDetailPage";
 import { InventoryOpeningStockPage } from "../modules/inventory/InventoryOpeningStockPage";
 import { VendorsPage } from "../modules/vendors/VendorsPage";
 import { VendorDetailPage } from "../modules/vendors/VendorDetailPage";
+import { SuppliersPage } from "../modules/suppliers/SuppliersPage";
+import { SupplierDetailPage } from "../modules/suppliers/SupplierDetailPage";
+import { ExpensesPage } from "../modules/expenses/ExpensesPage";
 import { PurchasesPage } from "../modules/purchases/PurchasesPage";
 import { PurchaseDetailPage } from "../modules/purchases/PurchaseDetailPage";
 import { InvoicesPage } from "../modules/invoices/InvoicesPage";
@@ -195,6 +198,9 @@ export default function App() {
           <Route path="/inventory/:id" element={<SubscriptionRoute moduleKey="inventory"><InventoryDetailPage /></SubscriptionRoute>} />
           <Route path="/vendors" element={<SubscriptionRoute moduleKey="vendors"><VendorsPage /></SubscriptionRoute>} />
           <Route path="/vendors/:id" element={<SubscriptionRoute moduleKey="vendors"><VendorDetailPage /></SubscriptionRoute>} />
+          <Route path="/suppliers" element={<SubscriptionRoute moduleKey="vendors"><SuppliersPage /></SubscriptionRoute>} />
+          <Route path="/suppliers/:id" element={<SubscriptionRoute moduleKey="vendors"><SupplierDetailPage /></SubscriptionRoute>} />
+          <Route path="/expenses" element={<SubscriptionRoute moduleKey="expenses"><ExpensesPage /></SubscriptionRoute>} />
           <Route path="/purchases" element={<SubscriptionRoute moduleKey="purchases"><PurchasesPage /></SubscriptionRoute>} />
           <Route path="/purchases/:id" element={<SubscriptionRoute moduleKey="purchases"><PurchaseDetailPage /></SubscriptionRoute>} />
           <Route path="/material-receive" element={<Navigate to="/purchases" replace />} />
@@ -229,6 +235,8 @@ export default function App() {
                   "/products-materials/catalog-library",
                   "/inventory",
                   "/vendors",
+                  "/suppliers",
+                  "/expenses",
                   "/purchases",
                   "/material-receive",
                   "/proforma-invoices",

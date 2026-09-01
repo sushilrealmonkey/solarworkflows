@@ -3,6 +3,8 @@ import { supabase } from "../../services/supabaseClient";
 import type {
   BillingPeriod,
   BillingPlan,
+  CheckoutCustomerDetails,
+  CheckoutQuote,
   CheckoutSession,
   RazorpayAuthorizationResult,
   SubscriptionAccess,
@@ -53,7 +55,10 @@ export async function fetchBillingPlans() {
 export async function createRazorpayCheckout(
   planKey: BillingPlan["plan_key"],
   billingPeriod: BillingPeriod,
-  discountCode?: string,
+  options: {
+    customer?: CheckoutCustomerDetails;
+    discountCode?: string;
+  } = {},
 ) {
   const { data, error } = await requireClient().functions.invoke(
     "create-razorpay-subscription",
@@ -61,7 +66,10 @@ export async function createRazorpayCheckout(
       body: {
         planKey,
         billingPeriod,
-        discountCode: discountCode?.trim() || undefined,
+        discountCode: options.discountCode?.trim() || undefined,
+        customerName: options.customer?.name.trim() || undefined,
+        customerPhone: options.customer?.phone.trim() || undefined,
+        customerEmail: options.customer?.email.trim() || undefined,
       },
     },
   );
@@ -72,6 +80,39 @@ export async function createRazorpayCheckout(
   }
 
   return data as CheckoutSession;
+}
+
+export async function previewRazorpayCheckout(
+  planKey: BillingPlan["plan_key"],
+  billingPeriod: BillingPeriod,
+  discountCode?: string,
+) {
+  const { data, error } = await requireClient().functions.invoke(
+    "create-razorpay-subscription",
+    {
+      body: {
+        action: "preview",
+        planKey,
+        billingPeriod,
+        discountCode: discountCode?.trim() || undefined,
+      },
+    },
+  );
+
+  if (error) throw new Error(await getFunctionErrorMessage(error));
+  if (
+    !data ||
+    typeof data.planName !== "string" ||
+    typeof data.baseAmountPaise !== "number" ||
+    typeof data.gstAmountPaise !== "number" ||
+    typeof data.totalAmountPaise !== "number" ||
+    typeof data.discountAmountPaise !== "number" ||
+    typeof data.payableAmountPaise !== "number"
+  ) {
+    throw new Error("The pricing preview could not be verified.");
+  }
+
+  return data as CheckoutQuote;
 }
 
 export async function cancelRazorpaySubscription() {

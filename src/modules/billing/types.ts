@@ -44,6 +44,23 @@ export type BillingPlan = {
   billing_period: "monthly";
 };
 
+export type CheckoutCustomerDetails = {
+  name: string;
+  phone: string;
+  email: string;
+};
+
+export type CheckoutQuote = {
+  planName: string;
+  billingPeriod: BillingPeriod;
+  baseAmountPaise: number;
+  gstAmountPaise: number;
+  totalAmountPaise: number;
+  discountAmountPaise: number;
+  payableAmountPaise: number;
+  discountApplied: boolean;
+};
+
 export type CheckoutSession = {
   upgradeCompleted?: boolean;
   discountApplied?: boolean;

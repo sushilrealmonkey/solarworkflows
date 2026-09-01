@@ -1,0 +1,52 @@
+export type SupplierStatus = "active" | "inactive" | "blacklisted";
+
+export type Supplier = {
+  id: string;
+  company_id: string;
+  organization_id: string;
+  supplier_code: string | null;
+  supplier_name: string;
+  contact_person: string | null;
+  phone: string | null;
+  alternate_phone: string | null;
+  email: string | null;
+  gst_number: string | null;
+  pan_number: string | null;
+  address_line_1: string | null;
+  address_line_2: string | null;
+  city: string | null;
+  district: string | null;
+  state: string | null;
+  pincode: string | null;
+  status: SupplierStatus;
+  preferred_payment_method: string | null;
+  payment_terms_days: number | null;
+  notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  archived_by: string | null;
+  archive_reason: string | null;
+};
+
+export type SupplierFormValues = {
+  supplier_name: string;
+  contact_person: string;
+  phone: string;
+  alternate_phone: string;
+  email: string;
+  gst_number: string;
+  pan_number: string;
+  address_line_1: string;
+  address_line_2: string;
+  city: string;
+  district: string;
+  state: string;
+  pincode: string;
+  status: SupplierStatus;
+  preferred_payment_method: string;
+  payment_terms_days: string;
+  notes: string;
+};

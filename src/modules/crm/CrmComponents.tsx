@@ -73,6 +73,9 @@ export function TextInput({
   inputMode,
   maxLength,
   pattern,
+  min,
+  max,
+  step,
   validationMessage,
 }: {
   label: string;
@@ -85,6 +88,9 @@ export function TextInput({
   inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search";
   maxLength?: number;
   pattern?: string;
+  min?: string | number;
+  max?: string | number;
+  step?: string | number;
   validationMessage?: string;
 }) {
   const formatValidationMessage =
@@ -118,6 +124,9 @@ export function TextInput({
         inputMode={inputMode}
         maxLength={maxLength}
         pattern={pattern}
+        min={min}
+        max={max}
+        step={step}
         aria-invalid={Boolean(error)}
         value={value}
         onChange={(event) => {

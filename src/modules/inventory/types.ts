@@ -137,6 +137,25 @@ export type InventoryStockCorrectionValues = {
   reason: string;
 };
 
+export type InventoryAddStockFormValues = {
+  item_id: string;
+  quantity: string;
+  stock_date: string;
+  vendor_id: string;
+  bill_no: string;
+  unit_purchase_price: string;
+  gst_percent: string;
+  notes: string;
+};
+
+export type InventoryStockAddResult = {
+  transaction_id: string;
+  batch_id: string;
+  item_id: string;
+  quantity: number;
+  current_stock: number;
+};
+
 export type InventoryTransaction = {
   id: string;
   company_id: string | null;

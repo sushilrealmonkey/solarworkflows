@@ -3,6 +3,15 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-08-31 (current worktree)
+
+- Added a responsive Inventory Add Stock flow for non-PO stock-in entries,
+  recording a traceable batch and append-only ledger transaction atomically.
+- Added GST-inclusive Razorpay plan validation, Razorpay GST invoice links, and
+  a Realmonkey/Bizlee branded PDF copy for tenant subscription payments.
+- Added a Bizlee pre-checkout review popup with editable signup customer
+  details, server-verified pricing, and coupon discount previews.
+
 ## 2026-08-11 (current worktree)
 
 - Added consented, tenant-scoped WhatsApp welcome queuing for phone-verified

@@ -1,5 +1,6 @@
 import { labelize, requiredError } from "../crm/crmUtils";
 import type {
+  InventoryAddStockFormValues,
   InventoryItem,
   InventoryItemCategory,
   InventoryItemFormValues,
@@ -56,6 +57,21 @@ export function emptyInventoryStockCorrection(
     counted_quantity: numberToInput(item.current_stock),
     correction_date: new Date().toISOString().slice(0, 10),
     reason: "",
+  };
+}
+
+export function emptyInventoryAddStockForm(
+  itemId = "",
+): InventoryAddStockFormValues {
+  return {
+    item_id: itemId,
+    quantity: "",
+    stock_date: new Date().toISOString().slice(0, 10),
+    vendor_id: "",
+    bill_no: "",
+    unit_purchase_price: "",
+    gst_percent: "",
+    notes: "",
   };
 }
 
@@ -218,6 +234,46 @@ export function validateInventoryStockCorrection(
   };
 }
 
+export function validateInventoryAddStockForm(
+  values: InventoryAddStockFormValues,
+  items: InventoryItem[],
+  canEditPricing: boolean,
+) {
+  const selectedItem = items.find((item) => item.id === values.item_id);
+  const quantity = Number(values.quantity);
+  const today = new Date().toISOString().slice(0, 10);
+  const itemIsActive = Boolean(
+    selectedItem &&
+      isActiveInventoryItem(selectedItem) &&
+      selectedItem.catalog_product?.status === "active" &&
+      !selectedItem.archived_at,
+  );
+
+  return {
+    item_id: requiredError(values.item_id, "Product or material") ||
+      (!itemIsActive ? "Select an active Product Master item." : ""),
+    quantity:
+      !values.quantity.trim() || !Number.isFinite(quantity)
+        ? "Quantity is required."
+        : quantity <= 0
+          ? "Quantity must be greater than zero."
+          : "",
+    stock_date:
+      requiredError(values.stock_date, "Stock date") ||
+      (values.stock_date > today ? "Stock date cannot be in the future." : ""),
+    unit_purchase_price: optionalNonNegativeNumberError(
+      values.unit_purchase_price,
+      "Unit purchase price",
+      canEditPricing,
+    ),
+    gst_percent: optionalPercentageError(
+      values.gst_percent,
+      "GST percentage",
+      canEditPricing,
+    ),
+  };
+}
+
 export function inventoryItemValidationSummary(
   errors: Record<string, string>,
 ) {
@@ -278,6 +334,52 @@ function nonNegativeNumberError(value: string, label: string) {
 
   if (nextValue < 0) {
     return `${label} cannot be negative.`;
+  }
+
+  return "";
+}
+
+function optionalNonNegativeNumberError(
+  value: string,
+  label: string,
+  canEditPricing: boolean,
+) {
+  if (!value.trim()) {
+    return "";
+  }
+
+  if (!canEditPricing) {
+    return "Pricing permission is required for cost details.";
+  }
+
+  const nextValue = Number(value);
+  if (!Number.isFinite(nextValue)) {
+    return `${label} must be a valid number.`;
+  }
+
+  if (nextValue < 0) {
+    return `${label} cannot be negative.`;
+  }
+
+  return "";
+}
+
+function optionalPercentageError(
+  value: string,
+  label: string,
+  canEditPricing: boolean,
+) {
+  const numberError = optionalNonNegativeNumberError(
+    value,
+    label,
+    canEditPricing,
+  );
+  if (numberError) {
+    return numberError;
+  }
+
+  if (value.trim() && Number(value) > 100) {
+    return `${label} must be between 0 and 100.`;
   }
 
   return "";

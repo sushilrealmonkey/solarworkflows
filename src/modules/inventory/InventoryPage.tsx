@@ -31,13 +31,16 @@ import {
   labelize,
 } from "../crm/crmUtils";
 import {
+  addInventoryStock,
   fetchInventoryItems,
   fetchInventoryMasters,
   fetchInventoryOpeningBalanceCandidates,
   fetchInventoryTransactions,
   updateInventoryItem,
 } from "./inventoryApi";
+import { InventoryAddStockModal } from "./InventoryAddStockModal";
 import {
+  emptyInventoryAddStockForm,
   formatStock,
   inventoryBrandName,
   inventoryItemTitle,
@@ -52,10 +55,12 @@ import {
   transactionDecreasesStock,
   transactionIncreasesStock,
   transactionTypeLabel,
+  validateInventoryAddStockForm,
   validateInventoryItemForm,
   availableStockNumber,
 } from "./inventoryUtils";
 import type {
+  InventoryAddStockFormValues,
   InventoryCatalogProduct,
   InventoryItem,
   InventoryItemFormValues,
@@ -116,11 +121,23 @@ export function InventoryPage() {
   } | null>(null);
   const [openingBalanceCandidateCount, setOpeningBalanceCandidateCount] =
     useState(0);
+  const [stockForm, setStockForm] =
+    useState<InventoryAddStockFormValues | null>(null);
+  const [stockFormErrors, setStockFormErrors] = useState<Record<string, string>>(
+    {},
+  );
+  const [addingStock, setAddingStock] = useState(false);
 
   const canView = hasPermission(profile, permissions, "inventory", "view");
   const canCreate = hasPermission(profile, permissions, "inventory", "create");
   const canUpdate = hasPermission(profile, permissions, "inventory", "update");
   const canManageStock = canCreate && canUpdate;
+  const canEditPricing = hasPermission(
+    profile,
+    permissions,
+    "product_pricing",
+    "update",
+  );
 
   async function loadData() {
     if (!canView) {
@@ -245,6 +262,15 @@ export function InventoryPage() {
     navigate(`/inventory/${itemId}`);
   }
 
+  function openAddStockForm() {
+    if (!canManageStock) {
+      return;
+    }
+
+    setStockFormErrors({});
+    setStockForm(emptyInventoryAddStockForm());
+  }
+
   function handleInventoryRowKeyDown(
     event: KeyboardEvent<HTMLTableRowElement | HTMLElement>,
     itemId: string,
@@ -299,6 +325,49 @@ export function InventoryPage() {
     }
   }
 
+  async function handleAddStockSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!stockForm) {
+      return;
+    }
+
+    const nextErrors = validateInventoryAddStockForm(
+      stockForm,
+      items,
+      canEditPricing,
+    );
+    setStockFormErrors(nextErrors);
+
+    if (Object.values(nextErrors).some(Boolean)) {
+      showToast("Please complete the required stock details.", "error");
+      return;
+    }
+
+    try {
+      setAddingStock(true);
+      const result = await addInventoryStock(stockForm);
+      setStockForm(null);
+      showToast(
+        `${formatStock(
+          result.quantity,
+          items.find((item) => item.id === result.item_id)?.unit,
+        )} added to inventory.`,
+        "success",
+      );
+      await loadData();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Stock could not be added.",
+        "error",
+      );
+    } finally {
+      setAddingStock(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -306,22 +375,27 @@ export function InventoryPage() {
           title="Inventory"
           description="Track stock items, material movement, and project usage."
         />
-        {activeTab === "stock" && masters.products.length === 0 ? (
-          <Link
-            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-            to="/products-materials/products"
-          >
-            Add Products &amp; Materials
-          </Link>
-        ) : activeTab === "stock" &&
-          canManageStock &&
-          openingBalanceCandidateCount > 0 ? (
-          <Link
-            className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
-            to="/inventory/opening-stock"
-          >
-            Set Opening Stock
-          </Link>
+        {activeTab === "stock" ? (
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+            {canManageStock && items.some(isAddStockItem) ? (
+              <Button onClick={openAddStockForm}>Add Stock</Button>
+            ) : null}
+            {masters.products.length === 0 ? (
+              <Link
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                to="/products-materials/products"
+              >
+                Add Products &amp; Materials
+              </Link>
+            ) : canManageStock && openingBalanceCandidateCount > 0 ? (
+              <Link
+                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700"
+                to="/inventory/opening-stock"
+              >
+                Set Opening Stock
+              </Link>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -739,6 +813,20 @@ export function InventoryPage() {
         />
       ) : null}
 
+      {stockForm ? (
+        <InventoryAddStockModal
+          values={stockForm}
+          setValues={setStockForm}
+          errors={stockFormErrors}
+          items={items}
+          vendors={masters.vendors}
+          canEditPricing={canEditPricing}
+          onClose={() => setStockForm(null)}
+          onSubmit={handleAddStockSubmit}
+          saving={addingStock}
+        />
+      ) : null}
+
     </div>
   );
 }
@@ -996,6 +1084,14 @@ function productOptionLabel(product: InventoryCatalogProduct) {
     .join(" - ");
 }
 
+function isAddStockItem(item: InventoryItem) {
+  return (
+    item.status === "active" &&
+    item.catalog_product?.status === "active" &&
+    !item.archived_at
+  );
+}
+
 export function InventoryTransactionsSection({
   detailView = false,
   direction = "all",
@@ -1100,7 +1196,7 @@ function InventoryTransactionTable({
           }
           description={
             isInward
-              ? "Received, returned, and positive adjustment movements will appear here."
+              ? "Received, manually added, returned, and positive adjustment movements will appear here."
               : "Issued, dispatched, and negative adjustment movements will appear here."
           }
         />
@@ -1484,7 +1580,9 @@ function TransactionUsage({
   if (transaction.reference_type) {
     return (
       <span className="font-medium text-slate-900">
-        {labelize(transaction.reference_type)}
+        {transaction.reference_type === "manual_stock_in"
+          ? "Manual Stock Add"
+          : labelize(transaction.reference_type)}
       </span>
     );
   }
@@ -1540,7 +1638,9 @@ export function TransactionTypeBadge({
       ? "Opening Balance"
       : referenceType === "stock_correction"
         ? "Stock Correction"
-        : transactionTypeLabel(value);
+        : referenceType === "manual_stock_in"
+          ? "Manual Stock Add"
+          : transactionTypeLabel(value);
 
   return <Badge tone={tone}>{displayLabel}</Badge>;
 }

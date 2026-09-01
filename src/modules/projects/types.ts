@@ -8,12 +8,9 @@ import type { QuotationWithRelations } from "../quotations/types";
 
 export type ProjectStatus =
   | "created"
-  | "material_pending"
   | "material_dispatched"
   | "installation_scheduled"
-  | "installation_in_progress"
   | "installation_completed"
-  | "inspection_pending"
   | "inspection_completed"
   | "net_metering_pending"
   | "commissioned"

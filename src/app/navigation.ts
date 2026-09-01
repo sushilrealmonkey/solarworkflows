@@ -35,6 +35,7 @@ function planModuleKey(path: string, fallback: string) {
     "/customers/b2b-direct": "b2b_sales",
     "/b2b-sales": "b2b_sales",
     "/inventory": "inventory",
+    "/expenses": "expenses",
     "/vendors": "vendors",
     "/purchases": "purchases",
     "/proforma-invoices": "invoices",
@@ -45,7 +46,6 @@ function planModuleKey(path: string, fallback: string) {
 }
 
 export const navigationItems: NavigationItem[] = [
-  navigationRoute("/today"),
   navigationRoute("/dashboard"),
   navigationRoute("/companies"),
   {
@@ -82,6 +82,14 @@ export const navigationItems: NavigationItem[] = [
     children: [
       navigationRoute("/inventory"),
       navigationRoute("/purchases"),
+      navigationRoute("/suppliers"),
+    ],
+  },
+  {
+    label: "Expense Management",
+    path: "/expense-management",
+    children: [
+      navigationRoute("/expenses"),
       navigationRoute("/vendors"),
     ],
   },
@@ -94,6 +102,7 @@ export const navigationItems: NavigationItem[] = [
     ],
   },
   navigationRoute("/settings"),
+  navigationRoute("/today"),
 ];
 
 export const platformNavigationItems = [
