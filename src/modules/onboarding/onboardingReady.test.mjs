@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   loadReadySummary,
-  openCreateEnquiryState,
   productSummaryCopy,
   readyDestinations,
   readyScreenContent,
@@ -30,9 +29,10 @@ const completedProgress = {
   updated_at: "2026-08-17T00:00:00Z",
 };
 
-test("Ready defines the real Step 5 completion experience", () => {
+test("Ready defines the payment-first Step 5 completion experience", () => {
   assert.equal(readyScreenContent.badge, "Step 5 of 5");
-  assert.equal(readyScreenContent.title, "Your Bizlee workspace is ready");
+  assert.equal(readyScreenContent.title, "Your Bizlee workspace is set up");
+  assert.equal(readyDestinations.payment, "/onboarding/payment");
   assert.equal(readyDestinations.back, "/onboarding/team");
 });
 
@@ -122,10 +122,10 @@ test("each failed summary query degrades independently without throwing", async 
   assert.equal(teamSummaryCopy(summary.team), "Team summary unavailable");
 });
 
-test("Create Your First Enquiry completes before opening the existing enquiry modal", async () => {
+test("payment follows successful onboarding completion", async () => {
   const events = [];
 
-  await runReadyCompletion("enquiry", {
+  await runReadyCompletion("payment", {
     complete: async () => {
       events.push("complete");
       return completedProgress;
@@ -136,12 +136,7 @@ test("Create Your First Enquiry completes before opening the existing enquiry mo
 
   assert.deepEqual(events, [
     "complete",
-    [
-      "finish",
-      "completed",
-      "/leads?new=1",
-      { replace: true, state: openCreateEnquiryState },
-    ],
+    ["finish", "completed", "/onboarding/payment", { replace: true }],
   ]);
 });
 
@@ -157,10 +152,10 @@ test("completion failure never navigates and a later retry succeeds", async () =
     finish: (_progress, route) => navigations.push(route),
   };
 
-  await assert.rejects(runReadyCompletion("enquiry", dependencies));
+  await assert.rejects(runReadyCompletion("payment", dependencies));
   assert.deepEqual(navigations, []);
-  await runReadyCompletion("enquiry", dependencies);
-  assert.deepEqual(navigations, ["/leads?new=1"]);
+  await runReadyCompletion("payment", dependencies);
+  assert.deepEqual(navigations, ["/onboarding/payment"]);
 });
 
 test("the Ready action lock prevents duplicate completion requests", async () => {
@@ -184,22 +179,6 @@ test("the Ready action lock prevents duplicate completion requests", async () =>
   release();
   assert.equal(await first, true);
   assert.equal(lock.current, false);
-});
-
-test("Go to Dashboard completes before dashboard navigation", async () => {
-  const events = [];
-  await runReadyCompletion("dashboard", {
-    complete: async () => {
-      events.push("complete");
-      return completedProgress;
-    },
-    finish: (progress, route, options) =>
-      events.push(["finish", progress.status, route, options]),
-  });
-  assert.deepEqual(events, [
-    "complete",
-    ["finish", "completed", "/dashboard", { replace: true }],
-  ]);
 });
 
 test("Back persists the Team step without completing onboarding", async () => {

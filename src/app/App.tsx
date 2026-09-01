@@ -21,6 +21,7 @@ import { OnboardingProductEntryPage } from "../modules/onboarding/OnboardingProd
 import { OnboardingProductImportPage } from "../modules/onboarding/OnboardingProductImportPage";
 import { OnboardingTeamPage } from "../modules/onboarding/OnboardingTeamPage";
 import { OnboardingReadyPage } from "../modules/onboarding/OnboardingReadyPage";
+import { OnboardingPaymentPage } from "../modules/onboarding/OnboardingPaymentPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
 import { TodayPage } from "../modules/assistant/TodayPage";
 import { CustomersPage } from "../modules/crm/CustomersPage";
@@ -108,6 +109,10 @@ export default function App() {
         <Route
           path="/onboarding/ready"
           element={<OnboardingReadyPage />}
+        />
+        <Route
+          path="/onboarding/payment"
+          element={<OnboardingPaymentPage />}
         />
         <Route element={<ProtectedRoute />}>
           <Route element={<DashboardLayout />}>

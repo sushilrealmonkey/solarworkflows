@@ -6,6 +6,8 @@ import type {
 } from "./types";
 import { formatDisplayDate, formatDisplayDateTime } from "../../utils/dateFormat";
 
+export const STANDARD_FREE_TRIAL_DAYS = 14;
+
 export function isAdminSetupPending(company: PlatformCompany) {
   if (!company.admin) {
     return true;
@@ -96,6 +98,30 @@ export function formatDate(value: string | null) {
 
 export function formatDateTime(value: string | null) {
   return formatDisplayDateTime(value);
+}
+
+export function isFreeTrialExtended(
+  subscription: PlatformCompanySubscription | null | undefined,
+) {
+  if (
+    subscription?.status !== "trialing" ||
+    !subscription.trial_started_at ||
+    !subscription.trial_ends_at
+  ) {
+    return false;
+  }
+
+  const trialStartedAt = new Date(subscription.trial_started_at).getTime();
+  const trialEndsAt = new Date(subscription.trial_ends_at).getTime();
+
+  if (!Number.isFinite(trialStartedAt) || !Number.isFinite(trialEndsAt)) {
+    return false;
+  }
+
+  return (
+    trialEndsAt >
+    trialStartedAt + STANDARD_FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000
+  );
 }
 
 export function deriveCompanyBillingStatus(

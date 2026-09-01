@@ -276,7 +276,7 @@ export function CompaniesPage() {
         title="EPC Companies"
         description={
           canManagePlatformCompanies
-            ? "Create, invite, activate, and review EPC tenant workspaces."
+            ? "Invite EPC companies to a free trial, then activate and review their workspaces."
             : "Review EPC tenant workspace details. Changes require a super admin."
         }
       />
@@ -325,7 +325,7 @@ export function CompaniesPage() {
             onClick={() => switchView("new")}
             type="button"
           >
-            Add EPC company
+            Invite EPC company
           </button>
         ) : null}
       </div>
@@ -483,11 +483,11 @@ function CreateCompanyForm({
     >
       <div className="max-w-2xl">
         <h2 className="text-base font-semibold text-slate-950">
-          Add EPC company
+          Invite EPC company to a free trial
         </h2>
         <p className="mt-1 text-sm leading-6 text-slate-600">
           Create the tenant workspace, Admin role, primary admin profile, and
-          Supabase invite email.
+          invite email. Free trials are available only through this Super Admin flow.
         </p>
       </div>
 
@@ -528,7 +528,7 @@ function CreateCompanyForm({
         disabled={isSubmitting}
         type="submit"
       >
-        {isSubmitting ? "Sending invite" : "Create and invite"}
+        {isSubmitting ? "Sending invite" : "Invite to free trial"}
       </button>
     </form>
   );

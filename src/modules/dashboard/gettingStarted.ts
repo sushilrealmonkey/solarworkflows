@@ -1,5 +1,4 @@
 import type { OrganizationSettings } from "../settings/types";
-import { openCreateEnquiryState } from "../onboarding/onboardingReady.ts";
 
 export const gettingStartedDestinations = {
   company: "/settings#company-profile",
@@ -8,7 +7,9 @@ export const gettingStartedDestinations = {
   enquiry: "/leads",
 } as const;
 
-export const openGettingStartedEnquiryState = openCreateEnquiryState;
+export const openGettingStartedEnquiryState = {
+  openCreateEnquiry: true,
+} as const;
 
 export type GettingStartedTaskKey =
   | "company"

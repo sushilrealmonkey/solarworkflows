@@ -3,21 +3,18 @@ import type { CompanyOnboardingProgress } from "./types";
 
 export const readyScreenContent = {
   badge: "Step 5 of 5",
-  context: "Ready to start",
-  title: "Your Bizlee workspace is ready",
+  context: "Almost ready",
+  title: "Your Bizlee workspace is set up",
   description:
-    "Your basic setup is complete. You can now start managing your solar business in Bizlee.",
+    "Your basic setup is complete. Choose a plan and complete payment to open your dashboard.",
 } as const;
 
 export const readyDestinations = {
-  enquiry: "/leads?new=1",
-  dashboard: "/dashboard",
+  payment: "/onboarding/payment",
   back: "/onboarding/team",
 } as const;
 
-export const openCreateEnquiryState = { openCreateEnquiry: true } as const;
-
-export type ReadyAction = "enquiry" | "dashboard";
+export type ReadyAction = "payment";
 
 export type ReadySummary = {
   companyAvailable: boolean;
@@ -43,7 +40,7 @@ type CompletionDependencies = {
   finish: (
     progress: CompanyOnboardingProgress,
     route: string,
-    options: { replace: true; state?: typeof openCreateEnquiryState },
+    options: { replace: true },
   ) => void;
 };
 
@@ -124,14 +121,7 @@ export async function runReadyCompletion(
 ) {
   const progress = await complete();
 
-  if (action === "enquiry") {
-    finish(progress, readyDestinations.enquiry, {
-      replace: true,
-      state: openCreateEnquiryState,
-    });
-  } else {
-    finish(progress, readyDestinations.dashboard, { replace: true });
-  }
+  finish(progress, readyDestinations.payment, { replace: true });
 
   return progress;
 }

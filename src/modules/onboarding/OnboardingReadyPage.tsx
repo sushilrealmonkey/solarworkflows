@@ -63,11 +63,6 @@ export function OnboardingReadyPage() {
         await runReadyCompletion(nextAction, {
           complete: completeCurrentCompanyOnboarding,
           finish: (progress, route, options) => {
-            if (nextAction === "enquiry") {
-              window.location.replace(route);
-              return;
-            }
-
             flushSync(() => {
               setProgress(progress);
               navigate(route, options);
@@ -159,7 +154,8 @@ export function OnboardingReadyView({
           <div>
             <h2 className="text-xl font-semibold text-white">Setup summary</h2>
             <p className="mt-1 text-sm leading-6 text-slate-300">
-              Your workspace is usable now. Products and teammates can still be added later.
+              Products and teammates can still be added later. Complete payment
+              to activate the workspace and open your dashboard.
             </p>
           </div>
         </div>
@@ -208,17 +204,10 @@ export function OnboardingReadyView({
 
         <div className="mt-6 space-y-3">
           <div className="[&>button]:min-h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:text-base">
-            <Button disabled={busy} onClick={() => onComplete("enquiry")}>
-              {action === "enquiry" ? "Opening enquiry…" : "Create Your First Enquiry"}
-            </Button>
-          </div>
-          <div className="[&>button]:min-h-11 [&>button]:w-full [&>button]:rounded-xl [&>button]:!border-white/20 [&>button]:!bg-white/10 [&>button]:!text-white [&>button:hover]:!bg-white/15">
-            <Button
-              disabled={busy}
-              onClick={() => onComplete("dashboard")}
-              variant="secondary"
-            >
-              {action === "dashboard" ? "Opening dashboard…" : "Go to Dashboard"}
+            <Button disabled={busy} onClick={() => onComplete("payment")}>
+              {action === "payment"
+                ? "Opening payment…"
+                : "Choose plan and continue to payment"}
             </Button>
           </div>
           <div className="pt-1 text-center [&>button]:min-h-11 [&>button]:!text-slate-300 [&>button:hover]:!bg-white/10">

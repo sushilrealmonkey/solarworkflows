@@ -7,7 +7,7 @@ declare
   premium_price integer;
   premium_yearly_price integer;
   starter_seat_limit integer;
-  trial_trigger_exists boolean;
+  subscription_trigger_exists boolean;
   pro_trial_trigger_exists boolean;
   access_function regprocedure :=
     'public.get_current_subscription_access()'::regprocedure;
@@ -78,9 +78,9 @@ begin
     select 1 from pg_trigger
     where tgname = 'create_company_trial_subscription'
       and not tgisinternal
-  ) into trial_trigger_exists;
-  if not trial_trigger_exists then
-    raise exception 'New company trial trigger is missing';
+  ) into subscription_trigger_exists;
+  if not subscription_trigger_exists then
+    raise exception 'New company subscription trigger is missing';
   end if;
 
   select exists (
@@ -102,21 +102,35 @@ begin
   end if;
 
   if position(
+    '''premium'''
+    in pg_get_functiondef(
+      'public.create_company_trial_subscription()'::regprocedure
+    )
+  ) = 0 or position(
+    '''trialing'''
+    in pg_get_functiondef(
+      'public.create_company_trial_subscription()'::regprocedure
+    )
+  ) = 0 then
+    raise exception 'Super Admin company invitations must retain the Premium free trial';
+  end if;
+
+  if position(
+    '''expired'''
+    in pg_get_functiondef(
+      'public.create_company_trial_subscription()'::regprocedure
+    )
+  ) = 0 then
+    raise exception 'New self-service companies must begin in an unpaid subscription state';
+  end if;
+
+  if position(
     'app.onboarding_company_id'
     in pg_get_functiondef(
       'public.create_company_trial_subscription()'::regprocedure
     )
   ) = 0 then
-    raise exception 'Trial creation must mark the onboarding transaction';
-  end if;
-
-  if position(
-    '''premium'''
-    in pg_get_functiondef(
-      'public.create_company_trial_subscription()'::regprocedure
-    )
-  ) = 0 then
-    raise exception 'New company trials must start on Pro';
+    raise exception 'Company creation must allow only the initial setup transaction';
   end if;
 
   if not has_function_privilege('authenticated', access_function, 'execute') then

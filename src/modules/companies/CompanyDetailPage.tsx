@@ -38,6 +38,7 @@ import {
   companyPlanLabel,
   companyToUpdateForm,
   formatDateTime,
+  isFreeTrialExtended,
   slugify,
   validateUpdateCompanyForm,
 } from "./companyUtils";
@@ -264,6 +265,7 @@ export function CompanyDetailPage() {
     company.billing_status === "free_trial_ended" &&
     company.subscription?.status === "trialing" &&
     Boolean(company.company_id && company.subscription.trial_ends_at);
+  const isTrialExtended = isFreeTrialExtended(company.subscription);
 
   return (
     <div className="space-y-6">
@@ -384,6 +386,19 @@ export function CompanyDetailPage() {
         <Badge tone="blue">Created {formatDateTime(company.created_at)}</Badge>
         <Badge>Updated {formatDateTime(company.updated_at)}</Badge>
       </section>
+
+      {company.subscription?.status === "trialing" ? (
+        <DetailSection title="Free Trial">
+          <DetailItem
+            label="Trial Started"
+            value={formatDateTime(company.subscription.trial_started_at)}
+          />
+          <DetailItem
+            label={isTrialExtended ? "Trial Extended Until" : "Trial Ends"}
+            value={formatDateTime(company.subscription.trial_ends_at)}
+          />
+        </DetailSection>
+      ) : null}
 
       <DetailSection title="Company Profile">
         <DetailItem label="Company Name" value={company.name} />

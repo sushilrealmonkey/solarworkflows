@@ -3,6 +3,20 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-09-01 (current worktree)
+
+- Added organization-scoped quotation PDF design selection with Aurora and
+  Meridian templates, in-settings previews, and downloadable sample PDFs.
+- Added the Meridian executive solar quotation PDF layout, including structured
+  system, pricing, commercial terms, scope, warranty, payment, and handover
+  sections while retaining the Aurora layout as the default.
+- Granted authorized platform backend staff a read-only EPC company directory
+  and detail view through restricted Supabase RPCs; company onboarding,
+  account-management, product-import, and other mutations remain
+  super-admin-only.
+- Added super-admin controls to restore an expired free trial for 1–90 days,
+  backed by server-side validation that excludes active and paid subscriptions.
+
 ## 2026-08-31 (current worktree)
 
 - Added a responsive Inventory Add Stock flow for non-PO stock-in entries,
