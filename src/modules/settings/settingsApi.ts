@@ -155,6 +155,34 @@ export async function updateOrganizationSettings(
   return data as OrganizationSettings;
 }
 
+type OnboardingCompanySettingsValues = Partial<
+  Pick<
+    OrganizationSettingsFormValues,
+    | "company_name"
+    | "company_logo_url"
+    | "address"
+    | "contact_email"
+    | "contact_phone"
+    | "gst_number"
+  >
+>;
+
+export async function updateCurrentOnboardingCompanySettings(
+  values: OnboardingCompanySettingsValues,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc(
+    "update_current_onboarding_company_settings",
+    { settings: values },
+  );
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as OrganizationSettings;
+}
+
 const companyBrandingBucket = "company-branding";
 
 export async function uploadCompanyLogo(

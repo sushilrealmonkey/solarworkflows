@@ -7,7 +7,7 @@ import { Button } from "../crm/CrmComponents";
 import { CompanyLogoUploader } from "../settings/CompanyLogoUploader";
 import {
   fetchOrganizationSettings,
-  updateOrganizationSettings,
+  updateCurrentOnboardingCompanySettings,
   uploadCompanyLogo,
 } from "../settings/settingsApi";
 import {
@@ -107,7 +107,7 @@ export function OnboardingCompanyPage() {
 
     try {
       setAction("saving");
-      await updateOrganizationSettings({
+      await updateCurrentOnboardingCompanySettings({
         company_name: values.company_name.trim(),
         gst_number: values.gst_number.trim().toUpperCase(),
         contact_phone: values.contact_phone.trim(),
@@ -139,7 +139,7 @@ export function OnboardingCompanyPage() {
 
   async function uploadLogo(logo: Blob) {
     const publicUrl = await uploadCompanyLogo(profile, logo);
-    await updateOrganizationSettings({ company_logo_url: publicUrl });
+    await updateCurrentOnboardingCompanySettings({ company_logo_url: publicUrl });
     update("company_logo_url", publicUrl);
   }
 
