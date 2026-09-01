@@ -8,6 +8,7 @@ import {
   uploadGeneratedPdf,
 } from "../documents/generatedPdfApi";
 import type { QuotationItem, QuotationWithRelations } from "./types";
+import { normalizeQuotationTemplate } from "./quotationTemplates";
 
 export async function generateAndStoreQuotationPdf(
   profile: UserProfile | null,
@@ -19,6 +20,7 @@ export async function generateAndStoreQuotationPdf(
   const filePath = quotationPdfPath(
     quotation,
     settings.quotation_prefix ?? "QUO",
+    normalizeQuotationTemplate(settings.quotation_template),
   );
   const pdfBlob = await buildQuotationPdf(quotation, items, organization, settings);
 
@@ -43,6 +45,7 @@ export async function fetchQuotationPdfPreviewUrl(
   const filePath = quotationPdfPath(
     quotation,
     settings.quotation_prefix ?? "QUO",
+    normalizeQuotationTemplate(settings.quotation_template),
   );
   const document = await fetchGeneratedDocument(filePath);
 
@@ -56,11 +59,13 @@ export async function fetchQuotationPdfPreviewUrl(
 function quotationPdfPath(
   quotation: QuotationWithRelations,
   quotationPrefix: string,
+  quotationTemplate: "aurora" | "meridian",
 ) {
   return buildQuotationPdfPath(
     quotation.organization_id,
     quotation.quotation_code,
     quotationPrefix,
     quotation.id,
+    quotationTemplate,
   );
 }

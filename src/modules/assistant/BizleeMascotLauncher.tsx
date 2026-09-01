@@ -38,7 +38,7 @@ export function BizleeMascotLauncher({
   const [isDismissed, setIsDismissed] = useState(false);
   const isSidebarPlacement = placement === "sidebar";
 
-  if (isDismissed || location.pathname === "/today") return null;
+  if (isDismissed || location.pathname === "/bizlee-ai") return null;
 
   return (
     <div
@@ -57,7 +57,7 @@ export function BizleeMascotLauncher({
               }`
             : "h-[4.75rem] w-[4.75rem] justify-center rounded-full hover:-translate-y-1 active:translate-y-0 sm:h-[5.5rem] sm:w-[5.5rem]"
         }`}
-        onClick={() => navigate("/today")}
+        onClick={() => navigate("/bizlee-ai")}
         title={isSidebarPlacement && sidebarCollapsed ? "Ask Bizlee AI" : undefined}
         type="button"
       >

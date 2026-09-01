@@ -125,13 +125,14 @@ export default function App() {
           <Route path="/trial-outreach" element={<TrialOutreachPage />} />
           <Route path="/dashboard" element={<RoleScopedDashboardPage />} />
           <Route
-            path="/today"
+            path="/bizlee-ai"
             element={
               <SubscriptionRoute moduleKey="assistant">
                 <TodayPage />
               </SubscriptionRoute>
             }
           />
+          <Route path="/today" element={<Navigate to="/bizlee-ai" replace />} />
           <Route
             path="/customers"
             element={<Navigate to="/customers/project-based" replace />}

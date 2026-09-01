@@ -3,6 +3,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 import { Link } from "react-router-dom";
@@ -215,22 +216,22 @@ function EpcAdminDashboard() {
 
       <section className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <CommandMetricCard
-          label="Pipeline Value"
-          value={compactCurrencyFormatter.format(adminData.pipelineValue)}
-          detail={`${adminData.activeLeads.length} active enquiries`}
-          trend={`${adminData.newLeadsThisMonth} new this month`}
+          label="New Enquiries"
+          value={adminData.newEnquiries.length}
+          detail={`${adminData.newEnquiriesThisMonth} received this month`}
+          trend="Kept separate from project sales"
           visual={
             <MiniSparkline
               color="#2563eb"
-              values={adminData.monthlyRows.map((row) => row.quotationValue)}
+              values={adminData.monthlyRows.map((row) => row.newEnquiryCount)}
             />
           }
           loading={loading}
         />
         <CommandMetricCard
-          label="Quotations Created"
-          value={adminData.sentQuotations.length}
-          detail={`${compactCurrencyFormatter.format(adminData.quotedValue)} quoted`}
+          label="Projected Pipeline Value"
+          value={compactCurrencyFormatter.format(adminData.projectedPipelineValue)}
+          detail={`${adminData.projectedQuotations.length} quotations created`}
           trend={`${adminData.awaitingQuotations.length} awaiting response`}
           visual={
             <MiniSparkline
@@ -243,8 +244,8 @@ function EpcAdminDashboard() {
         <CommandMetricCard
           label="Quote Acceptance Rate"
           value={`${adminData.quoteAcceptanceRate}%`}
-          detail={`${adminData.acceptedQuotations.length} accepted out of ${adminData.decisionQuotationCount}`}
-          trend="This workspace"
+          detail={`${adminData.wonQuotations.length} won out of ${adminData.closedQuotationCount}`}
+          trend="Closed quotations"
           visual={<MiniDonut percent={adminData.quoteAcceptanceRate} tone="green" />}
           loading={loading}
         />
@@ -378,13 +379,6 @@ function buildEpcDashboardModel(
   const reservations = snapshot?.inventoryReservations ?? [];
   const purchaseOrders = snapshot?.purchaseOrders ?? [];
   const b2bSales = snapshot?.recentB2BSales ?? [];
-  const activeLeadStatuses = new Set([
-    "new",
-    "contacted",
-    "site_visit_scheduled",
-    "qualified",
-    "quotation_sent",
-  ]);
   const completedProjectStatuses = new Set([
     "installation_completed",
     "inspection_completed",
@@ -392,29 +386,25 @@ function buildEpcDashboardModel(
     "cancelled",
   ]);
 
-  const activeLeads = leads.filter((lead) => activeLeadStatuses.has(lead.status ?? ""));
-  const newLeadsThisMonth = leads.filter((lead) =>
+  const newEnquiries = leads.filter((lead) => lead.status === "new");
+  const newEnquiriesThisMonth = newEnquiries.filter((lead) =>
     isSameMonth(lead.created_at, today),
   ).length;
-  const sentQuotations = quotations.filter(
-    (quotation) => quotation.status !== "cancelled",
+  const projectedQuotations = quotations.filter((quotation) =>
+    ["created", "loan_approval_due"].includes(quotation.status ?? ""),
   );
-  const acceptedQuotations = quotations.filter(
+  const wonQuotations = quotations.filter(
     (quotation) =>
       quotation.status === "accepted" || quotation.status === "loan_approved",
   );
-  const rejectedQuotations = quotations.filter((quotation) =>
+  const lostQuotations = quotations.filter((quotation) =>
     quotation.status === "cancelled",
   );
-  const awaitingQuotations = sentQuotations.filter(
-    (quotation) =>
-      quotation.status === "created" || quotation.status === "loan_approval_due",
-  );
-  const decisionQuotationCount =
-    sentQuotations.length + acceptedQuotations.length + rejectedQuotations.length;
+  const awaitingQuotations = projectedQuotations;
+  const closedQuotationCount = wonQuotations.length + lostQuotations.length;
   const quoteAcceptanceRate =
-    decisionQuotationCount > 0
-      ? Math.round((acceptedQuotations.length / decisionQuotationCount) * 100)
+    closedQuotationCount > 0
+      ? Math.round((wonQuotations.length / closedQuotationCount) * 100)
       : 0;
   const activeProjects = projects.filter(
     (project) => !completedProjectStatuses.has(project.project_status ?? ""),
@@ -453,45 +443,21 @@ function buildEpcDashboardModel(
 
   const pipelineRows = [
     {
-      label: "New Enquiries",
-      count: leads.filter((lead) => lead.status === "new").length,
-      value: sumLeadValue(leads.filter((lead) => lead.status === "new")),
-      tone: "blue",
-    },
-    {
-      label: "Site Survey Scheduled",
-      count: leads.filter((lead) => lead.status === "site_visit_scheduled").length,
-      value: sumLeadValue(
-        leads.filter((lead) => lead.status === "site_visit_scheduled"),
-      ),
-      tone: "violet",
-    },
-    {
       label: "Quotation Created",
-      count: sentQuotations.length,
-      value: sumQuotationValue(sentQuotations),
+      count: projectedQuotations.length,
+      value: sumQuotationValue(projectedQuotations),
       tone: "orange",
     },
     {
-      label: "Negotiation",
-      count: leads.filter((lead) => lead.status === "qualified").length,
-      value: sumLeadValue(leads.filter((lead) => lead.status === "qualified")),
-      tone: "amber",
-    },
-    {
-      label: "Won",
-      count: acceptedQuotations.length,
-      value: sumQuotationValue(acceptedQuotations),
+      label: "Project Won",
+      count: wonQuotations.length,
+      value: sumQuotationValue(wonQuotations),
       tone: "green",
     },
     {
-      label: "Lost",
-      count:
-        leads.filter((lead) => lead.status === "lost").length +
-        rejectedQuotations.length,
-      value:
-        sumLeadValue(leads.filter((lead) => lead.status === "lost")) +
-        sumQuotationValue(rejectedQuotations),
+      label: "Project Lost",
+      count: lostQuotations.length,
+      value: sumQuotationValue(lostQuotations),
       tone: "slate",
     },
   ];
@@ -500,6 +466,7 @@ function buildEpcDashboardModel(
     stageRow(label, [value], projects),
   );
   const monthlyRows = buildMonthlyRows(
+    leads,
     quotations,
     projects,
     snapshot?.recentPayments ?? [],
@@ -516,9 +483,7 @@ function buildEpcDashboardModel(
     (total, project) => total + Number(project.system_capacity_kw ?? 0),
     0,
   );
-  const pipelineValue =
-    sumLeadValue(activeLeads) ||
-    pipelineRows.reduce((total, row) => total + row.value, 0);
+  const projectedPipelineValue = sumQuotationValue(projectedQuotations);
 
   const scheduleRows = [
     ...surveys
@@ -556,28 +521,26 @@ function buildEpcDashboardModel(
 
   return {
     activeCapacityKw,
-    activeLeads,
     activeProjects,
     activeProjectValue,
-    acceptedQuotations,
     awaitingQuotations,
     b2bMonthlyRows,
     b2bSales,
+    closedQuotationCount,
     collectionEfficiency,
-    decisionQuotationCount,
     delayedProjects,
-    newLeadsThisMonth,
+    newEnquiries,
+    newEnquiriesThisMonth,
     overdueAmount,
     overdueFollowups,
     overduePaymentSummaries,
     pendingSurveyReports,
     pipelineRows,
-    pipelineValue,
+    projectedPipelineValue,
+    projectedQuotations,
     projectStageRows,
     quoteAcceptanceRate,
-    quotedValue: sumQuotationValue(quotations),
     scheduleRows,
-    sentQuotations,
     shortageReservations,
     surveyCompleted: surveys.filter((survey) => survey.survey_status === "completed")
       .length,
@@ -594,6 +557,7 @@ function buildEpcDashboardModel(
       shortageReservations.length +
       overduePaymentSummaries.length,
     monthlyRows,
+    wonQuotations,
   };
 }
 
@@ -725,13 +689,13 @@ function SalesPipelinePanel({
 
   return (
     <AdminPanel
-      title="Sales Pipeline"
-      action={<Link className="text-sm font-semibold text-[#06173f]" to="/leads">View pipeline</Link>}
+      title="Project Sales Pipeline"
+      action={<Link className="text-sm font-semibold text-[#06173f]" to="/quotations">View quotations</Link>}
     >
       {loading ? <LoadingRows /> : null}
       {!loading && rows.every((row) => row.count === 0) ? (
-        <GuidedEmptyState to="/leads" action="Add Enquiry">
-          No enquiries or quotations yet. Start by adding an enquiry so the pipeline can show real movement.
+        <GuidedEmptyState to="/quotations" action="Create Quotation">
+          No quotations yet. Create a quotation to begin tracking your projected project sales.
         </GuidedEmptyState>
       ) : null}
       {!loading && rows.some((row) => row.count > 0) ? (
@@ -747,7 +711,7 @@ function SalesPipelinePanel({
                 </p>
                 <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
                   <div
-                    className={`h-full rounded-full ${pipelineTone(row.tone)}`}
+                    className={`dashboard-chart-progress h-full rounded-full ${pipelineTone(row.tone)}`}
                     style={{ width: `${Math.max((row.count / maxCount) * 100, 8)}%` }}
                   />
                 </div>
@@ -908,11 +872,7 @@ function RevenueCollectionPanel({
   currencyFormatter: Intl.NumberFormat;
 }) {
   const maxValue = Math.max(
-    ...rows.flatMap((row) => [
-      row.projectValue,
-      row.receivedAmount,
-      row.balanceDue,
-    ]),
+    ...rows.flatMap((row) => [row.projectValue, row.receivedAmount]),
     1,
   );
 
@@ -924,7 +884,6 @@ function RevenueCollectionPanel({
           <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600 sm:gap-3 sm:text-xs">
             <Legend color="bg-violet-500" label="Project" />
             <Legend color="bg-emerald-500" label="Received" />
-            <Legend color="bg-orange-500" label="Balance" />
           </div>
           <ComboRevenueChart
             currencyFormatter={currencyFormatter}
@@ -958,7 +917,7 @@ function QuotationPipelinePanel({
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600 sm:gap-3 sm:text-xs">
             <Legend color="bg-blue-500" label="Quoted" />
-            <Legend color="bg-emerald-500" label="Accepted" />
+            <Legend color="bg-emerald-500" label="Won" />
           </div>
           <QuotationPipelineChart
             currencyFormatter={currencyFormatter}
@@ -1169,7 +1128,6 @@ function SurveyStatusPanel({
               ["Scheduled", data.surveyScheduled],
               ["Completed", data.surveyCompleted],
               ["Report Pending", data.pendingSurveyReports],
-              ["Avg. survey-to-quote", total > 0 ? "Track next" : "-"],
             ]}
           />
         </div>
@@ -1199,8 +1157,8 @@ function QuotationInsightsPanel({
           />
           <SmallStatList
             rows={[
-              ["Total Created", data.sentQuotations.length],
-              ["Accepted Value", currencyFormatter.format(sumQuotationValue(data.acceptedQuotations))],
+              ["Total Created", data.projectedQuotations.length],
+              ["Won Value", currencyFormatter.format(sumQuotationValue(data.wonQuotations))],
               ["Awaiting Response", data.awaitingQuotations.length],
               ["Acceptance Rate", `${data.quoteAcceptanceRate}%`],
             ]}
@@ -1411,9 +1369,10 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
   const areaPoints = [`4,52`, ...points, `68,52`].join(" ");
 
   return (
-    <svg aria-hidden="true" className="h-12 w-14 sm:h-16 sm:w-20" viewBox="0 0 72 56">
-      <polygon fill={color} opacity="0.1" points={areaPoints} />
+    <svg aria-hidden="true" className="dashboard-chart-sparkline h-12 w-14 sm:h-16 sm:w-20" viewBox="0 0 72 56">
+      <polygon className="dashboard-chart-sparkline-area" fill={color} opacity="0.1" points={areaPoints} />
       <polyline
+        className="dashboard-chart-sparkline-line"
         fill="none"
         points={points.join(" ")}
         stroke={color}
@@ -1421,7 +1380,7 @@ function MiniSparkline({ values, color }: { values: number[]; color: string }) {
         strokeLinejoin="round"
         strokeWidth="3"
       />
-      <circle cx={points.at(-1)?.split(",")[0] ?? "68"} cy={points.at(-1)?.split(",")[1] ?? "48"} fill={color} r="3" />
+      <circle className="dashboard-chart-sparkline-dot" cx={points.at(-1)?.split(",")[0] ?? "68"} cy={points.at(-1)?.split(",")[1] ?? "48"} fill={color} r="3" />
     </svg>
   );
 }
@@ -1440,6 +1399,7 @@ function MiniDonut({
     <svg aria-hidden="true" className="h-12 w-12 -rotate-90 sm:h-16 sm:w-16" viewBox="0 0 44 44">
       <circle cx="22" cy="22" fill="none" r="16" stroke="#e5e7eb" strokeWidth="7" />
       <circle
+        className="dashboard-chart-donut"
         cx="22"
         cy="22"
         fill="none"
@@ -1475,6 +1435,45 @@ function StageMarker({ index }: { index: number }) {
   );
 }
 
+function ChartValueBar({
+  color,
+  value,
+  maxValue,
+  currencyFormatter,
+}: {
+  color: string;
+  value: number;
+  maxValue: number;
+  currencyFormatter: Intl.NumberFormat;
+}) {
+  const numericValue = Number(value) || 0;
+  const relativeHeight = (numericValue / maxValue) * 100;
+  const height = Math.max(relativeHeight, numericValue > 0 ? 8 : 1);
+  const showLabelInside = relativeHeight >= 24;
+
+  return (
+    <div
+      aria-label={currencyFormatter.format(numericValue)}
+      className="relative min-h-1"
+      title={currencyFormatter.format(numericValue)}
+      style={{ height: `${height}%` }}
+    >
+      <span aria-hidden="true" className={`dashboard-chart-bar absolute inset-0 rounded-t ${color}`} />
+      {numericValue > 0 ? (
+        <span
+          className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap text-[8px] font-bold leading-none sm:text-[10px] ${
+            showLabelInside
+              ? "top-1 text-white"
+              : "-top-3 text-slate-700"
+          }`}
+        >
+          {currencyFormatter.format(numericValue)}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function ComboRevenueChart({
   rows,
   maxValue,
@@ -1486,17 +1485,6 @@ function ComboRevenueChart({
 }) {
   const columnWidth = 64;
   const chartWidth = Math.max(rows.length * columnWidth, 360);
-  const effectiveColumnWidth = chartWidth / Math.max(rows.length, 1);
-  const pointStart = effectiveColumnWidth / 2;
-  const pointEnd = chartWidth - pointStart;
-  const linePoints = rows.map((row, index) => {
-    const x =
-      rows.length === 1
-        ? pointStart
-        : pointStart + (index / (rows.length - 1)) * (pointEnd - pointStart);
-    const y = 146 - (Number(row.balanceDue) / maxValue) * 120;
-    return `${x},${Number.isFinite(y) ? y : 146}`;
-  });
 
   return (
     <div className="overflow-x-auto rounded-lg bg-stone-50">
@@ -1522,15 +1510,6 @@ function ComboRevenueChart({
               y2={y}
             />
           ))}
-          <polyline
-            fill="none"
-            points={linePoints.join(" ")}
-            stroke="#f97316"
-            strokeDasharray="5 5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="3"
-          />
         </svg>
         <div
           className="relative grid min-h-36 items-end gap-1 pt-2 sm:min-h-44 sm:gap-2"
@@ -1540,16 +1519,15 @@ function ComboRevenueChart({
             <div className="flex min-w-0 flex-col items-center gap-2" key={row.label}>
               <div className="grid h-28 w-full grid-cols-2 items-end gap-0.5 sm:h-36 sm:gap-1">
                 {[
-                  ["bg-violet-500", row.projectValue],
-                  ["bg-emerald-500", row.receivedAmount],
-                ].map(([color, value], index) => (
-                  <div
-                    className={`${color} min-h-1 rounded-t`}
+                  { color: "bg-violet-500", value: row.projectValue },
+                  { color: "bg-emerald-500", value: row.receivedAmount },
+                ].map(({ color, value }, index) => (
+                  <ChartValueBar
+                    color={color}
                     key={`${row.label}-${index}`}
-                    title={currencyFormatter.format(Number(value))}
-                    style={{
-                      height: `${Math.max((Number(value) / maxValue) * 100, Number(value) > 0 ? 8 : 1)}%`,
-                    }}
+                    currencyFormatter={currencyFormatter}
+                    maxValue={maxValue}
+                    value={Number(value)}
                   />
                 ))}
               </div>
@@ -1609,16 +1587,15 @@ function QuotationPipelineChart({
             <div className="flex min-w-0 flex-col items-center gap-2" key={row.label}>
               <div className="grid h-28 w-full grid-cols-2 items-end gap-0.5 sm:h-36 sm:gap-1">
                 {[
-                  ["bg-blue-500", row.quotationValue],
-                  ["bg-emerald-500", row.acceptedQuotationValue],
-                ].map(([color, value], index) => (
-                  <div
-                    className={`${color} min-h-1 rounded-t`}
+                  { color: "bg-blue-500", value: row.quotationValue },
+                  { color: "bg-emerald-500", value: row.acceptedQuotationValue },
+                ].map(({ color, value }, index) => (
+                  <ChartValueBar
+                    color={color}
                     key={`${row.label}-quotation-${index}`}
-                    title={currencyFormatter.format(Number(value))}
-                    style={{
-                      height: `${Math.max((Number(value) / maxValue) * 100, Number(value) > 0 ? 8 : 1)}%`,
-                    }}
+                    currencyFormatter={currencyFormatter}
+                    maxValue={maxValue}
+                    value={Number(value)}
                   />
                 ))}
               </div>
@@ -1648,8 +1625,10 @@ function MultiDonutChart({
       <circle cx="45" cy="45" fill="none" pathLength="100" r="32" stroke="#e5e7eb" strokeWidth="12" />
       {rows.map((row) => {
         const length = (row.value / total) * 100;
+        const segmentOffset = -offset;
         const segment = (
           <circle
+            className="dashboard-chart-donut-segment"
             key={row.label}
             cx="45"
             cy="45"
@@ -1658,9 +1637,10 @@ function MultiDonutChart({
             r="32"
             stroke={row.color}
             strokeDasharray={`${length} ${100 - length}`}
-            strokeDashoffset={-offset}
+            strokeDashoffset={segmentOffset}
             strokeLinecap="round"
             strokeWidth="12"
+            style={{ "--dashboard-chart-dashoffset": String(segmentOffset) } as CSSProperties}
             transform="rotate(-90 45 45)"
           />
         );
@@ -1693,6 +1673,7 @@ function GaugeChart({
       <svg aria-label={`${label} gauge`} className="h-24 w-full" viewBox="0 0 160 90">
         <path d="M25 78a55 55 0 0 1 110 0" fill="none" stroke="#e5e7eb" strokeLinecap="round" strokeWidth="14" />
         <path
+          className="dashboard-chart-gauge"
           d="M25 78a55 55 0 0 1 110 0"
           fill="none"
           pathLength="100"
@@ -1727,7 +1708,7 @@ function HorizontalBarSet({
             <p className="truncate text-xs font-semibold text-slate-600">{row.label}</p>
             <div className="mt-1 h-2 overflow-hidden rounded-full bg-white">
               <div
-                className="h-full rounded-full"
+                className="dashboard-chart-progress h-full rounded-full"
                 style={{
                   backgroundColor: row.color,
                   width: `${Math.max((row.value / maxValue) * 100, row.value > 0 ? 8 : 1)}%`,
@@ -1753,7 +1734,7 @@ function CollectionMeter({ percent }: { percent: number }) {
       </div>
       <div className="mt-3 h-3 overflow-hidden rounded-full bg-white">
         <div
-          className="h-full rounded-full bg-emerald-500"
+          className="dashboard-chart-progress h-full rounded-full bg-emerald-500"
           style={{ width: `${clampedPercent}%` }}
         />
       </div>
@@ -1773,7 +1754,7 @@ function DocumentMiniChart({
       {rows.map((row) => (
         <div className="flex min-w-0 flex-col items-center gap-1" key={row.label}>
           <div
-            className="w-full rounded-t"
+            className="dashboard-chart-bar w-full rounded-t"
             style={{
               backgroundColor: row.color,
               height: `${Math.max((row.value / maxValue) * 64, row.value > 0 ? 8 : 2)}px`,
@@ -1846,10 +1827,6 @@ function sortFollowupsByDueDate(
   );
 }
 
-function sumLeadValue(leads: Lead[]) {
-  return leads.reduce((total, lead) => total + Number(lead.offered_price ?? 0), 0);
-}
-
 function sumQuotationValue(quotations: EpcAdminDashboardSnapshot["quotations"]) {
   return quotations.reduce(
     (total, quotation) =>
@@ -1881,6 +1858,7 @@ function stageRow(
 }
 
 function buildMonthlyRows(
+  leads: Lead[],
   quotations: EpcAdminDashboardSnapshot["quotations"],
   projects: EpcAdminDashboardSnapshot["projects"],
   payments: PaymentWithRelations[],
@@ -1903,6 +1881,10 @@ function buildMonthlyRows(
 
     return {
       label,
+      newEnquiryCount: leads.filter(
+        (lead) =>
+          lead.status === "new" && isSameMonth(lead.created_at, monthDate),
+      ).length,
       quotationValue: sumQuotationValue(monthlyQuotations),
       acceptedQuotationValue: sumQuotationValue(
         monthlyQuotations.filter(

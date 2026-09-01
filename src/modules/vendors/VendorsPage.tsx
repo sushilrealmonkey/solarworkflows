@@ -551,19 +551,9 @@ export function VendorFormModal({
         required
       />
       <TextInput
-        label="Contact Person"
-        value={values.contact_person}
-        onChange={(value) => update("contact_person", value)}
-      />
-      <TextInput
         label="Phone"
         value={values.phone}
         onChange={(value) => update("phone", value)}
-      />
-      <TextInput
-        label="Alternate Phone"
-        value={values.alternate_phone}
-        onChange={(value) => update("alternate_phone", value)}
       />
       <TextInput
         label="Email"
@@ -670,35 +660,10 @@ export function VendorFormModal({
         value={values.city}
         onChange={(value) => update("city", value)}
       />
-      <TextInput
-        label="District"
-        value={values.district}
-        onChange={(value) => update("district", value)}
-      />
-      <TextInput
-        label="State"
-        value={values.state}
-        onChange={(value) => update("state", value)}
-      />
-      <TextInput
-        label="Pincode"
-        value={values.pincode}
-        onChange={(value) => update("pincode", value)}
-      />
       <TextArea
-        label="Address Line 1"
+        label="Full Address"
         value={values.address_line_1}
         onChange={(value) => update("address_line_1", value)}
-      />
-      <TextArea
-        label="Address Line 2"
-        value={values.address_line_2}
-        onChange={(value) => update("address_line_2", value)}
-      />
-      <TextArea
-        label="Notes"
-        value={values.notes}
-        onChange={(value) => update("notes", value)}
       />
     </Modal>
   );

@@ -50,6 +50,7 @@ import { CompanyLogoUploader } from "./CompanyLogoUploader";
 import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
 import { BillingInvoicesSection } from "./BillingInvoicesSection";
 import { BillingPlansSection } from "../billing/BillingPlansPage";
+import { QuotationTemplateSection } from "./QuotationTemplateSection";
 
 type StaffFormState = {
   mode: "create" | "edit";
@@ -57,8 +58,24 @@ type StaffFormState = {
   values: StaffFormValues;
 };
 
+type SettingsTabId =
+  | "company-profile"
+  | "quotation-template"
+  | "staff-management"
+  | "whatsapp-message"
+  | "billing-invoices";
+
+const settingsTabs = [
+  { id: "company-profile", label: "Company Profile" },
+  { id: "quotation-template", label: "Quotation Template" },
+  { id: "staff-management", label: "Staff Management" },
+  { id: "whatsapp-message", label: "WhatsApp Message" },
+  { id: "billing-invoices", label: "Billing & Invoices" },
+] satisfies ReadonlyArray<{ id: SettingsTabId; label: string }>;
+
 export function SettingsPage() {
   const { profile, permissions, subscription } = useAuth();
+  const [activeTab, setActiveTab] = useState<SettingsTabId>("company-profile");
 
   if (profile?.is_super_admin) {
     return <PlatformSettingsPage />;
@@ -92,11 +109,68 @@ export function SettingsPage() {
         }
       />
 
-      <OrganizationSettingsPage readOnly={readOnly} />
-      <BillingPlansSection />
-      <BillingInvoicesSection />
-      <NotificationPreferencesSection readOnly={readOnly} />
-      <StaffManagementPage readOnly={readOnly} reductionOnly={canReduceSeats} />
+      <nav
+        aria-label="Settings sections"
+        className="overflow-x-auto rounded-2xl border border-stone-200 bg-white p-2 shadow-sm"
+      >
+        <div className="flex min-w-max gap-1" role="tablist">
+          {settingsTabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+
+            return (
+              <button
+                aria-controls={`settings-panel-${tab.id}`}
+                aria-selected={isActive}
+                className={`inline-flex min-h-11 items-center rounded-xl px-3.5 text-sm font-semibold transition-colors sm:px-4 ${
+                  isActive
+                    ? "bg-[#06173f] text-white shadow-sm"
+                    : "text-slate-600 hover:bg-stone-100 hover:text-slate-950"
+                }`}
+                id={`settings-tab-${tab.id}`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                role="tab"
+                type="button"
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      <OrganizationSettingsPage activeTab={activeTab} readOnly={readOnly} />
+
+      <section
+        aria-labelledby="settings-tab-staff-management"
+        className="scroll-mt-24"
+        hidden={activeTab !== "staff-management"}
+        id="settings-panel-staff-management"
+        role="tabpanel"
+      >
+        <StaffManagementPage readOnly={readOnly} reductionOnly={canReduceSeats} />
+      </section>
+
+      <section
+        aria-labelledby="settings-tab-whatsapp-message"
+        className="scroll-mt-24"
+        hidden={activeTab !== "whatsapp-message"}
+        id="settings-panel-whatsapp-message"
+        role="tabpanel"
+      >
+        <NotificationPreferencesSection readOnly={readOnly} />
+      </section>
+
+      <section
+        aria-labelledby="settings-tab-billing-invoices"
+        className="scroll-mt-24 space-y-4"
+        hidden={activeTab !== "billing-invoices"}
+        id="settings-panel-billing-invoices"
+        role="tabpanel"
+      >
+        <BillingPlansSection />
+        <BillingInvoicesSection />
+      </section>
     </div>
   );
 }
@@ -165,7 +239,13 @@ export function SettingsOverviewPage() {
   );
 }
 
-export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: boolean }) {
+export function OrganizationSettingsPage({
+  readOnly = false,
+  activeTab = "company-profile",
+}: {
+  readOnly?: boolean;
+  activeTab?: SettingsTabId;
+}) {
   const { organization, profile, refresh, session } = useAuth();
   const { showToast } = useToast();
   const [values, setValues] = useState<OrganizationSettingsFormValues>(
@@ -265,48 +345,54 @@ export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: bool
 
   return (
     <form
-      className="scroll-mt-24 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
-      id="company-profile"
+      className="scroll-mt-24"
       onSubmit={handleSubmit}
     >
-      <div className="border-b border-stone-200 px-4 py-4 sm:px-6">
-        <SectionTitle
-          title="Company Profile"
-          description={
-            readOnly
-              ? "Company profile, branding, contact, and bank information."
-              : "Keep your business identity, branding, contact, and banking details up to date."
-          }
-        />
-      </div>
-
-      <div className="space-y-4 bg-stone-50/70 p-3 sm:p-5">
-        <section aria-labelledby="brand-identity-heading">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3
-                id="brand-identity-heading"
-                className="text-sm font-semibold text-slate-950"
-              >
-                Brand identity
-              </h3>
-              <p className="mt-0.5 text-xs leading-5 text-slate-500">
-                This logo appears across your workspace and customer documents.
-              </p>
-            </div>
-            <span className="hidden rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700 sm:inline-flex">
-              Company logo
-            </span>
-          </div>
-          <CompanyLogoUploader
-            currentUrl={values.company_logo_url}
-            disabled={saving || readOnly}
-            readOnly={readOnly}
-            onUpload={handleLogoUpload}
+      <section
+        aria-labelledby="settings-tab-company-profile"
+        className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+        hidden={activeTab !== "company-profile"}
+        id="settings-panel-company-profile"
+        role="tabpanel"
+      >
+        <div className="border-b border-stone-200 px-4 py-4 sm:px-6">
+          <SectionTitle
+            title="Company Profile"
+            description={
+              readOnly
+                ? "Company profile, branding, contact, and bank information."
+                : "Keep your business identity, branding, contact, and banking details up to date."
+            }
           />
-        </section>
+        </div>
 
-        <div className="grid items-start gap-4 xl:grid-cols-2">
+        <div className="space-y-4 bg-stone-50/70 p-3 sm:p-5">
+          <section aria-labelledby="brand-identity-heading">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3
+                  id="brand-identity-heading"
+                  className="text-sm font-semibold text-slate-950"
+                >
+                  Brand identity
+                </h3>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                  This logo appears across your workspace and customer documents.
+                </p>
+              </div>
+              <span className="hidden rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700 sm:inline-flex">
+                Company logo
+              </span>
+            </div>
+            <CompanyLogoUploader
+              currentUrl={values.company_logo_url}
+              disabled={saving || readOnly}
+              readOnly={readOnly}
+              onUpload={handleLogoUpload}
+            />
+          </section>
+
+          <div className="grid items-start gap-4 xl:grid-cols-2">
           <ProfileSettingsCard
             title="Company information"
             description="Business and primary contact details"
@@ -394,14 +480,48 @@ export function OrganizationSettingsPage({ readOnly = false }: { readOnly?: bool
           </ProfileSettingsCard>
         </div>
 
-        {!readOnly ? (
-          <div className="flex justify-end border-t border-stone-200 pt-4 [&>button]:w-full sm:[&>button]:w-auto">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save Settings"}
-            </Button>
-          </div>
-        ) : null}
-      </div>
+          {!readOnly ? (
+            <div className="flex justify-end border-t border-stone-200 pt-4 [&>button]:w-full sm:[&>button]:w-auto">
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save Company Profile"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="settings-tab-quotation-template"
+        className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm"
+        hidden={activeTab !== "quotation-template"}
+        id="settings-panel-quotation-template"
+        role="tabpanel"
+      >
+        <div className="border-b border-stone-200 px-4 py-4 sm:px-6">
+          <SectionTitle
+            title="Quotation Template"
+            description="Choose the branded design your team uses for quotation PDFs."
+          />
+        </div>
+
+        <div className="space-y-4 bg-stone-50/70 p-3 sm:p-5">
+          <QuotationTemplateSection
+            disabled={saving || readOnly}
+            organization={organization}
+            onChange={(template) => update("quotation_template", template)}
+            showToast={showToast}
+            values={values}
+          />
+
+          {!readOnly ? (
+            <div className="flex justify-end border-t border-stone-200 pt-4 [&>button]:w-full sm:[&>button]:w-auto">
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save Quotation Template"}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </section>
     </form>
   );
 }

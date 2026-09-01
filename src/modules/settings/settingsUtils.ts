@@ -6,6 +6,7 @@ import type {
   SettingsStaff,
   StaffFormValues,
 } from "./types";
+import { normalizeQuotationTemplate } from "../quotations/quotationTemplates";
 
 export const staffStatusOptions = ["invited", "active", "inactive"] as const;
 
@@ -37,6 +38,7 @@ export function emptyOrganizationSettingsForm(): OrganizationSettingsFormValues 
     timezone: "Asia/Kolkata",
     currency: "INR",
     date_format: "DD/MM/YYYY",
+    quotation_template: "aurora",
   };
 }
 
@@ -76,6 +78,7 @@ export function organizationSettingsToForm(
     timezone: settings.timezone ?? fallback.timezone,
     currency: settings.currency ?? fallback.currency,
     date_format: settings.date_format ?? fallback.date_format,
+    quotation_template: normalizeQuotationTemplate(settings.quotation_template),
   };
 }
 

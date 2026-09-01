@@ -31,7 +31,7 @@ function navigationRoute(path: string): NavigationItem {
 
 function planModuleKey(path: string, fallback: string) {
   const overrides: Record<string, string> = {
-    "/today": "assistant",
+    "/bizlee-ai": "assistant",
     "/customers/b2b-direct": "b2b_sales",
     "/b2b-sales": "b2b_sales",
     "/inventory": "inventory",
@@ -102,7 +102,7 @@ export const navigationItems: NavigationItem[] = [
     ],
   },
   navigationRoute("/settings"),
-  navigationRoute("/today"),
+  navigationRoute("/bizlee-ai"),
 ];
 
 export const platformNavigationItems = [

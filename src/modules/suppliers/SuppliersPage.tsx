@@ -377,7 +377,6 @@ export function SupplierFormModal({
       <TextInput label="Supplier Name" value={values.supplier_name} onChange={(value) => update("supplier_name", value)} error={errors.supplier_name} required />
       <TextInput label="Contact Person" value={values.contact_person} onChange={(value) => update("contact_person", value)} />
       <TextInput label="Mobile" value={values.phone} onChange={(value) => update("phone", value)} />
-      <TextInput label="Alternate Mobile" value={values.alternate_phone} onChange={(value) => update("alternate_phone", value)} />
       <TextInput label="Email" value={values.email} onChange={(value) => update("email", value)} error={errors.email} type="email" />
       <TextInput label="GST Number" value={values.gst_number} onChange={(value) => update("gst_number", value)} />
       <TextInput label="PAN Number" value={values.pan_number} onChange={(value) => update("pan_number", value)} />
@@ -398,12 +397,7 @@ export function SupplierFormModal({
       />
       <TextInput label="Payment Terms (Days)" value={values.payment_terms_days} onChange={(value) => update("payment_terms_days", value)} error={errors.payment_terms_days} type="number" min={0} max={365} step={1} />
       <TextInput label="City" value={values.city} onChange={(value) => update("city", value)} />
-      <TextInput label="District" value={values.district} onChange={(value) => update("district", value)} />
-      <TextInput label="State" value={values.state} onChange={(value) => update("state", value)} />
-      <TextInput label="Pincode" value={values.pincode} onChange={(value) => update("pincode", value)} />
-      <TextArea label="Address Line 1" value={values.address_line_1} onChange={(value) => update("address_line_1", value)} />
-      <TextArea label="Address Line 2" value={values.address_line_2} onChange={(value) => update("address_line_2", value)} />
-      <TextArea label="Notes" value={values.notes} onChange={(value) => update("notes", value)} />
+      <TextArea label="Full Address" value={values.address_line_1} onChange={(value) => update("address_line_1", value)} />
     </Modal>
   );
 }

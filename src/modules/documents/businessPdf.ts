@@ -31,6 +31,7 @@ import {
   reloadOnceForUpdatedAssets,
 } from "../../utils/staleAssetRecovery";
 import { formatDisplayDate } from "../../utils/dateFormat";
+import { normalizeQuotationTemplate } from "../quotations/quotationTemplates";
 
 type PdfDocumentKind = "quotation" | "proforma_invoice" | "invoice" | "purchase_order";
 type PdfDoc = InstanceType<typeof import("jspdf").jsPDF>;
@@ -137,6 +138,10 @@ export async function buildQuotationPdf(
   organization: OrganizationBranding,
   settings: OrganizationSettings,
 ) {
+  if (normalizeQuotationTemplate(settings.quotation_template) === "meridian") {
+    return buildMeridianQuotationPdf(quotation, items, organization, settings);
+  }
+
   return buildTechnicalCommercialProposalPdf(
     quotation,
     items,
@@ -233,6 +238,827 @@ async function buildTechnicalCommercialProposalPdf(
   drawTechnicalSignature(doc, companyName, colors, y);
 
   return doc.output("blob");
+}
+
+type MeridianQuotationContext = {
+  companyName: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  siteLocation: string;
+  organization: OrganizationBranding;
+  settings: OrganizationSettings;
+  logoDataUrl: PdfImageData | null;
+  headerImageDataUrl: PdfImageData | null;
+  trustSealDataUrl: PdfImageData | null;
+};
+
+async function buildMeridianQuotationPdf(
+  quotation: QuotationWithRelations,
+  items: QuotationItem[],
+  organization: OrganizationBranding,
+  settings: OrganizationSettings,
+) {
+  const { jsPDF } = await loadJsPdf();
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const colors = meridianColors(settings, organization);
+  const customer = quotation.customer;
+  const context: MeridianQuotationContext = {
+    companyName: settings.company_name || quotation.company_name || organization.name,
+    customerName: customer?.full_name ?? quotation.lead?.full_name ?? "Customer",
+    customerPhone: customer?.phone ?? quotation.lead?.phone ?? "",
+    customerEmail: customer?.email ?? quotation.lead?.email ?? "",
+    siteLocation:
+      quotation.installation_location ||
+      (customer ? formatCustomerAddress(customer) : quotation.lead?.address) ||
+      "",
+    organization,
+    settings,
+    logoDataUrl: await fetchImageAsDataUrl(settings.company_logo_url),
+    headerImageDataUrl: await fetchCroppedImageAsDataUrl(
+      quotationHeaderImageUrl,
+      700,
+      1200,
+    ),
+    trustSealDataUrl: await fetchImageAsDataUrl(trustSealImageUrl),
+  };
+
+  drawMeridianCover(doc, quotation, context, colors);
+
+  doc.addPage();
+  drawMeridianPageHeader(doc, quotation, context, colors);
+  let y = 37;
+  y = drawMeridianSectionTitle(
+    doc,
+    "01 · System configuration",
+    "The system we are building",
+    quotation.work_description ||
+      "A rooftop solar PV system designed around the customer site and expected consumption.",
+    colors,
+    y,
+  );
+  y = drawMeridianConfigurationCards(doc, quotation, colors, y + 4);
+  y = drawMeridianMaterialTable(doc, quotation, items, context, colors, y + 8);
+  drawMeridianCallout(
+    doc,
+    "Sizing note",
+    quotation.generation_notes ||
+      "Generation is indicative and depends on site conditions, weather, grid availability and system performance.",
+    colors,
+    Math.min(y + 8, pageHeight - 35),
+  );
+
+  doc.addPage();
+  drawMeridianPageHeader(doc, quotation, context, colors);
+  y = 37;
+  y = drawMeridianSectionTitle(
+    doc,
+    "02 · Quotation summary",
+    "The numbers at a glance",
+    "A clear view of the proposed equipment, turnkey value and payment milestones.",
+    colors,
+    y,
+  );
+  y = drawMeridianStatStrip(doc, quotation, settings, colors, y + 4);
+  y = drawMeridianSummaryCards(doc, quotation, settings, colors, y + 8);
+  drawMeridianPaymentTable(
+    doc,
+    quotation,
+    quotation.quotation_payment_terms ?? [],
+    settings,
+    quotationPdfTotals(quotation).totalAmount,
+    context,
+    colors,
+    y + 8,
+  );
+
+  doc.addPage();
+  drawMeridianPageHeader(doc, quotation, context, colors);
+  y = 37;
+  y = drawMeridianSectionTitle(
+    doc,
+    "03 · Commercial terms",
+    "What is included in the engagement",
+    "The same commercial and scope content is presented in a more structured reading order.",
+    colors,
+    y,
+  );
+  drawMeridianBlocksGrid(
+    doc,
+    compactBlocks([
+      ["Price basis", quotation.commercial_price_basis],
+      ["GST terms", quotation.commercial_gst_terms],
+      ["Security deposit / DISCOM charges", quotation.commercial_security_deposit_terms],
+      ["Transit insurance", quotation.commercial_transit_insurance],
+      ["Storage and insurance at site", quotation.commercial_site_storage_insurance],
+      ["Project initiation", quotation.commercial_project_initiation],
+      ["Warranty applicability", quotation.commercial_warranty_applicability],
+    ]),
+    colors,
+    y + 5,
+  );
+
+  doc.addPage();
+  drawMeridianPageHeader(doc, quotation, context, colors);
+  y = 37;
+  y = drawMeridianSectionTitle(
+    doc,
+    "04 · Scope and protection",
+    "The work around your installation",
+    "Responsibilities, exclusions and warranty coverage are kept visible for approval.",
+    colors,
+    y,
+  );
+  y = drawMeridianBlocksGrid(
+    doc,
+    compactBlocks([
+      ["Included scope", quotation.proposal_included_scope],
+      ["Client responsibilities", quotation.proposal_client_responsibilities],
+      ["Important considerations", quotation.proposal_important_considerations],
+      ["Exclusions", quotation.proposal_exclusions],
+    ]),
+    colors,
+    y + 5,
+  );
+  const warranties = quotation.quotation_warranties ?? [];
+  if (warranties.length > 0) {
+    drawMeridianWarrantyTable(doc, quotation, warranties, context, colors, y + 9);
+  }
+
+  doc.addPage();
+  drawMeridianPageHeader(doc, quotation, context, colors);
+  y = 37;
+  y = drawMeridianSectionTitle(
+    doc,
+    "05 · Approval and handover",
+    "Ready for the next step",
+    "Review the final notes and payment terms before authorising the proposed work.",
+    colors,
+    y,
+  );
+  y = drawMeridianBlocksGrid(
+    doc,
+    compactBlocks([
+      ["Payment terms", quotation.payment_terms],
+      ["Terms and conditions", quotation.terms_and_conditions],
+      ["Notes", quotation.notes],
+    ]),
+    colors,
+    y + 5,
+    1,
+  );
+  drawMeridianSignature(doc, context.companyName, colors, Math.max(y + 12, pageHeight - 72));
+
+  const totalPages = doc.getNumberOfPages();
+  for (let pageNumber = 2; pageNumber <= totalPages; pageNumber += 1) {
+    doc.setPage(pageNumber);
+    drawMeridianFooter(doc, quotation, context, colors, pageNumber, totalPages);
+  }
+
+  return doc.output("blob");
+}
+
+function meridianColors(
+  settings: OrganizationSettings,
+  organization: OrganizationBranding,
+) {
+  return {
+    primary: normalizeHex(settings.primary_color, "#0b2c4d"),
+    accent: normalizeHex(settings.accent_color, "#f5b51b"),
+    navy: "#0b2c4d",
+    text: "#102a43",
+    muted: "#5e7590",
+    line: "#d5e0ea",
+    soft: "#eff4f8",
+    page: "#ffffff",
+    organizationPrimary: organization.primaryColor,
+  };
+}
+
+function drawMeridianCover(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+) {
+  const railX = 135;
+  doc.setFillColor(colors.navy);
+  doc.rect(0, 0, pageWidth, pageHeight, "F");
+  if (context.headerImageDataUrl) {
+    try {
+      doc.addImage(
+        context.headerImageDataUrl.dataUrl,
+        context.headerImageDataUrl.format,
+        railX,
+        0,
+        pageWidth - railX,
+        pageHeight,
+      );
+    } catch {
+      doc.setFillColor("#163d5c");
+      doc.rect(railX, 0, pageWidth - railX, pageHeight, "F");
+    }
+  } else {
+    doc.setFillColor("#163d5c");
+    doc.rect(railX, 0, pageWidth - railX, pageHeight, "F");
+  }
+  doc.saveGraphicsState();
+  doc.setGState(doc.GState({ opacity: 0.46 }));
+  doc.setFillColor(colors.navy);
+  doc.rect(railX, 0, pageWidth - railX, pageHeight, "F");
+  doc.restoreGraphicsState();
+  doc.setFillColor(colors.navy);
+  doc.rect(0, 0, railX, pageHeight, "F");
+  drawCompanyLogo(
+    doc,
+    context.logoDataUrl,
+    context.organization.name,
+    colors.accent,
+    margin + 2,
+    16,
+    46,
+    25,
+  );
+  drawTrustSeal(doc, context.trustSealDataUrl, pageWidth - margin - 22, 18, 18);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(colors.accent);
+  doc.text(`QUOTATION · ${quotation.quotation_code ?? "DRAFT"}`, margin + 2, 64);
+
+  const title = technicalQuotationTitle(quotation) || "Solar PV system proposal";
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(title.length > 52 ? 18 : 21);
+  const titleLines = doc.splitTextToSize(title, 101) as string[];
+  doc.setTextColor("#ffffff");
+  doc.text(titleLines, margin + 2, 76, { lineHeightFactor: 1.07 });
+
+  doc.setFillColor(colors.accent);
+  doc.rect(margin + 2, 123, 30, 1.4, "F");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.7);
+  doc.setTextColor("#bcd0e2");
+  const description =
+    quotation.work_description ||
+    "Design, engineering, supply, installation, testing and commissioning of the proposed rooftop solar PV system.";
+  doc.text(doc.splitTextToSize(description, 101) as string[], margin + 2, 137, {
+    lineHeightFactor: 1.45,
+  });
+
+  const detailRows = compactRows([
+    ["Client", context.customerName],
+    ["Site", context.siteLocation],
+    ["Contact", context.customerPhone || context.customerEmail],
+    ["Capacity", valueWithUnit(quotation.system_capacity_kw, "kW")],
+    ["Issued", formatDate(quotation.quotation_date, context.settings.date_format)],
+    ["Valid until", formatDate(quotationValidUntilFromDateInput(quotation.quotation_date), context.settings.date_format)],
+  ]);
+  let detailY = 187;
+  detailRows.forEach(([label, value]) => {
+    doc.setDrawColor("#3c5872");
+    doc.line(margin + 2, detailY - 4, 128, detailY - 4);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.setTextColor("#8ba8c1");
+    doc.text(label.toUpperCase(), margin + 2, detailY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor("#ffffff");
+    drawPdfText(doc, value, 128, detailY, { align: "right" });
+    detailY += 10;
+  });
+
+  const totals = quotationPdfTotals(quotation);
+  const railTextX = railX + 5;
+  let railY = 226;
+  [
+    ["Expected generation", valueWithUnit(quotation.expected_annual_generation_kwh, "kWh")],
+    ["Turnkey contract value", formatAmount(quotation.summary_total_turnkey_cost ?? quotation.pricing_total_rate, context.settings.currency)],
+    ["Effective cost", formatAmount(totals.netPayableAmount ?? totals.totalAmount, context.settings.currency)],
+  ].forEach(([label, value]) => {
+    doc.setDrawColor("#718aa0");
+    doc.line(railTextX, railY - 5, pageWidth - margin, railY - 5);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.setTextColor("#ffffff");
+    drawPdfText(doc, value, railTextX, railY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.6);
+    doc.setTextColor("#bfd0df");
+    const labelLines = doc.splitTextToSize(label, 62) as string[];
+    doc.text(labelLines, railTextX, railY + 7, { lineHeightFactor: 1.15 });
+    railY += 25;
+  });
+
+  doc.setDrawColor("#3c5872");
+  doc.line(margin + 2, pageHeight - 25, 128, pageHeight - 25);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor("#ffffff");
+  doc.text(context.companyName, margin + 2, pageHeight - 17);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.8);
+  doc.setTextColor("#8ba8c1");
+  doc.text("Prepared from the quotation details recorded in your workspace.", margin + 2, pageHeight - 11);
+}
+
+function drawMeridianPageHeader(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+) {
+  doc.setFillColor(colors.page);
+  doc.rect(0, 0, pageWidth, pageHeight, "F");
+  drawCompanyLogo(
+    doc,
+    context.logoDataUrl,
+    context.organization.name,
+    colors.primary,
+    margin,
+    9,
+    25,
+    17,
+  );
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(colors.text);
+  doc.text(context.companyName, margin + 31, 16);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.8);
+  doc.setTextColor(colors.muted);
+  doc.text(
+    `${quotation.quotation_code ?? "Quotation"} · ${technicalQuotationTitle(quotation) || "Solar proposal"}`,
+    pageWidth - margin,
+    16,
+    { align: "right" },
+  );
+  doc.setDrawColor(colors.line);
+  doc.line(margin, 29, pageWidth - margin, 29);
+}
+
+function drawMeridianFooter(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+  pageNumber: number,
+  totalPages: number,
+) {
+  doc.setDrawColor(colors.line);
+  doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(colors.primary);
+  doc.text(context.companyName, margin, pageHeight - 8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(colors.muted);
+  doc.text(
+    `${quotation.quotation_code ?? "Quotation"} · ${String(pageNumber).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`,
+    pageWidth - margin,
+    pageHeight - 8,
+    { align: "right" },
+  );
+}
+
+function drawMeridianSectionTitle(
+  doc: PdfDoc,
+  eyebrow: string,
+  title: string,
+  description: string,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.2);
+  doc.setTextColor(colors.accent);
+  doc.text(eyebrow.toUpperCase(), margin, y);
+  doc.setFontSize(18);
+  doc.setTextColor(colors.text);
+  doc.text(title, margin, y + 11);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.2);
+  doc.setTextColor(colors.muted);
+  const lines = doc.splitTextToSize(description, contentWidth) as string[];
+  doc.text(lines, margin, y + 19, { lineHeightFactor: 1.35 });
+  return y + 22 + lines.length * 3.4;
+}
+
+function drawMeridianConfigurationCards(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const materialSummary = deriveQuotationMaterialSummary(quotation.material_items);
+  const groups = [
+    {
+      title: "Design parameters",
+      rows: compactRows([
+        ["Installed capacity, AC", valueWithUnit(quotation.system_capacity_kw, "kW")],
+        ["Module capacity, DC", valueWithUnit(quotation.summary_plant_size_kw, "kWp")],
+        ["System type", displayValue(quotation.system_type)],
+        ["Module category", displayValue(quotation.module_category)],
+        ["Installation type", displayValue(quotation.site_type)],
+        ["Site location", displayValue(quotation.installation_location)],
+      ]),
+    },
+    {
+      title: "Performance basis",
+      rows: compactRows([
+        ["Expected yield, year one", valueWithUnit(quotation.expected_annual_generation_kwh, "kWh")],
+        ["Panel technology", displayValue(quotation.panel_type)],
+        ["Panel brand", displayValue(quotation.summary_module_brand ?? materialSummary.summary_module_brand)],
+        ["Inverter type", displayValue(quotation.inverter_type)],
+        ["Inverter brand", displayValue(quotation.summary_inverter_brand ?? materialSummary.summary_inverter_brand)],
+        ["Monitoring", quotation.summary_remote_monitoring_included ? "Included" : "As proposed"],
+      ]),
+    },
+  ];
+  const width = (contentWidth - 8) / 2;
+  const heights = groups.map((group) => meridianRowsCardHeight(doc, group.rows, width));
+  const height = Math.max(...heights);
+  groups.forEach((group, index) => {
+    drawMeridianRowsCard(doc, group.title, group.rows, colors, margin + index * (width + 8), y, width, height);
+  });
+  return y + height;
+}
+
+function meridianRowsCardHeight(doc: PdfDoc, rows: Array<[string, string]>, width: number) {
+  return 16 + rows.reduce((total, [, value]) => {
+    const valueLines = doc.splitTextToSize(value || "-", width - 64) as string[];
+    return total + Math.max(8, valueLines.length * 3.4 + 3);
+  }, 0);
+}
+
+function drawMeridianRowsCard(
+  doc: PdfDoc,
+  title: string,
+  rows: Array<[string, string]>,
+  colors: ReturnType<typeof meridianColors>,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
+  doc.setFillColor(colors.soft);
+  doc.roundedRect(x, y, width, height, 2.5, 2.5, "F");
+  doc.setDrawColor(colors.line);
+  doc.roundedRect(x, y, width, height, 2.5, 2.5, "S");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(colors.muted);
+  doc.text(title.toUpperCase(), x + 4, y + 9);
+  let rowY = y + 17;
+  rows.forEach(([label, value]) => {
+    const valueLines = doc.splitTextToSize(value || "-", width - 64) as string[];
+    const rowHeight = Math.max(8, valueLines.length * 3.4 + 3);
+    doc.setDrawColor(colors.line);
+    doc.line(x + 4, rowY - 3, x + width - 4, rowY - 3);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.2);
+    doc.setTextColor(colors.muted);
+    doc.text(label, x + 4, rowY + 1);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(colors.text);
+    drawPdfText(doc, value || "-", x + width - 4, rowY + 1, { align: "right" });
+    rowY += rowHeight;
+  });
+}
+
+function meridianMaterialRows(
+  quotation: QuotationWithRelations,
+  items: QuotationItem[],
+) {
+  const materialItems = quotation.material_items?.filter(hasTechnicalMaterialRow) ?? [];
+  if (materialItems.length > 0) {
+    return materialItems.map((item, index) => [
+      String(index + 1).padStart(2, "0"),
+      displayValue(item.description),
+      [item.brand, item.specification || item.make_specification]
+        .filter(isPresentText)
+        .map(displayValue)
+        .join(" / "),
+      displayValue(item.quantity),
+      displayValue(item.unit || "pcs"),
+    ]);
+  }
+  return items.filter((item) =>
+    [item.item_name, item.material, item.description, item.make, item.specification].some(
+      isPresentText,
+    ),
+  ).map((item, index) => [
+    String(index + 1).padStart(2, "0"),
+    displayValue(item.material || item.item_name),
+    [item.make, item.specification || item.description]
+      .filter(isPresentText)
+      .map(displayValue)
+      .join(" / "),
+    item.quantity === null || item.quantity === undefined ? "" : String(item.quantity),
+    formatUnit(item.unit),
+  ]);
+}
+
+function drawMeridianMaterialTable(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  items: QuotationItem[],
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const rows = meridianMaterialRows(quotation, items);
+  if (rows.length === 0) {
+    return y;
+  }
+  return drawMeridianTable(
+    doc,
+    quotation,
+    "Bill of materials",
+    ["SL", "Material and specification", "Make", "Qty", "Unit"],
+    [12, 68, 58, 24, 20],
+    rows,
+    context,
+    colors,
+    y,
+  );
+}
+
+function drawMeridianStatStrip(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  settings: OrganizationSettings,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const totals = quotationPdfTotals(quotation);
+  const stats = [
+    ["Expected generation", valueWithUnit(quotation.expected_annual_generation_kwh, "kWh")],
+    ["Turnkey value", formatAmount(quotation.summary_total_turnkey_cost ?? quotation.pricing_total_rate, settings.currency)],
+    ["Effective cost", formatAmount(totals.netPayableAmount ?? totals.totalAmount, settings.currency)],
+  ];
+  const width = (contentWidth - 8) / 3;
+  stats.forEach(([label, value], index) => {
+    const x = margin + index * (width + 4);
+    doc.setFillColor(index === 2 ? colors.navy : colors.soft);
+    doc.roundedRect(x, y, width, 25, 2.2, 2.2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(index === 2 ? "#ffffff" : colors.text);
+    drawPdfText(doc, value, x + 4, y + 10);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+    doc.setTextColor(index === 2 ? "#bcd0e2" : colors.muted);
+    doc.text(label, x + 4, y + 18);
+  });
+  return y + 25;
+}
+
+function drawMeridianSummaryCards(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  settings: OrganizationSettings,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const materialSummary = deriveQuotationMaterialSummary(quotation.material_items);
+  const totals = quotationPdfTotals(quotation);
+  const leftRows = compactRows([
+    ["Panel brand", quotation.summary_module_brand ?? materialSummary.summary_module_brand],
+    ["Panel wattage", valueWithUnit(quotation.summary_module_wattage ?? materialSummary.summary_module_wattage, "W")],
+    ["Inverter brand", quotation.summary_inverter_brand ?? materialSummary.summary_inverter_brand],
+    ["Total turnkey cost", formatAmount(quotation.summary_total_turnkey_cost ?? quotation.pricing_total_rate, settings.currency)],
+  ]);
+  const rightRows = compactRows([
+    ["Base amount", formatNonZeroOrPresent(totals.baseAmount, settings.currency)],
+    ["GST amount", formatNonZeroOrPresent(totals.gstAmount, settings.currency)],
+    ["Discount", Number(totals.discountAmount ?? 0) > 0 ? formatAmount(totals.discountAmount, settings.currency) : ""],
+    ["Subsidy", Number(totals.subsidyAmount ?? 0) > 0 ? formatAmount(totals.subsidyAmount, settings.currency) : ""],
+    ["Total amount", formatNonZeroOrPresent(totals.totalAmount, settings.currency)],
+    ["Amount in words", amountInWordsFromTurnkeyCost(totals.totalAmount, quotation.summary_amount_in_words ?? "")],
+  ]);
+  const width = (contentWidth - 8) / 2;
+  const heights = [
+    meridianRowsCardHeight(doc, leftRows, width),
+    meridianRowsCardHeight(doc, rightRows, width),
+  ];
+  drawMeridianRowsCard(doc, "Equipment summary", leftRows, colors, margin, y, width, Math.max(...heights));
+  drawMeridianRowsCard(doc, "Commercial summary", rightRows, colors, margin + width + 8, y, width, Math.max(...heights));
+  return y + Math.max(...heights);
+}
+
+function drawMeridianPaymentTable(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  paymentTerms: QuotationPaymentTerm[],
+  settings: OrganizationSettings,
+  totalAmount: number | null | undefined,
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const rows = paymentTerms
+    .slice()
+    .sort((first, second) => (first.sort_order ?? 0) - (second.sort_order ?? 0))
+    .filter((paymentTerm) => [paymentTerm.milestone, paymentTerm.percentage, paymentTerm.amount].some(isPresentText))
+    .map((paymentTerm, index) => [
+      String(index + 1).padStart(2, "0"),
+      paymentTerm.milestone || "",
+      paymentTerm.percentage === null || paymentTerm.percentage === undefined ? "" : `${paymentTerm.percentage}%`,
+      formatPaymentTermPdfAmount(paymentTerm, totalAmount, settings),
+    ]);
+  if (rows.length === 0) {
+    return y;
+  }
+  return drawMeridianTable(
+    doc,
+    quotation,
+    "Payment milestones",
+    ["SL", "Milestone", "%", "Amount"],
+    [14, 96, 24, 48],
+    rows,
+    context,
+    colors,
+    y,
+  );
+}
+
+function drawMeridianBlocksGrid(
+  doc: PdfDoc,
+  blocks: Array<[string, string]>,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+  columns = 2,
+) {
+  if (blocks.length === 0) {
+    return y;
+  }
+  const gap = 8;
+  const width = columns === 1 ? contentWidth : (contentWidth - gap) / 2;
+  for (let index = 0; index < blocks.length; index += columns) {
+    const rowBlocks = blocks.slice(index, index + columns);
+    const rowHeights = rowBlocks.map(([, value]) => {
+      const lines = doc.splitTextToSize(value, width - 8) as string[];
+      return Math.max(23, 13 + lines.length * 3.7 + 7);
+    });
+    const rowHeight = Math.max(...rowHeights);
+    rowBlocks.forEach(([label, value], columnIndex) => {
+      const x = margin + columnIndex * (width + gap);
+      doc.setFillColor(colors.soft);
+      doc.roundedRect(x, y, width, rowHeight, 2.2, 2.2, "F");
+      doc.setFillColor(colors.accent);
+      doc.roundedRect(x, y, 2.2, rowHeight, 1.1, 1.1, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(colors.text);
+      doc.text(label, x + 6, y + 9);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.7);
+      doc.setTextColor(colors.muted);
+      doc.text(doc.splitTextToSize(value, width - 12) as string[], x + 6, y + 16, { lineHeightFactor: 1.25 });
+    });
+    y += rowHeight + 6;
+  }
+  return y;
+}
+
+function drawMeridianTable(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  title: string,
+  headers: string[],
+  widths: number[],
+  rows: string[][],
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  if (rows.length === 0) {
+    return y;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.2);
+  doc.setTextColor(colors.muted);
+  doc.text(title.toUpperCase(), margin, y);
+  y += 5;
+  const drawHeader = () => {
+    doc.setFillColor(colors.navy);
+    doc.roundedRect(margin, y, contentWidth, 8, 1, 1, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.6);
+    doc.setTextColor("#ffffff");
+    let headerX = margin + 3;
+    headers.forEach((header, index) => {
+      doc.text(header.toUpperCase(), headerX, y + 5.2);
+      headerX += widths[index];
+    });
+    y += 8;
+  };
+  drawHeader();
+  rows.forEach((row, rowIndex) => {
+    const wrapped = row.map((cell, index) => doc.splitTextToSize(cell || "-", widths[index] - 5) as string[]);
+    const rowHeight = Math.max(9, Math.max(...wrapped.map((cell) => cell.length)) * 3.5 + 4);
+    if (y + rowHeight > pageHeight - 23) {
+      doc.addPage();
+      drawMeridianPageHeader(doc, quotation, context, colors);
+      y = 37;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(colors.muted);
+      doc.text(title.toUpperCase(), margin, y);
+      y += 5;
+      drawHeader();
+    }
+    doc.setFillColor(rowIndex % 2 === 0 ? colors.soft : "#ffffff");
+    doc.rect(margin, y, contentWidth, rowHeight, "F");
+    doc.setDrawColor(colors.line);
+    doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight);
+    let x = margin + 3;
+    wrapped.forEach((cell, index) => {
+      doc.setFont("helvetica", index === 0 ? "bold" : "normal");
+      doc.setFontSize(7.2);
+      doc.setTextColor(index === 0 ? colors.text : colors.muted);
+      doc.text(cell, x, y + 5, { lineHeightFactor: 1.15 });
+      x += widths[index];
+    });
+    y += rowHeight;
+  });
+  return y;
+}
+
+function drawMeridianWarrantyTable(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  warranties: QuotationWarranty[],
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const rows = warranties
+    .slice()
+    .sort((first, second) => (first.sort_order ?? 0) - (second.sort_order ?? 0))
+    .filter((warranty) => [warranty.component, warranty.warranty_text].some(isPresentText))
+    .map((warranty, index) => [String(index + 1).padStart(2, "0"), warranty.component, warranty.warranty_text]);
+  return drawMeridianTable(
+    doc,
+    quotation,
+    "Warranty coverage",
+    ["SL", "Component", "Warranty"],
+    [14, 58, 110],
+    rows,
+    context,
+    colors,
+    y,
+  );
+}
+
+function drawMeridianCallout(
+  doc: PdfDoc,
+  title: string,
+  body: string,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const lines = doc.splitTextToSize(body, contentWidth - 14) as string[];
+  const height = Math.max(22, 15 + lines.length * 3.7);
+  doc.setFillColor(colors.soft);
+  doc.roundedRect(margin, y, contentWidth, height, 2.2, 2.2, "F");
+  doc.setFillColor(colors.primary);
+  doc.rect(margin, y, 2.2, height, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.7);
+  doc.setTextColor(colors.text);
+  doc.text(title, margin + 7, y + 9);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(colors.muted);
+  doc.text(lines, margin + 7, y + 16, { lineHeightFactor: 1.2 });
+}
+
+function drawMeridianSignature(
+  doc: PdfDoc,
+  companyName: string,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  const width = 94;
+  const height = 42;
+  const x = pageWidth - margin - width;
+  doc.setFillColor(colors.soft);
+  doc.roundedRect(x, y, width, height, 2.2, 2.2, "F");
+  doc.setDrawColor(colors.line);
+  doc.roundedRect(x, y, width, height, 2.2, 2.2, "S");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.7);
+  doc.setTextColor(colors.text);
+  doc.text("AUTHORISED SIGN & SEAL", x + 6, y + 9);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(colors.muted);
+  doc.text(`For ${companyName}`, x + 6, y + 17);
+  doc.setDrawColor(colors.line);
+  doc.line(x + 6, y + 30, x + width - 6, y + 30);
+  doc.text("Authorised signatory", x + width - 6, y + 36, { align: "right" });
 }
 
 export async function buildInvoicePdf(

@@ -209,12 +209,93 @@ select {
   animation: bizlee-mascot-spin 0.9s linear infinite;
 }
 
+@keyframes dashboard-chart-line-reveal {
+  from { stroke-dashoffset: 160; opacity: 0.2; }
+  to { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes dashboard-chart-area-reveal {
+  from { opacity: 0; }
+  to { opacity: 0.1; }
+}
+
+@keyframes dashboard-chart-point-pulse {
+  0%,
+  100% { opacity: 0.78; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.24); }
+}
+
+@keyframes dashboard-chart-donut-reveal {
+  from { opacity: 0.2; stroke-dashoffset: 100; }
+  to { opacity: 1; stroke-dashoffset: 0; }
+}
+
+@keyframes dashboard-chart-donut-segment-reveal {
+  from { opacity: 0.2; stroke-dashoffset: 100; }
+  to { opacity: 1; stroke-dashoffset: var(--dashboard-chart-dashoffset); }
+}
+
+@keyframes dashboard-chart-bar-rise {
+  from { opacity: 0.32; transform: scaleY(0); }
+  to { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes dashboard-chart-progress-reveal {
+  from { opacity: 0.35; transform: scaleX(0); }
+  to { opacity: 1; transform: scaleX(1); }
+}
+
+.dashboard-chart-sparkline-line {
+  stroke-dasharray: 160;
+  animation: dashboard-chart-line-reveal 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dashboard-chart-sparkline-area {
+  animation: dashboard-chart-area-reveal 900ms ease-out both;
+}
+
+.dashboard-chart-sparkline-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dashboard-chart-point-pulse 2.4s ease-in-out 900ms infinite;
+}
+
+.dashboard-chart-donut,
+.dashboard-chart-gauge {
+  animation: dashboard-chart-donut-reveal 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dashboard-chart-donut-segment {
+  stroke-dashoffset: var(--dashboard-chart-dashoffset);
+  animation: dashboard-chart-donut-segment-reveal 750ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dashboard-chart-bar {
+  display: block;
+  transform-origin: bottom;
+  animation: dashboard-chart-bar-rise 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dashboard-chart-progress {
+  transform-origin: left;
+  animation: dashboard-chart-progress-reveal 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bizlee-mascot-image,
   .bizlee-greeting-mascot,
   .bizlee-mascot-aura,
   .bizlee-mascot-thinking-dots i,
   .bizlee-mascot-loading { animation: none; }
+
+  .dashboard-chart-sparkline-line,
+  .dashboard-chart-sparkline-area,
+  .dashboard-chart-sparkline-dot,
+  .dashboard-chart-donut,
+  .dashboard-chart-gauge,
+  .dashboard-chart-donut-segment,
+  .dashboard-chart-bar,
+  .dashboard-chart-progress { animation: none; }
 }
 
 @media (hover: none) {

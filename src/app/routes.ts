@@ -26,7 +26,7 @@ const routeModulePrefixes: Array<[string, string]> = [
   ["/invoices", "invoices"],
   ["/documents", "documents"],
   ["/leads", "leads"],
-  ["/today", "assistant"],
+  ["/bizlee-ai", "assistant"],
   ["/dashboard", "dashboard"],
   ["/demo-bookings", "demo_bookings"],
   ["/trial-outreach", "trial_outreach"],
@@ -83,7 +83,7 @@ export const routes: AppRoute[] = [
     description: "A tenant-aware overview for future solar operations metrics.",
   },
   {
-    path: "/today",
+    path: "/bizlee-ai",
     label: "Bizlee AI",
     moduleKey: "assistant",
     description:

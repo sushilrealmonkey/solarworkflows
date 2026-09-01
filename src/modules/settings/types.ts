@@ -1,3 +1,5 @@
+import type { QuotationTemplateId } from "../quotations/quotationTemplates";
+
 export type OrganizationSettings = {
   id: string | null;
   organization_id: string | null;
@@ -27,6 +29,7 @@ export type OrganizationSettings = {
   timezone: string | null;
   currency: string | null;
   date_format: string | null;
+  quotation_template: QuotationTemplateId | null;
 };
 
 export type OrganizationSettingsFormValues = {
@@ -56,6 +59,7 @@ export type OrganizationSettingsFormValues = {
   timezone: string;
   currency: string;
   date_format: string;
+  quotation_template: QuotationTemplateId;
 };
 
 export type StaffStatus = "invited" | "active" | "inactive";

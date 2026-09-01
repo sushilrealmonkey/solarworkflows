@@ -3,6 +3,7 @@ import type { UserProfile } from "../../app/AuthProvider";
 import { documentBucketName } from "./documentUtils";
 import type { DocumentType, OrganizationDocument } from "./types";
 import type { OrganizationSettings } from "../settings/types";
+import { normalizeQuotationTemplate, type QuotationTemplateId } from "../quotations/quotationTemplates";
 
 export type GeneratedDocumentPayload = {
   document_type: Extract<
@@ -140,8 +141,10 @@ export function buildQuotationPdfPath(
   quotationCode: string | null,
   prefix: string,
   fallbackId: string,
+  quotationTemplate: QuotationTemplateId = "aurora",
 ) {
-  return `${organizationId}/quotations/${sanitizePdfName(quotationCode || `${prefix}-${fallbackId.slice(0, 8)}`)}.pdf`;
+  const baseName = sanitizePdfName(quotationCode || `${prefix}-${fallbackId.slice(0, 8)}`);
+  return `${organizationId}/quotations/${baseName}-${normalizeQuotationTemplate(quotationTemplate)}.pdf`;
 }
 
 export function buildInvoicePdfPath(
