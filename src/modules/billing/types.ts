@@ -27,6 +27,7 @@ export type SubscriptionAccess = {
   current_period_ends_at: string | null;
   cancel_at_period_end: boolean;
   write_allowed: boolean;
+  is_invitation_trial: boolean;
   is_admin: boolean;
   enabled_modules: string[];
   module_access: Record<string, PlanAccessLevel>;

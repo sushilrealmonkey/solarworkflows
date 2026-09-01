@@ -96,9 +96,12 @@ begin
     select 1
     from public.company_subscriptions
     where status = 'trialing'
-      and plan_key is distinct from 'premium'
+      and (
+        plan_key is distinct from 'premium'
+        or trial_access_source is distinct from 'super_admin_invite'
+      )
   ) then
-    raise exception 'Every trial tenant must have the Pro plan';
+    raise exception 'Every trial tenant must be an invited Premium workspace';
   end if;
 
   if position(
@@ -111,8 +114,13 @@ begin
     in pg_get_functiondef(
       'public.create_company_trial_subscription()'::regprocedure
     )
+  ) = 0 or position(
+    '''super_admin_invite'''
+    in pg_get_functiondef(
+      'public.create_company_trial_subscription()'::regprocedure
+    )
   ) = 0 then
-    raise exception 'Super Admin company invitations must retain the Premium free trial';
+    raise exception 'Super Admin company invitations must retain the verified Premium free trial';
   end if;
 
   if position(
@@ -122,6 +130,15 @@ begin
     )
   ) = 0 then
     raise exception 'New self-service companies must begin in an unpaid subscription state';
+  end if;
+
+  if position(
+    '''self_signup'''
+    in pg_get_functiondef(
+      'public.create_company_trial_subscription()'::regprocedure
+    )
+  ) = 0 then
+    raise exception 'Self-service subscriptions must be explicitly marked as unpaid';
   end if;
 
   if position(

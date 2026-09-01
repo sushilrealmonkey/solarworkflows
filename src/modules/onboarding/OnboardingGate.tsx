@@ -14,6 +14,7 @@ import { PortalLogo } from "../../components/PortalBrand";
 import { AuthThemeCard, AuthThemeShell } from "../auth/AuthTheme";
 import { Button } from "../crm/CrmComponents";
 import { fetchCurrentCompanyOnboardingProgress } from "./onboardingApi";
+import { hasWorkspacePaymentAccess } from "./paymentAccess";
 import { resolveTenantOnboardingDestination } from "./onboardingRouting";
 import type { CompanyOnboardingProgress } from "./types";
 
@@ -139,10 +140,7 @@ export function OnboardingGate() {
     return <OnboardingErrorScreen message={error} onRetry={retry} />;
   }
 
-  const hasWorkspaceAccess =
-    subscription?.status === "active" ||
-    subscription?.status === "trialing" ||
-    subscription?.status === "grandfathered";
+  const hasWorkspaceAccess = hasWorkspacePaymentAccess(subscription);
 
   if (!bypassOnboarding && progress?.status === "completed" && !hasWorkspaceAccess) {
     return location.pathname === "/onboarding/payment" ? (
