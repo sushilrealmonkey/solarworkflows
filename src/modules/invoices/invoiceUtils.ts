@@ -1,5 +1,8 @@
 import { requiredError } from "../crm/crmUtils";
-import { numberToInput } from "../quotations/quotationUtils";
+import {
+  calculateTurnkeyGstBreakdown,
+  numberToInput,
+} from "../quotations/quotationUtils";
 import type {
   Invoice,
   InvoiceCreationMode,
@@ -194,6 +197,70 @@ export function lineGstAmount(item: InvoiceItem) {
 
 export function lineGrossAmount(item: InvoiceItem) {
   return Number(item.line_total ?? 0) + lineGstAmount(item);
+}
+
+export type ProjectInvoiceGstBreakdownRow = {
+  label: string;
+  gstPercent: number;
+  taxableAmount: number;
+  gstAmount: number;
+  cgstAmount: number;
+  sgstAmount: number;
+};
+
+/**
+ * Project contract values are GST-inclusive. They are invoiced using the
+ * 70/30 split already used by quotations: 70% solar supply at 5% GST and
+ * 30% services at 18% GST. Do not expose the resulting blended percentage
+ * on a tax invoice because it is not a valid GST rate.
+ */
+export function calculateProjectInvoiceGstBreakdown(
+  inclusiveAmount: number | null | undefined,
+): ProjectInvoiceGstBreakdownRow[] {
+  const amount = Number(inclusiveAmount ?? 0);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return [];
+  }
+
+  const breakdown = calculateTurnkeyGstBreakdown(amount);
+
+  return [
+    projectInvoiceGstRow(
+      "70% solar portion",
+      5,
+      breakdown.solarInclusiveAmount,
+      breakdown.solarGstAmount,
+    ),
+    projectInvoiceGstRow(
+      "30% service portion",
+      18,
+      breakdown.serviceInclusiveAmount,
+      breakdown.serviceGstAmount,
+    ),
+  ];
+}
+
+function projectInvoiceGstRow(
+  label: string,
+  gstPercent: number,
+  inclusiveAmount: number,
+  gstAmount: number,
+): ProjectInvoiceGstBreakdownRow {
+  const cgstAmount = roundMoney(gstAmount / 2);
+
+  return {
+    label,
+    gstPercent,
+    taxableAmount: roundMoney(inclusiveAmount - gstAmount),
+    gstAmount,
+    cgstAmount,
+    sgstAmount: roundMoney(gstAmount - cgstAmount),
+  };
+}
+
+function roundMoney(value: number) {
+  return Math.round((Number.isFinite(value) ? value : 0) * 100) / 100;
 }
 
 export function draftLineTotal(item: InvoiceItemFormValues) {

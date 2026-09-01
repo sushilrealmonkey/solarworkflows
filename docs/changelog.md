@@ -5,6 +5,8 @@ Keep entries short and factual.
 
 ## 2026-09-01 (current worktree)
 
+- Restored the WhatsApp daily-summary cron worker and made it automatically
+  resume when its Vault credentials are provisioned after deployment.
 - Added organization-scoped quotation PDF design selection with Aurora and
   Meridian templates, in-settings previews, and downloadable sample PDFs.
 - Added the Meridian executive solar quotation PDF layout, including structured

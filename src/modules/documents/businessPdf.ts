@@ -5,6 +5,7 @@ import quotationHeaderImageUrl from "../../assets/quotation-header-solar.jpg";
 import type { OrganizationSettings } from "../settings/types";
 import { formatCustomerAddress } from "../site-surveys/surveyUtils";
 import type { InvoiceItem, InvoiceWithRelations } from "../invoices/types";
+import { calculateProjectInvoiceGstBreakdown } from "../invoices/invoiceUtils";
 import type {
   ProformaInvoiceItem,
   ProformaInvoiceWithRelations,
@@ -61,6 +62,16 @@ type Totals = {
   netPayableAmount: number | null;
 };
 
+type PdfTaxBreakdownRow = {
+  label?: string;
+  hsnSac: string;
+  percent: number;
+  base: number;
+  cgst: number;
+  sgst: number;
+  gst: number;
+};
+
 type BusinessPdfInput = {
   kind: PdfDocumentKind;
   title: string;
@@ -88,6 +99,7 @@ type BusinessPdfInput = {
   warrantyItems?: QuotationWarranty[];
   paymentTermItems?: QuotationPaymentTerm[];
   totals: Totals;
+  taxBreakdownRows?: PdfTaxBreakdownRow[];
   companyName?: string | null;
   companyGstin?: string | null;
   companyMobile?: string | null;
@@ -1087,6 +1099,18 @@ export async function buildInvoicePdf(
     ]);
   }
 
+  const projectTaxBreakdown = invoice.project_id
+    ? calculateProjectInvoiceGstBreakdown(invoice.total_amount).map((row) => ({
+        label: row.label,
+        hsnSac: "-",
+        percent: row.gstPercent,
+        base: row.taxableAmount,
+        cgst: row.cgstAmount,
+        sgst: row.sgstAmount,
+        gst: row.gstAmount,
+      }))
+    : undefined;
+
   return buildBusinessPdf({
     kind: "invoice",
     title: "Tax Invoice",
@@ -1130,6 +1154,7 @@ export async function buildInvoicePdf(
       amountPaid: invoice.amount_paid,
       netPayableAmount: invoice.balance_due,
     },
+    taxBreakdownRows: projectTaxBreakdown,
     paymentTerms: "Pay by the due date mentioned on this invoice.",
     bankLines: settingsBankLines(settings),
     termsAndConditions:
@@ -2446,7 +2471,7 @@ function drawSimpleAmountWords(
 }
 
 function drawSimpleTaxSummary(doc: PdfDoc, input: BusinessPdfInput, y: number) {
-  const rows = simpleGstBreakdown(input.items);
+  const rows = simpleGstBreakdown(input);
   if (rows.length === 0) {
     return y;
   }
@@ -2711,21 +2736,24 @@ function simpleQuantity(item: PdfLineItem) {
 }
 
 function simpleTableTotalRows(input: BusinessPdfInput) {
-  const gstRows = simpleGstBreakdown(input.items);
+  const gstRows = simpleGstBreakdown(input);
   const rows: Array<{ label: string; amount: number }> = [];
   const hasMultipleTaxRows = gstRows.length > 1;
 
   gstRows.forEach((row) => {
     const hsnLabel =
-      hasMultipleTaxRows && row.hsnSac !== "-" ? ` HSN ${row.hsnSac}` : "";
+      !row.label && hasMultipleTaxRows && row.hsnSac !== "-"
+        ? ` HSN ${row.hsnSac}`
+        : "";
+    const componentLabel = row.label ? ` (${row.label})` : "";
     const halfRate = formatPercent(row.percent / 2);
     rows.push(
       {
-        label: `CGST @ ${halfRate}%${hsnLabel}`,
+        label: `CGST @ ${halfRate}%${componentLabel}${hsnLabel}`,
         amount: row.cgst,
       },
       {
-        label: `SGST @ ${halfRate}%${hsnLabel}`,
+        label: `SGST @ ${halfRate}%${componentLabel}${hsnLabel}`,
         amount: row.sgst,
       },
     );
@@ -2741,9 +2769,15 @@ function simpleTableTotalRows(input: BusinessPdfInput) {
   return rows;
 }
 
-function simpleGstBreakdown(items: PdfLineItem[]) {
+function simpleGstBreakdown(input: BusinessPdfInput): PdfTaxBreakdownRow[] {
+  if (input.taxBreakdownRows) {
+    return input.taxBreakdownRows.filter(
+      (row) => row.percent > 0 && row.base >= 0 && row.gst > 0,
+    );
+  }
+
   const rows = new Map<string, { hsnSac: string; percent: number; base: number; gst: number }>();
-  items.filter(hasPrintableLineItem).forEach((item) => {
+  input.items.filter(hasPrintableLineItem).forEach((item) => {
     const percent = Number(item.gstPercent ?? 0);
     const base = Number(item.lineTotal ?? 0);
     const gst = base * percent / 100;

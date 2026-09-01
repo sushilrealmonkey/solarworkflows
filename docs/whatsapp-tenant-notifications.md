@@ -108,15 +108,17 @@ mobile_push_worker_project_url
 mobile_push_worker_secret
 ```
 
-The migration schedules no jobs when these entries are absent. The Vault
-worker secrets must exactly match the corresponding Edge Function secrets.
+The daily-summary cron job remains scheduled when its Vault entries are
+absent, but makes no request until they are provisioned. This lets it begin
+working automatically if secrets are configured after deployment. Vault worker
+secrets must exactly match the corresponding Edge Function secrets.
 
 ## Rollout Checklist
 
 1. Apply migrations in staging and run both notification SQL test files.
 2. Deploy `notification-settings`, `process-notifications`, and
    `process-daily-summaries`.
-3. Configure Function secrets and the three Vault entries.
+3. Configure all required Function secrets and Vault entries.
 4. Keep `NOTIFICATION_TEST_MODE=true` and allowlist internal numbers only.
 5. Enable preferences for an internal tenant admin.
 6. Queue one trial event and confirm sent, delivered, and read transitions.

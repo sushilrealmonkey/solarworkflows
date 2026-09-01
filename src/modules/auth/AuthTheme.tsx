@@ -96,7 +96,7 @@ function AuthDarkBackground() {
     >
       <div className="absolute inset-x-0 top-0 h-px bg-orange-300/30" />
       <AuthTopWaveLines className="absolute left-0 top-0 h-80 w-full text-orange-300/20 lg:h-[28rem]" />
-      <AuthWaveLines className="absolute -bottom-20 -left-44 h-80 w-[46rem] rotate-180 text-orange-300/20 lg:h-[28rem] lg:w-[58rem]" />
+      <AuthWaveLines className="absolute -bottom-20 -left-44 h-80 w-[calc(100%+11rem)] rotate-180 text-orange-300/20 lg:h-[28rem]" />
     </div>
   );
 }
@@ -132,7 +132,12 @@ function AuthTopWaveLines({ className }: { className: string }) {
 
 function AuthWaveLines({ className }: { className: string }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 900 420">
+    <svg
+      className={className}
+      fill="none"
+      preserveAspectRatio="none"
+      viewBox="0 0 900 420"
+    >
       {Array.from({ length: 10 }).map((_, index) => (
         <path
           d={`M0 ${92 + index * 9}C144 ${22 + index * 8} 248 ${
