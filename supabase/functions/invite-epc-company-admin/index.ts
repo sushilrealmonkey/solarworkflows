@@ -1,4 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import {
+  parseTrialExtensionDays,
+  trialExtensionEndsAt,
+} from "./trial-extension.ts";
 
 type InviteRequestBody = {
   action?:
@@ -7,7 +11,8 @@ type InviteRequestBody = {
     | "update_company_status"
     | "update_admin_status"
     | "update_company_profile"
-    | "guarded_delete_company";
+    | "guarded_delete_company"
+    | "extend_expired_trial";
   admin_profile_id?: string;
   organization_id?: string;
   organization_name?: string;
@@ -26,6 +31,7 @@ type InviteRequestBody = {
   timezone?: string | null;
   currency?: string | null;
   status?: string;
+  trial_extension_days?: number;
 };
 
 type AdminProfileRow = {
@@ -123,6 +129,10 @@ async function handleInviteRequest(request: Request): Promise<Response> {
 
     if (action === "guarded_delete_company") {
       return await guardedDeleteCompany(serviceClient, body);
+    }
+
+    if (action === "extend_expired_trial") {
+      return await extendExpiredTrial(serviceClient, body);
     }
 
     if (action !== "create_company") {
@@ -710,6 +720,71 @@ async function guardedDeleteCompany(
   return jsonResponse({
     ok: true,
     message: "EPC company deleted",
+  });
+}
+
+async function extendExpiredTrial(
+  serviceClient: ReturnType<typeof createClient>,
+  body: InviteRequestBody,
+) {
+  const organizationId = normalizeText(body.organization_id);
+  const extensionDays = parseTrialExtensionDays(body.trial_extension_days);
+
+  if (!organizationId) {
+    return jsonResponse({ error: "Organization is required" }, 400);
+  }
+
+  if (!extensionDays) {
+    return jsonResponse(
+      { error: "Trial extension must be a whole number from 1 to 90 days" },
+      400,
+    );
+  }
+
+  const { data: organization, error: organizationError } = await serviceClient
+    .from("organizations")
+    .select("company_id")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  if (organizationError) {
+    return jsonResponse({ error: organizationError.message }, 400);
+  }
+
+  if (!organization?.company_id) {
+    return jsonResponse({ error: "Company subscription not found" }, 404);
+  }
+
+  const now = new Date();
+  const { data: subscription, error: subscriptionError } = await serviceClient
+    .from("company_subscriptions")
+    .update({
+      status: "trialing",
+      trial_ends_at: trialExtensionEndsAt(extensionDays, now),
+      updated_at: now.toISOString(),
+    })
+    .eq("company_id", organization.company_id)
+    .eq("status", "trialing")
+    .not("trial_ends_at", "is", null)
+    .lte("trial_ends_at", now.toISOString())
+    .select("trial_ends_at")
+    .maybeSingle();
+
+  if (subscriptionError) {
+    return jsonResponse({ error: subscriptionError.message }, 400);
+  }
+
+  if (!subscription) {
+    return jsonResponse(
+      { error: "Only an expired free trial can be extended" },
+      409,
+    );
+  }
+
+  return jsonResponse({
+    ok: true,
+    message: `Free trial extended by ${extensionDays} day${extensionDays === 1 ? "" : "s"}`,
+    trial_ends_at: subscription.trial_ends_at,
   });
 }
 

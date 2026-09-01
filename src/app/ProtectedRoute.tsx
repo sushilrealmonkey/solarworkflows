@@ -12,7 +12,9 @@ export function ProtectedRoute() {
   const moduleKey = moduleKeyForPath(location.pathname);
   const isPlatformStaffModule =
     profile?.platform_role === "backend_staff" &&
-    (moduleKey === "trial_outreach" || moduleKey === "demo_bookings");
+    (moduleKey === "companies" ||
+      moduleKey === "trial_outreach" ||
+      moduleKey === "demo_bookings");
   const canViewModule =
     !moduleKey ||
     Boolean(profile?.is_super_admin) ||

@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { useToast } from "../../components/ui/ToastProvider";
 import { ProductImportPanel } from "../product-master/ProductImportPanel";
@@ -23,6 +24,7 @@ import {
 } from "../crm/CrmComponents";
 import { labelize } from "../crm/crmUtils";
 import {
+  extendExpiredPlatformTrial,
   fetchPlatformCompany,
   guardedDeletePlatformCompany,
   sendPlatformAdminSetupLink,
@@ -57,8 +59,12 @@ type SetupLinkNotice = {
   link: string;
 };
 
+const DEFAULT_TRIAL_EXTENSION_DAYS = "7";
+const MAX_TRIAL_EXTENSION_DAYS = 90;
+
 export function CompanyDetailPage() {
   const { id } = useParams();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [company, setCompany] = useState<PlatformCompany | null>(null);
@@ -70,6 +76,14 @@ export function CompanyDetailPage() {
     useState<SetupLinkNotice | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [productImportOpen, setProductImportOpen] = useState(false);
+  const [trialExtensionDays, setTrialExtensionDays] = useState(
+    DEFAULT_TRIAL_EXTENSION_DAYS,
+  );
+  const [trialExtensionError, setTrialExtensionError] = useState<string | null>(
+    null,
+  );
+  const [trialExtensionOpen, setTrialExtensionOpen] = useState(false);
+  const canManagePlatformCompanies = Boolean(profile?.is_super_admin);
 
   const loadCompany = useCallback(async () => {
     if (!id) {
@@ -184,6 +198,44 @@ export function CompanyDetailPage() {
     }
   }
 
+  async function submitTrialExtension(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!company) {
+      return;
+    }
+
+    const extensionDays = Number(trialExtensionDays);
+    if (
+      !Number.isInteger(extensionDays) ||
+      extensionDays < 1 ||
+      extensionDays > MAX_TRIAL_EXTENSION_DAYS
+    ) {
+      setTrialExtensionError("Enter a whole number from 1 to 90 days.");
+      return;
+    }
+
+    try {
+      setBusyAction("extend-trial");
+      setTrialExtensionError(null);
+      await extendExpiredPlatformTrial(company.id, extensionDays);
+      setTrialExtensionOpen(false);
+      await loadCompany();
+      showToast(
+        `Free trial extended by ${extensionDays} day${extensionDays === 1 ? "" : "s"}.`,
+        "success",
+      );
+    } catch (nextError) {
+      setTrialExtensionError(
+        nextError instanceof Error
+          ? nextError.message
+          : "Unable to extend the free trial.",
+      );
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -208,6 +260,10 @@ export function CompanyDetailPage() {
 
   const nextCompanyStatus = company.status === "active" ? "inactive" : "active";
   const summary = company.activity_summary;
+  const canExtendExpiredTrial =
+    company.billing_status === "free_trial_ended" &&
+    company.subscription?.status === "trialing" &&
+    Boolean(company.company_id && company.subscription.trial_ends_at);
 
   return (
     <div className="space-y-6">
@@ -216,7 +272,8 @@ export function CompanyDetailPage() {
           title={company.name}
           description={`${company.slug}${company.subdomain ? ` / ${company.subdomain}` : ""}`}
         />
-        <div className="flex flex-wrap gap-2">
+        {canManagePlatformCompanies ? (
+          <div className="flex flex-wrap gap-2">
           <Button onClick={() => setEditState({ values: companyToUpdateForm(company), error: null })}>
             Edit
           </Button>
@@ -258,6 +315,18 @@ export function CompanyDetailPage() {
           >
             Send setup link
           </Button>
+          {canExtendExpiredTrial ? (
+            <Button
+              disabled={Boolean(busyAction)}
+              onClick={() => {
+                setTrialExtensionError(null);
+                setTrialExtensionOpen(true);
+              }}
+              variant="secondary"
+            >
+              Extend free trial
+            </Button>
+          ) : null}
           <Button
             disabled={Boolean(busyAction)}
             onClick={() => setDeleteOpen(true)}
@@ -265,7 +334,8 @@ export function CompanyDetailPage() {
           >
             Delete
           </Button>
-        </div>
+          </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -274,7 +344,7 @@ export function CompanyDetailPage() {
         </section>
       ) : null}
 
-      {setupLinkNotice ? (
+      {canManagePlatformCompanies && setupLinkNotice ? (
         <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
@@ -348,7 +418,8 @@ export function CompanyDetailPage() {
           label="Last Login"
           value={formatDateTime(company.admin?.last_login_at ?? null)}
         />
-        <div className="flex flex-wrap gap-2 sm:col-span-2">
+        {canManagePlatformCompanies ? (
+          <div className="flex flex-wrap gap-2 sm:col-span-2">
           <Button
             disabled={Boolean(busyAction) || !company.admin || company.admin.status === "active"}
             onClick={() =>
@@ -375,7 +446,8 @@ export function CompanyDetailPage() {
           >
             Mark admin inactive
           </Button>
-        </div>
+          </div>
+        ) : null}
       </DetailSection>
 
       <DetailSection title="Access And Workspace Setup">
@@ -395,31 +467,33 @@ export function CompanyDetailPage() {
 
       <TenantUsersSection users={company.tenant_users ?? []} />
 
-      <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-slate-950">
-              Product Catalog
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-              Add this EPC workspace’s products in bulk from a CSV or Excel file.
-              The import is validated against this workspace’s product categories.
-            </p>
+      {canManagePlatformCompanies ? (
+        <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">
+                Product Catalog
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                Add this EPC workspace’s products in bulk from a CSV or Excel file.
+                The import is validated against this workspace’s product categories.
+              </p>
+            </div>
+            {!productImportOpen ? (
+              <Button onClick={() => setProductImportOpen(true)}>
+                Upload products
+              </Button>
+            ) : null}
           </div>
-          {!productImportOpen ? (
-            <Button onClick={() => setProductImportOpen(true)}>
-              Upload products
-            </Button>
+          {productImportOpen ? (
+            <ProductImportPanel
+              onClose={() => setProductImportOpen(false)}
+              organizationId={company.id}
+              workspaceLabel="EPC workspace"
+            />
           ) : null}
-        </div>
-        {productImportOpen ? (
-          <ProductImportPanel
-            onClose={() => setProductImportOpen(false)}
-            organizationId={company.id}
-            workspaceLabel="EPC workspace"
-          />
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <DetailSection title="Activity Snapshot">
@@ -490,7 +564,7 @@ export function CompanyDetailPage() {
         Back to EPC Companies
       </Link>
 
-      {editState ? (
+      {canManagePlatformCompanies && editState ? (
         <CompanyEditModal
           busy={busyAction === "edit"}
           editState={editState}
@@ -500,7 +574,7 @@ export function CompanyDetailPage() {
         />
       ) : null}
 
-      {deleteOpen ? (
+      {canManagePlatformCompanies && deleteOpen ? (
         <ConfirmDialog
           title="Delete EPC company?"
           description="This will permanently delete only setup-only EPC companies. If operational records exist, the action will be blocked and you should mark the company inactive instead."
@@ -509,6 +583,44 @@ export function CompanyDetailPage() {
           onCancel={() => setDeleteOpen(false)}
           onConfirm={() => void confirmDelete()}
         />
+      ) : null}
+
+      {canManagePlatformCompanies && trialExtensionOpen ? (
+        <Modal
+          maxWidthClass="sm:max-w-lg"
+          onClose={() => setTrialExtensionOpen(false)}
+          onSubmit={submitTrialExtension}
+          submitLabel="Extend free trial"
+          submitting={busyAction === "extend-trial"}
+          title="Extend expired free trial"
+        >
+          <div className="md:col-span-2">
+            <p className="text-sm leading-6 text-slate-600">
+              This restores full trial access from today for the number of days
+              you choose. It cannot be used for a paid subscription or a trial
+              that is still active.
+            </p>
+          </div>
+          {trialExtensionError ? (
+            <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 md:col-span-2">
+              {trialExtensionError}
+            </div>
+          ) : null}
+          <TextInput
+            inputMode="numeric"
+            label="Additional trial days"
+            max={MAX_TRIAL_EXTENSION_DAYS}
+            min={1}
+            onChange={(value) => {
+              setTrialExtensionDays(value);
+              setTrialExtensionError(null);
+            }}
+            required
+            step={1}
+            type="number"
+            value={trialExtensionDays}
+          />
+        </Modal>
       ) : null}
     </div>
   );

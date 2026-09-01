@@ -140,6 +140,7 @@ export type PlatformCompanyActionResult = {
   email_sent?: boolean;
   message?: string;
   setup_link?: string | null;
+  trial_ends_at?: string | null;
 };
 
 export type PlatformDashboardSnapshot = {

@@ -29,6 +29,7 @@ export function DashboardLayout() {
   const visibleNavigationItems = useMemo<NavigationItem[]>(() => {
     if (profile?.platform_role === "backend_staff") {
       return platformNavigationItems.filter((item) =>
+        item.path === "/companies" ||
         item.path === "/demo-bookings" ||
         item.path === "/whatsapp-messaging" ||
         item.path === "/trial-outreach",
@@ -91,6 +92,8 @@ export function DashboardLayout() {
 
   if (
     profile?.platform_role === "backend_staff" &&
+    location.pathname !== "/companies" &&
+    !location.pathname.startsWith("/companies/") &&
     location.pathname !== "/demo-bookings" &&
     !location.pathname.startsWith("/demo-bookings/") &&
     location.pathname !== "/whatsapp-messaging" &&

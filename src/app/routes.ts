@@ -7,6 +7,7 @@ export type AppRoute = {
 };
 
 const routeModulePrefixes: Array<[string, string]> = [
+  ["/companies", "companies"],
   ["/site-surveys", "site_surveys"],
   ["/products-materials", "product_master"],
   ["/product-master", "product_master"],

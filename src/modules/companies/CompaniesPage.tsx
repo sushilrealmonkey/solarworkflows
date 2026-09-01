@@ -63,7 +63,10 @@ export function CompaniesPage() {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const canUsePlatformWorkflow = Boolean(profile?.is_super_admin);
+  const canManagePlatformCompanies = Boolean(profile?.is_super_admin);
+  const canUsePlatformWorkflow =
+    canManagePlatformCompanies || profile?.platform_role === "backend_staff";
+  const activeViewMode = canManagePlatformCompanies ? viewMode : "companies";
 
   const loadCompanies = useCallback(async () => {
     try {
@@ -130,7 +133,7 @@ export function CompaniesPage() {
   }, [clientCompanies, inHouseCompanies]);
 
   const companiesForDirectory =
-    viewMode === "in_house" ? inHouseCompanies : clientCompanies;
+    activeViewMode === "in_house" ? inHouseCompanies : clientCompanies;
 
   const filteredCompanies = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -257,11 +260,11 @@ export function CompaniesPage() {
       <div className="space-y-6">
         <PageHeader
           title="Companies"
-          description="Platform-level EPC company onboarding is available only to super admins."
+          description="EPC company details are available only to super admins and authorized platform staff."
         />
         <EmptyState
-          title="Super admin access required"
-          description="This page manages tenant workspaces and primary admin profiles across the platform."
+          title="Platform access required"
+          description="This page contains tenant workspace and primary admin information."
         />
       </div>
     );
@@ -271,7 +274,11 @@ export function CompaniesPage() {
     <div className="space-y-6">
       <PageHeader
         title="EPC Companies"
-        description="Create, invite, activate, and review EPC tenant workspaces."
+        description={
+          canManagePlatformCompanies
+            ? "Create, invite, activate, and review EPC tenant workspaces."
+            : "Review EPC tenant workspace details. Changes require a super admin."
+        }
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
@@ -286,38 +293,46 @@ export function CompaniesPage() {
       <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <ModeButton
-            active={viewMode === "companies"}
+            active={activeViewMode === "companies"}
             label="Client companies"
             onClick={() => switchView("companies")}
           />
-          <ModeButton
-            active={viewMode === "in_house"}
-            label="In-house"
-            onClick={() => switchView("in_house")}
-          />
-          <ModeButton
-            active={viewMode === "invites"}
-            label="Invites"
-            onClick={() => switchView("invites")}
-          />
-          <ModeButton
-            active={viewMode === "new"}
-            label="New"
-            onClick={() => switchView("new")}
-          />
+          {canManagePlatformCompanies ? (
+            <ModeButton
+              active={activeViewMode === "in_house"}
+              label="In-house"
+              onClick={() => switchView("in_house")}
+            />
+          ) : null}
+          {canManagePlatformCompanies ? (
+            <>
+              <ModeButton
+                active={activeViewMode === "invites"}
+                label="Invites"
+                onClick={() => switchView("invites")}
+              />
+              <ModeButton
+                active={activeViewMode === "new"}
+                label="New"
+                onClick={() => switchView("new")}
+              />
+            </>
+          ) : null}
         </div>
-        <button
-          className="rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500"
-          onClick={() => switchView("new")}
-          type="button"
-        >
-          Add EPC company
-        </button>
+        {canManagePlatformCompanies ? (
+          <button
+            className="rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-500"
+            onClick={() => switchView("new")}
+            type="button"
+          >
+            Add EPC company
+          </button>
+        ) : null}
       </div>
 
       {error ? <FormError message={error} /> : null}
 
-      {viewMode === "new" ? (
+      {canManagePlatformCompanies && activeViewMode === "new" ? (
         <CreateCompanyForm
           isSubmitting={isSubmitting}
           onSubmit={handleSubmit}
@@ -326,7 +341,7 @@ export function CompaniesPage() {
         />
       ) : null}
 
-      {viewMode === "invites" ? (
+      {canManagePlatformCompanies && activeViewMode === "invites" ? (
         <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
           <SectionHeader
             description="Review EPC admins who still need to finish password setup."
@@ -367,15 +382,15 @@ export function CompaniesPage() {
         </section>
       ) : null}
 
-      {viewMode === "companies" || viewMode === "in_house" ? (
+      {activeViewMode === "companies" || activeViewMode === "in_house" ? (
         <section className="rounded-lg border border-stone-200 bg-white shadow-sm">
             <div className="border-b border-stone-200 p-4">
               <div className="mb-4">
                 <h2 className="text-base font-semibold text-slate-950">
-                  {viewMode === "in_house" ? "In-house accounts" : "Client companies"}
+                  {activeViewMode === "in_house" ? "In-house accounts" : "Client companies"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  {viewMode === "in_house"
+                  {activeViewMode === "in_house"
                     ? "Internal and test workspaces kept separate from the client directory."
                     : "Client EPC workspaces and their current subscription status."}
                 </p>
