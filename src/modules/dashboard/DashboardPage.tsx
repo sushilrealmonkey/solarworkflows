@@ -137,7 +137,7 @@ function EpcAdminDashboard() {
     <div className="space-y-3 sm:space-y-5">
       <TrialBanner />
       {loading ? <PageLoader label="Loading your business overview..." /> : null}
-      <section className="rounded-lg border border-orange-100 bg-white p-3 shadow-sm shadow-orange-950/5 sm:p-5">
+      <section className="rounded-lg border border-orange-100 bg-white p-3 shadow-sm shadow-orange-950/5 sm:px-5 sm:py-4">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start xl:items-center">
           <SolarOperationsBrandGraphic
             className="sm:hidden"
@@ -151,45 +151,11 @@ function EpcAdminDashboard() {
             <p className="mt-1 text-xs text-slate-500 sm:text-sm">
               {reportDate}
             </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <QuickAction to="/leads" label="Add Enquiry" />
-              <QuickAction to="/site-surveys" label="Site Survey" />
-              <QuickAction to="/quotations" label="Quotation" />
-              <QuickAction to="/payments" label="Payment" />
-              <QuickAction to="/inventory" label="Material" />
-              <QuickAction to="/b2b-sales" label="B2B Sale" />
-            </div>
           </div>
           <SolarOperationsBrandGraphic
             className="hidden sm:flex"
             logoUrl={organization.logoUrl}
             organizationName={organization.name}
-          />
-        </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-4 sm:gap-3 xl:grid-cols-4">
-          <HealthSignal
-            label="Urgent actions today"
-            value={adminData.urgentActions}
-            tone="rose"
-            loading={loading}
-          />
-          <HealthSignal
-            label="Overdue payments"
-            value={compactCurrencyFormatter.format(adminData.overdueAmount)}
-            tone="amber"
-            loading={loading}
-          />
-          <HealthSignal
-            label="Projects delayed"
-            value={adminData.delayedProjects.length}
-            tone="blue"
-            loading={loading}
-          />
-          <HealthSignal
-            label="Quotations awaiting response"
-            value={adminData.awaitingQuotations.length}
-            tone="violet"
-            loading={loading}
           />
         </div>
       </section>
@@ -559,53 +525,6 @@ function buildEpcDashboardModel(
     monthlyRows,
     wonQuotations,
   };
-}
-
-function QuickAction({ to, label }: { to: string; label: string }) {
-  return (
-    <Link
-      className="inline-flex min-h-8 items-center justify-center rounded-full border border-orange-100 bg-orange-50 px-3 py-1.5 text-xs font-semibold leading-none text-[#06173f] transition hover:border-orange-200 hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-      to={to}
-    >
-      {label}
-    </Link>
-  );
-}
-
-function HealthSignal({
-  label,
-  value,
-  tone,
-  loading,
-}: {
-  label: string;
-  value: ReactNode;
-  tone: "rose" | "amber" | "blue" | "violet";
-  loading: boolean;
-}) {
-  const toneClass = {
-    rose: "bg-rose-50 text-rose-700",
-    amber: "bg-amber-50 text-amber-700",
-    blue: "bg-blue-50 text-blue-700",
-    violet: "bg-violet-50 text-violet-700",
-  }[tone];
-
-  return (
-    <article className="rounded-lg border border-stone-100 bg-stone-50 p-2.5 sm:p-3">
-      {loading ? (
-        <div className="h-12 animate-pulse rounded-md bg-white" />
-      ) : (
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-base font-bold sm:h-10 sm:w-10 sm:text-lg ${toneClass}`}>
-            {value}
-          </span>
-          <p className="min-w-0 text-xs font-semibold leading-4 text-slate-800 sm:text-sm sm:leading-5">
-            {label}
-          </p>
-        </div>
-      )}
-    </article>
-  );
 }
 
 function CommandMetricCard({
@@ -1449,8 +1368,6 @@ function ChartValueBar({
   const numericValue = Number(value) || 0;
   const relativeHeight = (numericValue / maxValue) * 100;
   const height = Math.max(relativeHeight, numericValue > 0 ? 8 : 1);
-  const showLabelInside = relativeHeight >= 24;
-
   return (
     <div
       aria-label={currencyFormatter.format(numericValue)}
@@ -1461,11 +1378,7 @@ function ChartValueBar({
       <span aria-hidden="true" className={`dashboard-chart-bar absolute inset-0 rounded-t ${color}`} />
       {numericValue > 0 ? (
         <span
-          className={`pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 whitespace-nowrap text-[8px] font-bold leading-none sm:text-[10px] ${
-            showLabelInside
-              ? "top-1 text-white"
-              : "-top-3 text-slate-700"
-          }`}
+          className="pointer-events-none absolute left-1/2 z-20 -top-3 -translate-x-1/2 whitespace-nowrap text-[8px] font-bold leading-none text-slate-700 sm:text-[10px]"
         >
           {currencyFormatter.format(numericValue)}
         </span>
@@ -1494,7 +1407,7 @@ function ComboRevenueChart({
       >
         <svg
           aria-hidden="true"
-          className="pointer-events-none absolute left-3 top-3 z-10 h-32 sm:h-40"
+          className="pointer-events-none absolute left-3 top-3 h-32 sm:h-40"
           preserveAspectRatio="none"
           style={{ width: `${chartWidth}px` }}
           viewBox={`0 0 ${chartWidth} 160`}
