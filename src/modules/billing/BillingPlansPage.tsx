@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
-import { PageLoader } from "../../components/PageLoader";
 import { isValidPhoneNumber } from "../../services/authAccess";
 import {
   cancelRazorpaySubscription,
@@ -90,8 +89,9 @@ export function BillingPlansSection() {
 }
 
 function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
-  const { profile, session, subscription, refresh } = useAuth();
+  const { profile, session, subscription, refresh, refreshSubscription } = useAuth();
   const isSuperAdmin = Boolean(profile?.is_super_admin);
+  const isOnboarding = !showHeader;
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [billingPeriod, setBillingPeriod] =
     useState<BillingPeriod>("monthly");
@@ -111,15 +111,45 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [planLoadAttempt, setPlanLoadAttempt] = useState(0);
 
   useEffect(() => {
-    fetchBillingPlans()
-      .then(setPlans)
-      .catch((nextError) =>
-        setError(nextError instanceof Error ? nextError.message : "Unable to load plans."),
-      )
-      .finally(() => setLoading(false));
-  }, []);
+    let active = true;
+    let timedOut = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 12_000);
+
+    setLoading(true);
+    setError(null);
+
+    void fetchBillingPlans(controller.signal)
+      .then((nextPlans) => {
+        if (active) setPlans(nextPlans);
+      })
+      .catch((nextError) => {
+        if (!active) return;
+        setError(
+          timedOut
+            ? "Plan details are taking longer than expected. Please try again."
+            : nextError instanceof Error
+              ? nextError.message
+              : "Unable to load plans.",
+        );
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [planLoadAttempt]);
 
   const statusText = useMemo(() => {
     if (!subscription) return null;
@@ -320,7 +350,7 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
               setMessage(
                 "UPI AutoPay mandate authorised. Your plan will activate after webhook confirmation.",
               );
-              await refresh();
+              await refreshSubscription();
             })
             .catch((nextError) => {
               setError(
@@ -362,7 +392,7 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={isOnboarding ? "space-y-5" : "space-y-6"}>
       {showHeader ? (
         <PageHeader
           title="Billing & Plans"
@@ -374,8 +404,11 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
         />
       ) : (
         <div>
-          <h2 className="text-lg font-semibold text-slate-950">Billing &amp; Plans</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-200">
+            Final step
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-white">Billing &amp; Plans</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-200">
             Review your current subscription, select Core or Pro, and complete payment securely.
           </p>
         </div>
@@ -429,7 +462,7 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
           {message}
         </p>
       ) : null}
-      {error ? (
+      {error && (loading || plans.length > 0) ? (
         <p className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900">
           {error}
         </p>
@@ -465,11 +498,35 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-4 md:grid-cols-2">
         {loading
-          ? <><div className="lg:col-span-2"><PageLoader label="Loading subscription plans..." /></div>{[0, 1].map((item) => (
-              <div className="h-96 animate-pulse rounded-2xl bg-stone-100" key={item} />
-            ))}</>
+          ? (
+            <>
+              <p className="sr-only" role="status">
+                Loading subscription plans…
+              </p>
+              {[0, 1].map((item) => (
+                <PlanCardSkeleton key={item} />
+              ))}
+            </>
+          )
+          : plans.length === 0 ? (
+            <section className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center md:col-span-2">
+              <p className="font-semibold text-rose-950">
+                {error ?? "No subscription plans are available right now."}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-rose-800">
+                Check your connection and try loading the plans again.
+              </p>
+              <button
+                className="mt-4 min-h-11 rounded-lg bg-[#06173f] px-4 py-2 text-sm font-semibold text-white"
+                onClick={() => setPlanLoadAttempt((attempt) => attempt + 1)}
+                type="button"
+              >
+                Retry loading plans
+              </button>
+            </section>
+          )
           : plans.map((plan) => {
               const isCurrent =
                 subscription?.status === "active" &&
@@ -484,19 +541,21 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
               const payablePricePaise = displayPricePaise + gstAmountPaise;
               return (
                 <article
-                  className={`relative rounded-2xl border bg-white p-5 shadow-sm ${
+                  className={`min-w-0 rounded-2xl border bg-white p-5 shadow-sm ${
                     isPro ? "border-orange-300" : "border-stone-200"
                   }`}
                   key={plan.plan_key}
                 >
-                  {isPro ? (
-                    <span className="absolute right-4 top-4 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">
-                      Complete workspace
-                    </span>
-                  ) : null}
-                  <h2 className="text-xl font-semibold text-slate-950">
-                    {plan.display_name}
-                  </h2>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="text-xl font-semibold text-slate-950">
+                      {plan.display_name}
+                    </h2>
+                    {isPro ? (
+                      <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-800">
+                        Complete workspace
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="mt-4 text-4xl font-semibold text-slate-950">
                     ₹{(payablePricePaise / 100).toLocaleString("en-IN", {
                       minimumFractionDigits: 2,
@@ -580,6 +639,25 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
         />
       ) : null}
     </div>
+  );
+}
+
+function PlanCardSkeleton() {
+  return (
+    <article
+      aria-hidden="true"
+      className="animate-pulse rounded-2xl border border-white/40 bg-white p-5 shadow-sm"
+    >
+      <div className="h-6 w-32 rounded bg-slate-200" />
+      <div className="mt-5 h-10 w-48 rounded bg-slate-200" />
+      <div className="mt-3 h-4 w-44 rounded bg-slate-100" />
+      <div className="mt-8 space-y-4">
+        {[0, 1, 2, 3].map((item) => (
+          <div className="h-4 rounded bg-slate-100" key={item} />
+        ))}
+      </div>
+      <div className="mt-8 h-11 rounded-lg bg-slate-200" />
+    </article>
   );
 }
 

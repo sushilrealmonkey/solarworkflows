@@ -39,14 +39,15 @@ async function getFunctionErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Action failed.";
 }
 
-export async function fetchBillingPlans() {
-  const { data, error } = await requireClient()
+export async function fetchBillingPlans(signal?: AbortSignal) {
+  const query = requireClient()
     .from("subscription_plans")
     .select(
       "plan_key, display_name, price_paise, yearly_price_paise, currency, billing_period",
     )
     .eq("is_active", true)
     .order("price_paise");
+  const { data, error } = await (signal ? query.abortSignal(signal) : query);
 
   if (error) throw new Error(error.message);
   return (data ?? []) as BillingPlan[];

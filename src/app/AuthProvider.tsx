@@ -93,6 +93,7 @@ type AuthContextValue = {
   subscription: SubscriptionAccess | null;
   errorMessage: string | null;
   refresh: () => Promise<void>;
+  refreshSubscription: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -374,6 +375,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [loadUserContext]);
 
+  const refreshSubscription = useCallback(async () => {
+    if (!session || !profile || profile.is_super_admin || profile.platform_role) {
+      return;
+    }
+
+    const loadedSubscription = await fetchSubscriptionAccess();
+    setSubscription(loadedSubscription);
+  }, [profile, session]);
+
   const signOut = useCallback(async () => {
     if (!supabase) {
       resetUserState();
@@ -449,6 +459,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription,
       errorMessage,
       refresh,
+      refreshSubscription,
       signOut,
     }),
     [
@@ -462,6 +473,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       subscription,
       errorMessage,
       refresh,
+      refreshSubscription,
       signOut,
     ],
   );
