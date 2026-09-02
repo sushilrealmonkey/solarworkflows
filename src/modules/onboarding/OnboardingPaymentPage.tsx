@@ -39,10 +39,6 @@ export function OnboardingPaymentPage() {
       workspaceLayout
     >
       <AuthThemeCard>
-        <p className="mb-6 rounded-2xl border border-amber-200/35 bg-amber-100/10 px-4 py-3 text-sm leading-6 text-amber-50">
-          Your dashboard will open automatically once Razorpay confirms the
-          successful payment.
-        </p>
         <BillingPlansSection />
       </AuthThemeCard>
     </AuthThemeShell>

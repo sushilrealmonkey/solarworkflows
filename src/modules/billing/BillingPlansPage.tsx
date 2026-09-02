@@ -421,7 +421,7 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
         </section>
       ) : null}
 
-      {statusText ? (
+      {!isOnboarding && statusText ? (
         <section className="rounded-xl border border-orange-200 bg-orange-50 p-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">
             Current access
