@@ -11,6 +11,8 @@ import {
 } from "../crm/CrmComponents";
 import { labelize } from "../crm/crmUtils";
 import { formatMoney } from "../quotations/quotationUtils";
+import { PaymentDueBadge } from "../payments/PaymentComponents";
+import type { PaymentDueItem } from "../payments/types";
 import {
   applyCustomerSnapshotToSaleForm,
   availableStockQuantity,
@@ -38,8 +40,10 @@ export function B2BSaleStatusBadge({
 
 export function B2BSaleTotalsCard({
   sale,
+  dueItem,
 }: {
   sale: B2BSaleWithRelations;
+  dueItem?: PaymentDueItem | null;
 }) {
   return (
     <aside className="xl:sticky xl:top-6 xl:self-start">
@@ -56,8 +60,23 @@ export function B2BSaleTotalsCard({
               {formatMoney(sale.total_amount)}
             </dd>
           </div>
-          <TotalRow label="Invoice Paid" value={sale.invoice?.amount_paid} />
-          <TotalRow label="Invoice Balance" value={sale.invoice?.balance_due} />
+          <TotalRow
+            label="Amount Received"
+            value={dueItem?.amount_received ?? sale.invoice?.amount_paid ?? sale.proforma_invoice?.amount_paid}
+          />
+          <TotalRow
+            label="Balance Due"
+            value={dueItem?.balance_due ?? sale.invoice?.balance_due ?? sale.proforma_invoice?.balance_due}
+          />
+          <TextRow label="Payment Due On" value={formatDisplayDate(sale.payment_due_on)} />
+          {dueItem ? (
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-slate-600">Payment Status</dt>
+              <dd>
+                <PaymentDueBadge value={dueItem.payment_status} />
+              </dd>
+            </div>
+          ) : null}
         </dl>
       </section>
     </aside>
@@ -75,6 +94,15 @@ function TotalRow({
     <div className="flex items-center justify-between gap-4">
       <dt className="text-slate-600">{label}</dt>
       <dd className="font-semibold text-slate-950">{formatMoney(value)}</dd>
+    </div>
+  );
+}
+
+function TextRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="text-slate-600">{label}</dt>
+      <dd className="font-semibold text-slate-950">{value}</dd>
     </div>
   );
 }
@@ -198,6 +226,12 @@ export function B2BSaleFormModal({
         onChange={(value) => update("sale_date", value)}
         error={errors.sale_date}
         required
+        type="date"
+      />
+      <TextInput
+        label="Payment Due On"
+        value={values.payment_due_on}
+        onChange={(value) => update("payment_due_on", value)}
         type="date"
       />
       <TextArea

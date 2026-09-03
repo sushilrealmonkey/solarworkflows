@@ -14,6 +14,9 @@ export function WorkspaceOnboardingPage() {
     session?.user.phone,
     session?.user.user_metadata,
   );
+  const hasVerifiedWhatsAppNumber = Boolean(
+    session?.user.phone && session.user.phone_confirmed_at,
+  );
   const [workspaceName, setWorkspaceName] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState(signupPhone);
@@ -132,17 +135,17 @@ export function WorkspaceOnboardingPage() {
 
               <TextField
                 autoComplete="tel"
-                disabled={isSubmitting || Boolean(session?.user.phone)}
-                label={session?.user.phone ? "Verified mobile number" : "Phone number (optional)"}
+                disabled={isSubmitting || hasVerifiedWhatsAppNumber}
+                label={hasVerifiedWhatsAppNumber ? "Verified WhatsApp number" : "WhatsApp number"}
                 maxLength={20}
                 onChange={setPhone}
                 placeholder="+91 98765 43210"
-                required={false}
+                required
                 type="tel"
                 value={phone}
               />
 
-              {session?.user.phone ? (
+              {hasVerifiedWhatsAppNumber ? (
                 <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3">
                   <input
                     checked={welcomeWhatsAppConsent}

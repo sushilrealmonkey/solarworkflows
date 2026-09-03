@@ -50,6 +50,7 @@ function salePayload(values: B2BSaleFormValues) {
     delivery_address: nullable(values.delivery_address),
     gst_number: nullable(values.gst_number),
     sale_date: nullable(values.sale_date),
+    payment_due_on: nullable(values.payment_due_on),
     discount_amount: 0,
     notes: nullable(values.notes),
   };

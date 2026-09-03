@@ -40,8 +40,13 @@ type AdminProfileRow = {
   organization_id: string | null;
   full_name: string | null;
   email: string | null;
+  phone: string | null;
   status: string | null;
   onboarded_at: string | null;
+};
+
+type StorageBucketRow = {
+  id: string;
 };
 
 const corsHeaders = {
@@ -495,9 +500,17 @@ async function updateCompanyProfile(
     return jsonResponse({ error: "Enter a valid primary admin email" }, 400);
   }
 
+  if (!adminPhone) {
+    return jsonResponse({ error: "Primary admin WhatsApp number is required" }, 400);
+  }
+
+  if (!isValidWhatsAppNumber(adminPhone)) {
+    return jsonResponse({ error: "Enter a valid primary admin WhatsApp number" }, 400);
+  }
+
   const { data: adminProfileData, error: profileError } = await serviceClient
     .from("users_profile")
-    .select("id, auth_user_id, email")
+    .select("id, auth_user_id, email, phone")
     .eq("organization_id", organizationId)
     .eq("is_super_admin", false)
     .order("created_at", { ascending: true })
@@ -548,6 +561,7 @@ async function updateCompanyProfile(
 
   if (adminProfileData) {
     const adminProfile = adminProfileData as AdminProfileRow;
+    const phoneChanged = phoneDigits(adminProfile.phone) !== phoneDigits(adminPhone);
 
     if (
       adminProfile.auth_user_id &&
@@ -570,6 +584,7 @@ async function updateCompanyProfile(
         full_name: adminFullName,
         email: adminEmail,
         phone: adminPhone,
+        ...(phoneChanged ? { phone_verified: false } : {}),
         updated_at: new Date().toISOString(),
       })
       .eq("id", adminProfile.id)
@@ -596,6 +611,24 @@ async function guardedDeleteCompany(
     return jsonResponse({ error: "Organization is required" }, 400);
   }
 
+  const { data: organizationData, error: organizationLookupError } =
+    await serviceClient
+      .from("organizations")
+      .select("company_id")
+      .eq("id", organizationId)
+      .maybeSingle();
+
+  if (organizationLookupError) {
+    return jsonResponse({ error: organizationLookupError.message }, 400);
+  }
+
+  if (!organizationData) {
+    return jsonResponse({ error: "EPC company not found" }, 404);
+  }
+
+  // Category rows are seeded configuration, not operational activity. They
+  // cascade with their organization/company, while any records that depend on
+  // them (products, vendors, expenses, or BOM templates) remain blockers.
   const operationalTables: Array<{ table: string; tenantColumn?: string }> = [
     { table: "customers" },
     { table: "leads" },
@@ -609,14 +642,15 @@ async function guardedDeleteCompany(
     { table: "inventory_transactions" },
     { table: "inventory_reservations" },
     { table: "inventory_batches" },
+    { table: "suppliers" },
     { table: "vendors" },
+    { table: "vendor_expenses" },
     { table: "purchase_orders" },
     { table: "documents" },
     { table: "proforma_invoices" },
     { table: "invoices" },
     { table: "b2b_sales" },
     { table: "products", tenantColumn: "tenant_id" },
-    { table: "product_categories", tenantColumn: "tenant_id" },
     { table: "bom_templates", tenantColumn: "tenant_id" },
     { table: "activity_logs" },
     { table: "daily_briefs" },
@@ -651,41 +685,25 @@ async function guardedDeleteCompany(
 
   const profiles = (profilesData ?? []) as AdminProfileRow[];
 
-  if (
-    profiles.length > 1 ||
-    profiles.some((profile) =>
-      profile.onboarded_at ||
-      profile.status === "active"
-    )
-  ) {
+  // A company may be deleted when its only user is the primary admin, whether
+  // that admin is still invited or has already activated their account. Extra
+  // tenant users remain a deletion blocker.
+  if (profiles.length > 1) {
     blockers.push(`users_profile: ${profiles.length}`);
   }
 
-  const { data: organizationData, error: organizationLookupError } =
-    await serviceClient
-      .from("organizations")
-      .select("company_id")
-      .eq("id", organizationId)
-      .maybeSingle();
+  const storageCheck = await findCompanyStorageBlockers(
+    serviceClient,
+    [organizationId, organizationData.company_id].filter(
+      (value): value is string => Boolean(value),
+    ),
+  );
 
-  if (organizationLookupError) {
-    return jsonResponse({ error: organizationLookupError.message }, 400);
+  if (storageCheck.error) {
+    return jsonResponse({ error: storageCheck.error }, 400);
   }
 
-  const storagePrefixes = [organizationId, organizationData?.company_id]
-    .filter((value): value is string => Boolean(value));
-  for (const prefix of storagePrefixes) {
-    const { count, error: storageError } = await serviceClient
-      .schema("storage")
-      .from("objects")
-      .select("id", { count: "exact", head: true })
-      .like("name", `${prefix}/%`);
-
-    if (storageError) {
-      return jsonResponse({ error: storageError.message }, 400);
-    }
-    if ((count ?? 0) > 0) blockers.push(`storage.objects(${prefix}): ${count}`);
-  }
+  blockers.push(...storageCheck.blockers);
 
   if (blockers.length > 0) {
     return jsonResponse(
@@ -697,14 +715,20 @@ async function guardedDeleteCompany(
     );
   }
 
-  for (const profile of profiles) {
-    if (profile.auth_user_id) {
-      const { error: deleteAuthError } =
-        await serviceClient.auth.admin.deleteUser(profile.auth_user_id);
+  const authUserIds = profiles
+    .map((profile) => profile.auth_user_id)
+    .filter((value): value is string => Boolean(value));
 
-      if (deleteAuthError) {
-        return jsonResponse({ error: deleteAuthError.message }, 400);
-      }
+  // Auth user deletion invalidates refresh tokens, and this additionally
+  // removes the active sessions before the workspace is deleted.
+  for (const authUserId of authUserIds) {
+    const { error: revokeSessionsError } = await serviceClient.rpc(
+      "revoke_tenant_user_sessions",
+      { target_auth_user_id: authUserId },
+    );
+
+    if (revokeSessionsError) {
+      return jsonResponse({ error: revokeSessionsError.message }, 400);
     }
   }
 
@@ -715,6 +739,26 @@ async function guardedDeleteCompany(
 
   if (deleteOrganizationError) {
     return jsonResponse({ error: deleteOrganizationError.message }, 400);
+  }
+
+  if (organizationData.company_id) {
+    const { error: deleteCompanyError } = await serviceClient
+      .from("companies")
+      .delete()
+      .eq("id", organizationData.company_id);
+
+    if (deleteCompanyError) {
+      return jsonResponse({ error: deleteCompanyError.message }, 400);
+    }
+  }
+
+  for (const authUserId of authUserIds) {
+    const { error: deleteAuthError } =
+      await serviceClient.auth.admin.deleteUser(authUserId);
+
+    if (deleteAuthError) {
+      return jsonResponse({ error: deleteAuthError.message }, 400);
+    }
   }
 
   return jsonResponse({
@@ -788,6 +832,40 @@ async function extendExpiredTrial(
   });
 }
 
+async function findCompanyStorageBlockers(
+  serviceClient: ReturnType<typeof createClient>,
+  prefixes: string[],
+) {
+  const { data: bucketsData, error: bucketsError } =
+    await serviceClient.storage.listBuckets();
+
+  if (bucketsError) {
+    return { blockers: [], error: bucketsError.message };
+  }
+
+  const blockers: string[] = [];
+  const uniquePrefixes = [...new Set(prefixes)];
+  const buckets = (bucketsData ?? []) as StorageBucketRow[];
+
+  for (const bucket of buckets) {
+    for (const prefix of uniquePrefixes) {
+      const { data: objects, error: objectsError } = await serviceClient.storage
+        .from(bucket.id)
+        .list(prefix, { limit: 1 });
+
+      if (objectsError) {
+        return { blockers: [], error: objectsError.message };
+      }
+
+      if ((objects ?? []).length > 0) {
+        blockers.push(`storage:${bucket.id}/${prefix}`);
+      }
+    }
+  }
+
+  return { blockers, error: null };
+}
+
 function validateCreateBody(body: InviteRequestBody) {
   const organizationName = normalizeText(body.organization_name);
   const organizationSlug = slugify(normalizeText(body.organization_slug));
@@ -811,6 +889,14 @@ function validateCreateBody(body: InviteRequestBody) {
     throw new Error("Enter a valid primary admin email");
   }
 
+  if (!adminPhone) {
+    throw new Error("Primary admin WhatsApp number is required");
+  }
+
+  if (!isValidWhatsAppNumber(adminPhone)) {
+    throw new Error("Enter a valid primary admin WhatsApp number");
+  }
+
   return {
     organization_name: organizationName,
     organization_slug: organizationSlug,
@@ -827,6 +913,14 @@ function normalizeText(value: string | undefined) {
 function normalizeNullableText(value: string | null) {
   const normalized = (value ?? "").trim();
   return normalized ? normalized : null;
+}
+
+function isValidWhatsAppNumber(value: string) {
+  return /^[0-9+() -]{6,20}$/.test(value);
+}
+
+function phoneDigits(value: string | null | undefined) {
+  return (value ?? "").replace(/\D/g, "");
 }
 
 function normalizeStatus(value: string | undefined, allowedValues: string[]) {

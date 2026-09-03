@@ -52,13 +52,6 @@ import {
   emptyProductForm,
   validateProductForm,
 } from "../product-master/productMasterUtils";
-import { fetchInventoryItems } from "../inventory/inventoryApi";
-import {
-  inventoryBrandName,
-  inventoryModelName,
-  inventoryProductName,
-} from "../inventory/inventoryUtils";
-import type { InventoryItem } from "../inventory/types";
 import { fetchOrganizationSettings } from "../settings/settingsApi";
 import {
   applySurveyToQuotationForm,
@@ -76,7 +69,6 @@ import {
   leadToQuotationForm,
   normalizeQuotationCustomerType,
   quotationCustomerTypeOptions,
-  quotationInverterTypeOptions,
   quotationModuleCategoryOptions,
   quotationPanelTechnologyOptions,
   quotationSiteTypeOptions,
@@ -102,6 +94,8 @@ import {
   quotationMaterialItemWithProduct,
   quotationQuickProductIdentificationError,
 } from "./quotationQuickProduct";
+import { fetchQuotationPackages } from "../quotation-packages/quotationPackageApi";
+import type { QuotationPackage } from "../quotation-packages/types";
 
 const tabs = [
   "Project",
@@ -109,25 +103,6 @@ const tabs = [
   "Commercial",
   "Warranty & Payment",
   "Review",
-];
-
-const createPanelWattageValue = "__create_panel_wattage__";
-const standardPanelWattages = [
-  "335",
-  "400",
-  "440",
-  "450",
-  "500",
-  "520",
-  "525",
-  "540",
-  "545",
-  "550",
-  "570",
-  "580",
-  "600",
-  "620",
-  "650",
 ];
 
 type QuickProductTarget =
@@ -167,7 +142,7 @@ export function NewQuotationPage() {
   const [siteSurveys, setSiteSurveys] = useState<SiteSurveyWithRelations[]>([]);
   const [productCategories, setProductCategories] = useState<ProductCategory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [quotationPackages, setQuotationPackages] = useState<QuotationPackage[]>([]);
   const [quickProductForm, setQuickProductForm] =
     useState<QuickProductFormState | null>(null);
   const [quickProductErrors, setQuickProductErrors] = useState<
@@ -178,7 +153,6 @@ export function NewQuotationPage() {
     title: string;
     description: string;
   } | null>(null);
-  const [creatingPanelWattage, setCreatingPanelWattage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showBomRequiredAlert, setShowBomRequiredAlert] = useState(false);
@@ -221,7 +195,7 @@ export function NewQuotationPage() {
           nextSiteSurveys,
           nextProductCategories,
           nextProducts,
-          nextInventoryItems,
+          nextQuotationPackages,
           nextSettings,
           currentQuotation,
         ] = await Promise.all([
@@ -230,7 +204,7 @@ export function NewQuotationPage() {
           fetchQuotationSiteSurveys(profile),
           fetchProductCategories(profile),
           fetchProducts(profile),
-          fetchInventoryItems(profile),
+          fetchQuotationPackages(profile, true),
           fetchOrganizationSettings().catch(() => null),
           editQuotationId ? fetchQuotation(profile, editQuotationId) : null,
         ]);
@@ -240,10 +214,18 @@ export function NewQuotationPage() {
         setProductCategories(
           nextProductCategories.filter((category) => category.is_active !== false),
         );
-        setProducts(nextProducts.filter((product) => product.status === "active"));
-        setInventoryItems(
-          nextInventoryItems.filter((item) => item.status === "active"),
+        const packageProductIds = new Set(
+          nextQuotationPackages.flatMap((quotationPackage) =>
+            quotationPackage.items.map((item) => item.product_id),
+          ),
         );
+        setProducts(
+          nextProducts.filter(
+            (product) =>
+              product.status === "active" || packageProductIds.has(product.id),
+          ),
+        );
+        setQuotationPackages(nextQuotationPackages);
         if (editQuotationId) {
           if (!currentQuotation) {
             setLoadError("Quotation could not be found.");
@@ -352,6 +334,13 @@ export function NewQuotationPage() {
     () => leads.find((lead) => lead.id === values.lead_id) ?? null,
     [leads, values.lead_id],
   );
+  const selectedQuotationPackage = useMemo(
+    () =>
+      quotationPackages.find(
+        (quotationPackage) => quotationPackage.id === values.quotation_package_id,
+      ) ?? null,
+    [quotationPackages, values.quotation_package_id],
+  );
   const quickProductBrandOptions = useMemo(
     () =>
       Array.from(
@@ -367,33 +356,6 @@ export function NewQuotationPage() {
     () => values.material_items.filter(hasSavedBomItem),
     [values.material_items],
   );
-  const panelInventoryItems = useMemo(
-    () => inventoryItems.filter((item) => item.item_category === "solar_panel"),
-    [inventoryItems],
-  );
-  const inverterInventoryItems = useMemo(
-    () => inventoryItems.filter((item) => item.item_category === "inverter"),
-    [inventoryItems],
-  );
-  const panelBrandOptions = useMemo(
-    () => inventoryBrandOptions(panelInventoryItems, "Select panel brand"),
-    [panelInventoryItems],
-  );
-  const inverterBrandOptions = useMemo(
-    () => inventoryBrandOptions(inverterInventoryItems, "Select inverter brand"),
-    [inverterInventoryItems],
-  );
-  const panelWattageOptions = useMemo(
-    () => panelWattageSelectOptions(panelInventoryItems),
-    [panelInventoryItems],
-  );
-  const selectedPanelWattageValue =
-    values.summary_module_wattage &&
-    !panelWattageOptions.some(
-      (option) => option.value === values.summary_module_wattage,
-    )
-      ? createPanelWattageValue
-      : values.summary_module_wattage;
   const commercialTurnkeyAmount =
     values.summary_total_turnkey_cost || values.pricing_total_rate;
   const commercialDiscountedAmount = discountedTurnkeyAmount(
@@ -425,6 +387,49 @@ export function NewQuotationPage() {
 
   function update(key: keyof QuotationFormValues, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateQuotationPackage(packageId: string) {
+    if (!packageId) {
+      setValues((current) => ({ ...current, quotation_package_id: "" }));
+      return;
+    }
+
+    const quotationPackage = quotationPackages.find(
+      (candidate) => candidate.id === packageId,
+    );
+    if (!quotationPackage) {
+      return;
+    }
+
+    const packageMaterials = quotationPackage.items.map((item) => ({
+      inventory_item_id: "",
+      product_category_id:
+        products.find((product) => product.id === item.product_id)?.category_id ?? "",
+      product_id: item.product_id,
+      hsn_code: item.hsn_code ?? "",
+      description: item.product_name,
+      brand: item.brand ?? "",
+      model_number: item.model_number ?? "",
+      specification: item.specification ?? "",
+      make_specification: [item.brand, item.model_number, item.specification]
+        .filter(Boolean)
+        .join(" / "),
+      quantity: String(item.quantity),
+      unit: item.unit,
+    }));
+
+    setValues((current) =>
+      newQuotationDefaults({
+        ...current,
+        quotation_package_id: quotationPackage.id,
+        material_items: packageMaterials,
+        summary_total_turnkey_cost: String(quotationPackage.commercial_cost),
+        pricing_total_rate: String(quotationPackage.commercial_cost),
+      }),
+    );
+    setActiveTab("BOM");
+    showToast(`${quotationPackage.name} applied. Review the BOM, then finish commercials.`, "success");
   }
 
   function updateQuotationDate(quotationDate: string) {
@@ -523,14 +528,12 @@ export function NewQuotationPage() {
     }));
   }
 
-  function updatePanelWattage(wattage: string) {
-    if (wattage === createPanelWattageValue) {
-      setCreatingPanelWattage(true);
-      return;
-    }
-
-    setCreatingPanelWattage(false);
-    update("summary_module_wattage", wattage);
+  function updateSystemType(systemType: string) {
+    setValues((current) => ({
+      ...current,
+      system_type: systemType,
+      inverter_type: systemType,
+    }));
   }
 
   function updateLead(leadId: string) {
@@ -566,6 +569,7 @@ export function NewQuotationPage() {
       hsn_code: "",
       description: "",
       brand: "",
+      model_number: "",
       specification: "",
       make_specification: "",
     }));
@@ -716,13 +720,25 @@ export function NewQuotationPage() {
 
   function updateBomRow(
     index: number,
-    key: "quantity",
+    key: "quantity" | "brand" | "model_number" | "specification",
     value: string,
   ) {
     setValues((current) => ({
       ...current,
       material_items: current.material_items.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [key]: value } : item,
+        itemIndex === index
+          ? {
+              ...item,
+              [key]: value,
+              make_specification: [
+                key === "brand" ? value : item.brand,
+                key === "model_number" ? value : item.model_number,
+                key === "specification" ? value : item.specification,
+              ]
+                .filter(Boolean)
+                .join(" / "),
+            }
+          : item,
       ),
     }));
   }
@@ -1021,7 +1037,7 @@ export function NewQuotationPage() {
           <SelectInput
             label="System Type"
             value={values.system_type}
-            onChange={(value) => update("system_type", value)}
+            onChange={updateSystemType}
             options={[
               { value: "", label: "Select system type" },
               ...quotationSystemTypeOptions.map((value) => ({
@@ -1055,18 +1071,6 @@ export function NewQuotationPage() {
             ]}
           />
           <SelectInput
-            label="Inverter Type"
-            value={values.inverter_type}
-            onChange={(value) => update("inverter_type", value)}
-            options={[
-              { value: "", label: "Select inverter type" },
-              ...quotationInverterTypeOptions.map((value) => ({
-                value,
-                label: value,
-              })),
-            ]}
-          />
-          <SelectInput
             label="Site Type"
             value={values.site_type}
             onChange={(value) => update("site_type", value)}
@@ -1079,55 +1083,50 @@ export function NewQuotationPage() {
             label="Expected Generation p.a. (kWh)"
             value={values.expected_annual_generation_kwh || "-"}
           />
-          <SelectInput
-            label="Panel Brand"
-            value={values.summary_module_brand}
-            onChange={(value) => update("summary_module_brand", value)}
-            options={optionsWithCurrentValue(
-              panelBrandOptions,
-              values.summary_module_brand,
-              "Current panel brand",
-            )}
-          />
-          <SelectInput
-            label="Panel Wattage (W)"
-            value={selectedPanelWattageValue}
-            onChange={updatePanelWattage}
-            options={[
-              { value: "", label: "Select panel wattage" },
-              ...panelWattageOptions,
-              { value: createPanelWattageValue, label: "Create new wattage" },
-            ]}
-          />
-          {creatingPanelWattage ||
-          selectedPanelWattageValue === createPanelWattageValue ? (
-            <TextInput
-              label="New Panel Wattage (W)"
-              value={values.summary_module_wattage}
-              onChange={(value) => update("summary_module_wattage", value)}
-              type="number"
-            />
-          ) : null}
-          <SelectInput
-            label="Inverter Brand"
-            value={values.summary_inverter_brand}
-            onChange={(value) => update("summary_inverter_brand", value)}
-            options={optionsWithCurrentValue(
-              inverterBrandOptions,
-              values.summary_inverter_brand,
-              "Current inverter brand",
-            )}
-          />
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm leading-6 text-slate-700 md:col-span-2">
+            <span className="font-semibold text-slate-950">How this is calculated: </span>
+            System capacity × 4 peak-sun-hours per day × 365 days. This is an
+            indicative annual estimate; actual generation depends on site shading,
+            orientation, weather, and system performance.
+          </div>
         </Section>
       ) : null}
 
       {activeTab === "BOM" ? (
         <Section title="Standard Bill Of Material">
           <div className="space-y-4 md:col-span-2">
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1">
+                  <SelectInput
+                    label="Start with a quotation package"
+                    onChange={updateQuotationPackage}
+                    options={[
+                      { value: "", label: "Build this quotation manually" },
+                      ...quotationPackages
+                        .filter(
+                          (quotationPackage) =>
+                            quotationPackage.is_active ||
+                            quotationPackage.id === values.quotation_package_id,
+                        )
+                        .map((quotationPackage) => ({
+                          value: quotationPackage.id,
+                          label: `${quotationPackage.name} — ${formatMoneyWithPaise(quotationPackage.commercial_cost)}`,
+                        })),
+                    ]}
+                    value={values.quotation_package_id}
+                  />
+                </div>
+                <p className="pb-2 text-sm text-slate-700">
+                  {selectedQuotationPackage
+                    ? `${selectedQuotationPackage.items.length} products and the package cost are ready to review.`
+                    : "Apply products and commercial cost in one step."}
+                </p>
+              </div>
+            </div>
             <p className="text-sm text-slate-600">
-              Complete the product and quantity for each standard category. The
-              unit is inherited from Product Master. Unused categories can be left
-              blank.
+              Products from a package appear here ready to review. You can change
+              the product, brand, model, specification, or quantity for this quotation.
             </p>
 
             <div className="space-y-3 md:hidden">
@@ -1184,10 +1183,20 @@ export function NewQuotationPage() {
                         type="number"
                       />
                       <ReadonlyFormValue label="HSN Code" value={item.hsn_code ?? ""} />
-                      <ReadonlyFormValue label="Brand" value={item.brand ?? ""} />
-                      <ReadonlyFormValue
+                      <TextInput
+                        label="Brand"
+                        value={item.brand ?? ""}
+                        onChange={(value) => updateBomRow(index, "brand", value)}
+                      />
+                      <TextInput
+                        label="Model"
+                        value={item.model_number ?? ""}
+                        onChange={(value) => updateBomRow(index, "model_number", value)}
+                      />
+                      <TextInput
                         label="Specifications"
-                        value={item.specification ?? item.make_specification ?? ""}
+                        value={item.specification ?? ""}
+                        onChange={(value) => updateBomRow(index, "specification", value)}
                       />
                     </div>
                   </article>
@@ -1196,7 +1205,7 @@ export function NewQuotationPage() {
             </div>
 
             <div className="hidden overflow-x-auto rounded-xl border border-stone-200 md:block">
-              <table className="min-w-[1040px] w-full border-collapse text-left text-sm">
+              <table className="min-w-[1220px] w-full border-collapse text-left text-sm">
                 <thead className="bg-stone-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Sr.</th>
@@ -1204,6 +1213,7 @@ export function NewQuotationPage() {
                     <th className="px-4 py-3">Product</th>
                     <th className="px-4 py-3">HSN Code</th>
                     <th className="px-4 py-3">Brand</th>
+                    <th className="px-4 py-3">Model</th>
                     <th className="px-4 py-3">Specifications</th>
                     <th className="px-4 py-3">Quantity</th>
                   </tr>
@@ -1251,9 +1261,35 @@ export function NewQuotationPage() {
                           />
                         </td>
                         <td className="px-4 py-3">{item.hsn_code || "-"}</td>
-                        <td className="px-4 py-3">{item.brand || "-"}</td>
-                        <td className="px-4 py-3">
-                          {item.specification || item.make_specification || "-"}
+                        <td className="min-w-36 px-4 py-3">
+                          <input
+                            aria-label={`Brand for ${bomCategoryLabel(item, productCategories)}`}
+                            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+                            value={item.brand ?? ""}
+                            onChange={(event) =>
+                              updateBomRow(index, "brand", event.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="min-w-40 px-4 py-3">
+                          <input
+                            aria-label={`Model for ${bomCategoryLabel(item, productCategories)}`}
+                            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+                            value={item.model_number ?? ""}
+                            onChange={(event) =>
+                              updateBomRow(index, "model_number", event.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="min-w-48 px-4 py-3">
+                          <input
+                            aria-label={`Specifications for ${bomCategoryLabel(item, productCategories)}`}
+                            className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-orange-600 focus:ring-2 focus:ring-orange-100"
+                            value={item.specification ?? ""}
+                            onChange={(event) =>
+                              updateBomRow(index, "specification", event.target.value)
+                            }
+                          />
                         </td>
                         <td className="px-4 py-3">
                           <input
@@ -1328,6 +1364,7 @@ export function NewQuotationPage() {
                 />
                 <ReadonlyFormValue label="HSN Code" value={bomDraft.hsn_code ?? ""} />
                 <ReadonlyFormValue label="Brand" value={bomDraft.brand ?? ""} />
+                <ReadonlyFormValue label="Model" value={bomDraft.model_number ?? ""} />
                 <ReadonlyFormValue
                   label="Specifications"
                   value={bomDraft.specification ?? ""}
@@ -1349,6 +1386,16 @@ export function NewQuotationPage() {
 
       {activeTab === "Commercial" ? (
         <Section title="Commercial Terms And Scope">
+          {selectedQuotationPackage ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 md:col-span-2">
+              <p className="font-semibold text-slate-950">
+                {selectedQuotationPackage.name} package price applied
+              </p>
+              <p className="mt-1 text-sm text-slate-700">
+                {formatMoneyWithPaise(selectedQuotationPackage.commercial_cost)} has been copied as the turnkey cost. You can still adjust it for this customer.
+              </p>
+            </div>
+          ) : null}
           <TextInput
             label="Total Turnkey Cost"
             value={values.summary_total_turnkey_cost}
@@ -1779,6 +1826,7 @@ function ProposalPreview({
   values: QuotationFormValues;
 }) {
   const bomRows = values.material_items.filter(hasSavedBomItem);
+  const materialSummary = deriveQuotationMaterialSummary(bomRows);
   const warrantyRows = values.warranty_rows.filter((item) =>
     [item.component, item.warranty_text].some((value) => value.trim()),
   );
@@ -1878,9 +1926,9 @@ function ProposalPreview({
       <PreviewBlock title="3. Quotation Summary">
         <PreviewGrid
           rows={[
-            ["Panel Brand", values.summary_module_brand || "-"],
-            ["Panel Wattage", valueWithUnit(values.summary_module_wattage, "W")],
-            ["Inverter Brand", values.summary_inverter_brand || "-"],
+            ["Panel Brand", materialSummary.summary_module_brand || "-"],
+            ["Panel Wattage", valueWithUnit(materialSummary.summary_module_wattage || "", "W")],
+            ["Inverter Brand", materialSummary.summary_inverter_brand || "-"],
             ["Total Turnkey Cost", moneyPreview(turnkeyAmount)],
             ["Base Amount", moneyPreviewFromNumber(gstBreakdown.taxableAmount)],
             ["Discount", moneyPreview(values.discount_amount)],
@@ -2104,9 +2152,10 @@ function prepareNewQuotationValues(
     .map((item) => ({
       ...item,
       brand: item.brand ?? "",
+      model_number: item.model_number ?? "",
       specification: item.specification ?? "",
       make_specification:
-        [item.brand, item.specification].filter(Boolean).join(" / ") ||
+        [item.brand, item.model_number, item.specification].filter(Boolean).join(" / ") ||
         item.make_specification,
     }));
   const materialSummary = deriveQuotationMaterialSummary(material_items);
@@ -2118,17 +2167,12 @@ function prepareNewQuotationValues(
       quotationPaymentTermBaseAmount(preparedValues),
     ),
     summary_module_brand:
-      preparedValues.summary_module_brand ||
-      materialSummary.summary_module_brand ||
-      "",
+      materialSummary.summary_module_brand || "",
     summary_module_wattage:
-      preparedValues.summary_module_wattage ||
-      materialSummary.summary_module_wattage ||
-      "",
+      materialSummary.summary_module_wattage || "",
     summary_inverter_brand:
-      preparedValues.summary_inverter_brand ||
-      materialSummary.summary_inverter_brand ||
-      "",
+      materialSummary.summary_inverter_brand || "",
+    inverter_type: preparedValues.system_type,
     summary_earthing_count:
       preparedValues.summary_earthing_count ||
       materialSummary.summary_earthing_count ||
@@ -2215,6 +2259,7 @@ function emptyMaterialItem(): QuotationMaterialItem {
     hsn_code: "",
     description: "",
     brand: "",
+    model_number: "",
     specification: "",
     make_specification: "",
     quantity: "",
@@ -2229,6 +2274,7 @@ function hasSavedBomItem(item: QuotationMaterialItem) {
         [
           item.hsn_code,
           item.brand,
+          item.model_number,
           item.specification,
           item.make_specification,
           item.quantity,
@@ -2252,112 +2298,6 @@ function bomCategoryLabel(
     item.bom_category_name ||
     productCategoryName(categories, item.product_category_id)
   );
-}
-
-function inventoryBrandOptions(items: InventoryItem[], placeholder: string) {
-  const brandsByName = new Map<string, { name: string; products: Set<string> }>();
-
-  items.forEach((item) => {
-    const brand = inventoryBrandName(item).trim();
-    if (!brand) {
-      return;
-    }
-
-    const key = brand.toLowerCase();
-    const option = brandsByName.get(key) ?? {
-      name: brand,
-      products: new Set<string>(),
-    };
-    const title = inventoryProductHint(item);
-    if (title) {
-      option.products.add(title);
-    }
-    brandsByName.set(key, option);
-  });
-
-  const options = Array.from(brandsByName.values())
-    .sort((first, second) => first.name.localeCompare(second.name))
-    .map((brand) => {
-      const products = Array.from(brand.products);
-      const productHint =
-        products.length === 1
-          ? products[0]
-          : products.length > 1
-            ? `${products.length} products`
-            : "";
-
-      return {
-        value: brand.name,
-        label: productHint ? `${brand.name} - ${productHint}` : brand.name,
-      };
-    });
-
-  return [{ value: "", label: placeholder }, ...options];
-}
-
-function inventoryProductHint(item: InventoryItem) {
-  return [inventoryProductName(item), inventoryModelName(item)]
-    .filter(Boolean)
-    .join(" / ");
-}
-
-function panelWattageSelectOptions(items: InventoryItem[]) {
-  const wattages = new Set(standardPanelWattages);
-
-  items.forEach((item) => {
-    const wattage = wattageFromInventoryItem(item);
-    if (wattage) {
-      wattages.add(wattage);
-    }
-  });
-
-  return Array.from(wattages)
-    .sort((first, second) => Number(first) - Number(second))
-    .map((wattage) => ({
-      value: wattage,
-      label: `${wattage} W`,
-    }));
-}
-
-function wattageFromInventoryItem(item: InventoryItem) {
-  return wattageFromText(
-    [
-      item.item_name,
-      inventoryModelName(item),
-      item.model,
-      item.notes,
-    ].join(" "),
-  );
-}
-
-function wattageFromText(value: string) {
-  const match = value.match(/(\d+(?:\.\d+)?)\s*(?:wp|watt(?:s)?|w)\b/i);
-  return match?.[1] ?? "";
-}
-
-function optionsWithCurrentValue(
-  options: Array<{ value: string; label: string }>,
-  currentValue: string,
-  currentLabel: string,
-) {
-  const trimmedValue = currentValue.trim();
-
-  if (
-    !trimmedValue ||
-    options.some(
-      (option) => option.value.toLowerCase() === trimmedValue.toLowerCase(),
-    )
-  ) {
-    return options;
-  }
-
-  return [
-    ...options,
-    {
-      value: currentValue,
-      label: `${currentLabel}: ${currentValue}`,
-    },
-  ];
 }
 
 function valueWithUnit(value: string, unit: string) {

@@ -189,10 +189,11 @@ async function buildTechnicalCommercialProposalPdf(
   const totals = quotationPdfTotals(quotation);
   const companyName =
     settings.company_name || quotation.company_name || organization.name;
-  const [logoDataUrl, headerImageDataUrl, trustSealDataUrl] = await Promise.all([
+  const [logoDataUrl, headerImageDataUrl, trustSealDataUrl, upiQrCodeDataUrl] = await Promise.all([
     fetchImageAsDataUrl(settings.company_logo_url),
     fetchCroppedImageAsDataUrl(quotationHeaderImageUrl, 1400, 560),
     fetchImageAsDataUrl(trustSealImageUrl),
+    fetchImageAsDataUrl(settings.upi_qr_code_url),
   ]);
 
   drawTechnicalCoverPage(
@@ -243,6 +244,7 @@ async function buildTechnicalCommercialProposalPdf(
     y + 6,
     totals.totalAmount,
   );
+  y = drawTechnicalUpiQrPayment(doc, upiQrCodeDataUrl, colors, y + 6);
   y = drawTechnicalCommercialTerms(doc, quotation, colors, y + 6);
   y = drawTechnicalConsiderations(doc, quotation, colors, y + 6);
   y = drawTechnicalWarrantyTable(doc, quotation.quotation_warranties ?? [], colors, y + 6);
@@ -263,6 +265,7 @@ type MeridianQuotationContext = {
   logoDataUrl: PdfImageData | null;
   headerImageDataUrl: PdfImageData | null;
   trustSealDataUrl: PdfImageData | null;
+  upiQrCodeDataUrl: PdfImageData | null;
 };
 
 async function buildMeridianQuotationPdf(
@@ -293,6 +296,7 @@ async function buildMeridianQuotationPdf(
       1200,
     ),
     trustSealDataUrl: await fetchImageAsDataUrl(trustSealImageUrl),
+    upiQrCodeDataUrl: await fetchImageAsDataUrl(settings.upi_qr_code_url),
   };
 
   drawMeridianCover(doc, quotation, context, colors);
@@ -333,7 +337,7 @@ async function buildMeridianQuotationPdf(
   );
   y = drawMeridianStatStrip(doc, quotation, settings, colors, y + 4);
   y = drawMeridianSummaryCards(doc, quotation, settings, colors, y + 8);
-  drawMeridianPaymentTable(
+  y = drawMeridianPaymentTable(
     doc,
     quotation,
     quotation.quotation_payment_terms ?? [],
@@ -342,6 +346,14 @@ async function buildMeridianQuotationPdf(
     context,
     colors,
     y + 8,
+  );
+  y = drawMeridianUpiQrPayment(
+    doc,
+    quotation,
+    context.upiQrCodeDataUrl,
+    context,
+    colors,
+    y + 5,
   );
 
   doc.addPage();
@@ -680,9 +692,8 @@ function drawMeridianConfigurationCards(
       rows: compactRows([
         ["Expected yield, year one", valueWithUnit(quotation.expected_annual_generation_kwh, "kWh")],
         ["Panel technology", displayValue(quotation.panel_type)],
-        ["Panel brand", displayValue(quotation.summary_module_brand ?? materialSummary.summary_module_brand)],
-        ["Inverter type", displayValue(quotation.inverter_type)],
-        ["Inverter brand", displayValue(quotation.summary_inverter_brand ?? materialSummary.summary_inverter_brand)],
+        ["Panel brand", displayValue(materialSummary.summary_module_brand)],
+        ["Inverter brand", displayValue(materialSummary.summary_inverter_brand)],
         ["Monitoring", quotation.summary_remote_monitoring_included ? "Included" : "As proposed"],
       ]),
     },
@@ -747,7 +758,7 @@ function meridianMaterialRows(
     return materialItems.map((item, index) => [
       String(index + 1).padStart(2, "0"),
       displayValue(item.description),
-      [item.brand, item.specification || item.make_specification]
+      [item.brand, item.model_number, item.specification || item.make_specification]
         .filter(isPresentText)
         .map(displayValue)
         .join(" / "),
@@ -836,9 +847,9 @@ function drawMeridianSummaryCards(
   const materialSummary = deriveQuotationMaterialSummary(quotation.material_items);
   const totals = quotationPdfTotals(quotation);
   const leftRows = compactRows([
-    ["Panel brand", quotation.summary_module_brand ?? materialSummary.summary_module_brand],
-    ["Panel wattage", valueWithUnit(quotation.summary_module_wattage ?? materialSummary.summary_module_wattage, "W")],
-    ["Inverter brand", quotation.summary_inverter_brand ?? materialSummary.summary_inverter_brand],
+    ["Panel brand", materialSummary.summary_module_brand],
+    ["Panel wattage", valueWithUnit(materialSummary.summary_module_wattage, "W")],
+    ["Inverter brand", materialSummary.summary_inverter_brand],
     ["Total turnkey cost", formatAmount(quotation.summary_total_turnkey_cost ?? quotation.pricing_total_rate, settings.currency)],
   ]);
   const rightRows = compactRows([
@@ -893,6 +904,54 @@ function drawMeridianPaymentTable(
     colors,
     y,
   );
+}
+
+function drawMeridianUpiQrPayment(
+  doc: PdfDoc,
+  quotation: QuotationWithRelations,
+  upiQrCodeDataUrl: PdfImageData | null,
+  context: MeridianQuotationContext,
+  colors: ReturnType<typeof meridianColors>,
+  y: number,
+) {
+  if (!upiQrCodeDataUrl) {
+    return y;
+  }
+
+  const height = 48;
+  if (y + height > pageHeight - 24) {
+    doc.addPage();
+    drawMeridianPageHeader(doc, quotation, context, colors);
+    y = 37;
+  }
+
+  doc.setFillColor(colors.soft);
+  doc.roundedRect(margin, y, contentWidth, height, 2.2, 2.2, "F");
+  doc.setDrawColor(colors.line);
+  doc.roundedRect(margin, y, contentWidth, height, 2.2, 2.2, "S");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.2);
+  doc.setTextColor(colors.text);
+  doc.text("SCAN TO PAY VIA UPI", margin + 44, y + 15);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(colors.muted);
+  doc.text("Use your UPI app to scan this company QR code and make the payment.", margin + 44, y + 22);
+
+  try {
+    doc.addImage(
+      upiQrCodeDataUrl.dataUrl,
+      upiQrCodeDataUrl.format,
+      margin + 6,
+      y + 8,
+      32,
+      32,
+    );
+  } catch {
+    // A malformed optional QR must not prevent quotation generation.
+  }
+
+  return y + height;
 }
 
 function drawMeridianBlocksGrid(
@@ -1614,7 +1673,7 @@ function drawTechnicalInstallationMaterial(
     .map((item) => ({
       description: displayValue(item.description),
       makeSpecification:
-        [item.brand, item.specification]
+        [item.brand, item.model_number, item.specification]
           .filter(isPresentText)
           .map(displayValue)
           .join(" / ") || displayValue(item.make_specification),
@@ -1683,20 +1742,16 @@ function drawTechnicalQuotationSummary(
 ) {
   const materialSummary = deriveQuotationMaterialSummary(quotation.material_items);
   const totals = quotationPdfTotals(quotation);
-  const moduleWattage =
-    quotation.summary_module_wattage ??
-    materialSummary.summary_module_wattage;
+  const moduleWattage = materialSummary.summary_module_wattage;
   const systemRows = compactRows([
     [
       "Panel Brand",
-      quotation.summary_module_brand ?? materialSummary.summary_module_brand ?? "",
+      materialSummary.summary_module_brand ?? "",
     ],
     ["Panel Wattage", valueWithUnit(moduleWattage, "W")],
     [
       "Inverter Brand",
-      quotation.summary_inverter_brand ??
-        materialSummary.summary_inverter_brand ??
-        "",
+      materialSummary.summary_inverter_brand ?? "",
     ],
     ["Total Turnkey Cost", quotation.summary_total_turnkey_cost === null || quotation.summary_total_turnkey_cost === undefined ? "" : formatAmount(quotation.summary_total_turnkey_cost, settings.currency)],
     ["Total Amount", totals.totalAmount === null || totals.totalAmount === undefined ? "" : formatAmount(totals.totalAmount, settings.currency)],
@@ -1876,6 +1931,49 @@ function drawTechnicalPaymentTerms(
 
   y = drawTechnicalSectionHeading(doc, "Payment Terms", colors, y);
   return drawTechnicalTable(doc, ["Sr.", "Milestone", "%", "Amount"], [14, 88, 28, 56], rows, colors, y) + 4;
+}
+
+function drawTechnicalUpiQrPayment(
+  doc: PdfDoc,
+  upiQrCodeDataUrl: PdfImageData | null,
+  colors: Record<string, string>,
+  y: number,
+) {
+  if (!upiQrCodeDataUrl) {
+    return y;
+  }
+
+  const height = 48;
+  y = ensureSpace(doc, y, height + 4, colors.primary);
+  drawBox(doc, margin, y, contentWidth, height, "Scan to pay via UPI", colors);
+
+  try {
+    doc.addImage(
+      upiQrCodeDataUrl.dataUrl,
+      upiQrCodeDataUrl.format,
+      margin + 5,
+      y + 11,
+      32,
+      32,
+    );
+  } catch {
+    return y + height;
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(colors.text);
+  doc.text("Pay securely with your UPI app", margin + 45, y + 21);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.8);
+  doc.setTextColor(colors.muted);
+  doc.text(
+    "Scan this company QR code to make the payment.",
+    margin + 45,
+    y + 28,
+  );
+
+  return y + height;
 }
 
 function formatPaymentTermPdfAmount(
@@ -3217,6 +3315,7 @@ function drawMaterialTable(
     [
       item.description,
       item.brand,
+      item.model_number,
       item.specification,
       item.make_specification,
       item.quantity,
@@ -3255,7 +3354,7 @@ function drawMaterialTable(
       widths[2] - 4,
     ) as string[];
     const specLines = doc.splitTextToSize(
-      displayValue(item.specification || item.make_specification),
+      displayValue([item.model_number, item.specification || item.make_specification].filter(isPresentText).join(" / ")),
       widths[3] - 4,
     ) as string[];
     const rowHeight = Math.max(

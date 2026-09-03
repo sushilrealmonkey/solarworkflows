@@ -3,6 +3,8 @@ import { supabase } from "../../services/supabaseClient";
 import { filterByArchiveScope } from "../lifecycle/archiveScope";
 import type {
   Payment,
+  PaymentDueItem,
+  PaymentDueSourceType,
   PaymentFormValues,
   PaymentProjectOption,
   PaymentProjectSummary,
@@ -226,4 +228,39 @@ export async function fetchProjectPaymentSummary(
   }
 
   return data as PaymentProjectSummary | null;
+}
+
+export async function fetchPaymentDueItems(
+  profile: UserProfile | null,
+  options: {
+    sourceType?: PaymentDueSourceType;
+    sourceId?: string;
+    overdueOnly?: boolean;
+    limit?: number;
+  } = {},
+) {
+  if (!profile) {
+    return [] as PaymentDueItem[];
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("get_payment_due_items", {
+    target_source_type: options.sourceType ?? null,
+    target_source_id: options.sourceId ?? null,
+    overdue_only: options.overdueOnly ?? false,
+    max_items: options.limit ?? 100,
+  });
+
+  // During a staged rollout, an app bundle may arrive before the migration that
+  // exposes this RPC. Treat only that known schema-cache miss as no due items so
+  // it cannot prevent the rest of the dashboard from loading.
+  if (error?.code === "PGRST202") {
+    return [] as PaymentDueItem[];
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as PaymentDueItem[];
 }

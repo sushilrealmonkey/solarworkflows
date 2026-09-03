@@ -38,6 +38,24 @@ type Snapshot = {
   whatsapp_recipient_id: string | null;
   whatsapp_opted_in: boolean;
   email_opted_in: boolean;
+  onboarding_status: string | null;
+  onboarding_step: string | null;
+  onboarding_completed_at: string | null;
+  product_count: number | string | null;
+  first_product_at: string | null;
+  enquiry_without_followup_count: number | string | null;
+  last_unfollowed_enquiry_at: string | null;
+  login_event_count: number | string | null;
+  team_invite_count: number | string | null;
+  first_team_invite_at: string | null;
+  feature_error_count_24h: number | string | null;
+  latest_feature_error_at: string | null;
+  latest_activity_event: string | null;
+  intent_score: number | string | null;
+  intent_tier: string | null;
+  is_high_intent: boolean;
+  value_reached: boolean;
+  adoption_signal: boolean;
 };
 
 type ClaimedTouchpoint = {
@@ -46,15 +64,20 @@ type ClaimedTouchpoint = {
   enrollment_id: string;
   sequence_day: number;
   touchpoint_key: string;
-  channel: "email" | "whatsapp" | "call";
+  channel: "email" | "whatsapp" | "call" | "in_app" | "support";
   scheduled_at: string;
   attempt_count: number;
   assigned_to_profile_id: string | null;
+  recipient_profile_id: string | null;
+  priority: "low" | "normal" | "high" | "urgent";
+  reason: string | null;
+  metadata: JsonObject;
 };
 
 type PlatformStaff = {
   id: string;
   full_name: string | null;
+  is_super_admin: boolean;
 };
 
 const PLAN_TOUCHPOINT_KEYS = new Set([
@@ -67,6 +90,10 @@ const PLAN_TOUCHPOINT_KEYS = new Set([
   "trial_activation_three_days",
   "trial_activation_one_day",
   "trial_activation_expired",
+  "trial_behavior_no_login_24h",
+  "trial_behavior_setup_incomplete",
+  "trial_behavior_inactive_48h",
+  "trial_behavior_rescue_five_days",
 ]);
 
 Deno.serve(async (request) => {
@@ -128,17 +155,6 @@ Deno.serve(async (request) => {
       if (scheduledResult.error) throw scheduledResult.error;
       scheduled += Number(scheduledResult.data ?? 0);
 
-      if (snapshot.first_value_at) {
-        const cancelledActivationTouches = await service
-          .from("trial_outreach_touchpoints")
-          .update({ status: "cancelled", outcome: "first_value_reached", updated_at: new Date().toISOString() })
-          .eq("company_id", snapshot.company_id)
-          .eq("enrollment_id", snapshot.enrollment_id)
-          .in("status", ["queued", "due"])
-          .neq("touchpoint_key", "trial_activation_expired");
-        if (cancelledActivationTouches.error) throw cancelledActivationTouches.error;
-        cancelled += cancelledActivationTouches.count ?? 0;
-      }
     }
 
     const staff = await loadPlatformStaff(service);
@@ -184,25 +200,23 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      if (testMode && touchpoint.channel !== "call") {
-        await releaseTouchpoint(service, touchpoint.touchpoint_id);
+      if (testMode && touchpoint.channel !== "call" && touchpoint.channel !== "support") {
+        await releaseTouchpoint(service, touchpoint.touchpoint_id, touchpoint.attempt_count);
         summary.testSkipped += 1;
         continue;
       }
 
-      if (touchpoint.channel === "call") {
-        if (snapshot.first_value_at) {
-          await settleTouchpoint(service, touchpoint.touchpoint_id, "skipped", "first_value_reached");
-          summary.skipped += 1;
-          continue;
-        }
-        if (!staff.length) {
-          await releaseTouchpoint(service, touchpoint.touchpoint_id);
+      if (touchpoint.channel === "call" || touchpoint.channel === "support") {
+        const eligibleStaff = touchpoint.channel === "support"
+          ? staff.filter((member) => member.is_super_admin)
+          : staff;
+        if (!eligibleStaff.length) {
+          await releaseTouchpoint(service, touchpoint.touchpoint_id, touchpoint.attempt_count);
           summary.skipped += 1;
           continue;
         }
 
-        const assignee = staff[staffCursor % staff.length];
+        const assignee = eligibleStaff[staffCursor % eligibleStaff.length];
         staffCursor += 1;
         const result = await service
           .from("trial_outreach_touchpoints")
@@ -211,14 +225,41 @@ Deno.serve(async (request) => {
             assigned_to_profile_id: assignee.id,
             claimed_at: null,
             metadata: {
+              ...touchpoint.metadata,
               assigned_name: assignee.full_name,
-              call_script: callScript(snapshot),
+              assignment_queue: touchpoint.channel === "support" ? "founder_product_support" : "telecaller",
+              task_script: taskScript(snapshot, touchpoint.touchpoint_key, touchpoint.channel),
             },
           })
           .eq("id", touchpoint.touchpoint_id)
           .eq("status", "processing");
         if (result.error) throw result.error;
         summary.callsDue += 1;
+        continue;
+      }
+
+      if (touchpoint.channel === "in_app") {
+        try {
+          const prompt = inAppPrompt(touchpoint.touchpoint_key);
+          const { data, error } = await service.rpc("publish_trial_outreach_in_app_prompt", {
+            p_touchpoint_id: touchpoint.touchpoint_id,
+            p_company_id: touchpoint.company_id,
+            p_recipient_profile_id: touchpoint.recipient_profile_id,
+            p_payload: {
+              ...prompt,
+              trigger_key: touchpoint.touchpoint_key,
+              destination_route: prompt.destination_route,
+            },
+          });
+          if (error || !data) throw error ?? new Error("In-app prompt was not created");
+          await completeTouchpoint(service, touchpoint.touchpoint_id, "sent", null, {
+            provider: "in_app_notification",
+            notification_event_id: data,
+          });
+        } catch (error) {
+          await failTouchpoint(service, touchpoint.touchpoint_id, errorMessage(error));
+          summary.failed += 1;
+        }
         continue;
       }
 
@@ -286,7 +327,7 @@ Deno.serve(async (request) => {
 });
 
 async function loadSnapshots(client: SupabaseClient) {
-  const { data, error } = await client.rpc("get_trial_outreach_snapshots", { p_company_id: null });
+  const { data, error } = await client.rpc("get_trial_outreach_behavior_snapshots", { p_company_id: null });
   if (error) throw error;
   return (data ?? []) as Snapshot[];
 }
@@ -313,7 +354,7 @@ function deriveState(snapshot: Snapshot) {
     return { status: "expired" as const, engagementState: "expired", stopReason: "trial_expired" };
   }
 
-  if (snapshot.first_value_at) {
+  if (snapshot.value_reached || snapshot.is_high_intent || snapshot.adoption_signal) {
     const lastActivity = snapshot.last_activity_at ? new Date(snapshot.last_activity_at).getTime() : 0;
     const inactive = !lastActivity || now - lastActivity > 2 * 86400000;
     return {
@@ -323,9 +364,38 @@ function deriveState(snapshot: Snapshot) {
     };
   }
 
+  const hasMeaningfulActivity =
+    snapshot.onboarding_status === "completed" ||
+    Number(snapshot.lead_count ?? 0) > 0 ||
+    Number(snapshot.product_count ?? 0) > 0 ||
+    Number(snapshot.quotation_count ?? 0) > 0 ||
+    Number(snapshot.customer_count ?? 0) > 0 ||
+    Number(snapshot.site_survey_count ?? 0) > 0 ||
+    Number(snapshot.project_count ?? 0) > 0 ||
+    Number(snapshot.team_invite_count ?? 0) > 0;
+
+  if (!snapshot.last_login_at && !hasMeaningfulActivity) {
+    return {
+      status: "active" as const,
+      engagementState: "never_started",
+      stopReason: null,
+    };
+  }
+
+  const lastActivity = snapshot.last_activity_at ? new Date(snapshot.last_activity_at).getTime() : 0;
+  if (!lastActivity || now - lastActivity > 2 * 86400000) {
+    return {
+      status: "active" as const,
+      engagementState: "activated_inactive",
+      stopReason: null,
+    };
+  }
+
   return {
     status: "active" as const,
-    engagementState: snapshot.last_login_at ? "started_stalled" : "never_started",
+    engagementState: snapshot.onboarding_status === "completed" && Number(snapshot.lead_count ?? 0) > 0
+      ? "engaged"
+      : "started_stalled",
     stopReason: null,
   };
 }
@@ -346,6 +416,10 @@ async function updateEnrollment(client: SupabaseClient, snapshot: Snapshot, stat
       first_value_at: snapshot.first_value_at,
       first_value_kind: snapshot.first_value_kind,
       last_activity_at: snapshot.last_activity_at,
+      intent_score: Number(snapshot.intent_score ?? 0),
+      intent_tier: snapshot.intent_tier ?? "low",
+      value_reached_at: snapshot.value_reached ? snapshot.first_quotation_at : null,
+      adoption_signal_at: snapshot.adoption_signal ? snapshot.first_team_invite_at : null,
       last_evaluated_at: new Date().toISOString(),
       stop_reason: state.stopReason,
       completed_at: state.status === "active" ? null : new Date().toISOString(),
@@ -357,7 +431,7 @@ async function updateEnrollment(client: SupabaseClient, snapshot: Snapshot, stat
 async function loadPlatformStaff(client: SupabaseClient) {
   const { data, error } = await client
     .from("users_profile")
-    .select("id,full_name")
+    .select("id,full_name,is_super_admin")
     .eq("status", "active")
     .or("is_super_admin.eq.true,platform_role.eq.backend_staff")
     .order("created_at", { ascending: true });
@@ -512,10 +586,10 @@ async function settleTouchpoint(client: SupabaseClient, id: string, status: "ski
   if (error) throw error;
 }
 
-async function releaseTouchpoint(client: SupabaseClient, id: string) {
+async function releaseTouchpoint(client: SupabaseClient, id: string, attemptCount: number) {
   const { error } = await client
     .from("trial_outreach_touchpoints")
-    .update({ status: "queued", claimed_at: null })
+    .update({ status: "queued", claimed_at: null, attempt_count: Math.max(0, attemptCount - 1) })
     .eq("id", id)
     .eq("status", "processing");
   if (error) throw error;
@@ -538,16 +612,65 @@ async function failTouchpoint(client: SupabaseClient, id: string, message: strin
 function progressText(snapshot: Snapshot) {
   const inputCount = Number(snapshot.customer_count ?? 0) + Number(snapshot.lead_count ?? 0);
   const workflowCount = Number(snapshot.quotation_count ?? 0) + Number(snapshot.site_survey_count ?? 0) + Number(snapshot.project_count ?? 0);
-  if (snapshot.first_value_at) return "You have already reached a first result. The next step is to return and keep the workflow moving.";
-  if (inputCount > 0) return "You have started with a lead or customer. Complete one quotation, survey, or project step to see the full value.";
+  if (snapshot.value_reached) return "You have created a quotation. Return to keep the deal and your team moving.";
+  if (snapshot.product_count && !snapshot.quotation_count) return "Your products are ready. Create one quotation to experience the full workflow.";
+  if (inputCount > 0) return "You have started with an enquiry or customer. Add a follow-up or prepare a quotation for the next step.";
   if (snapshot.last_login_at) return "You have logged in. Create one real lead or customer to start your first useful workflow.";
   if (workflowCount > 0) return "Your workflow records are ready for the next step.";
   return "Your workspace is ready for its first real workflow.";
 }
 
-function callScript(snapshot: Snapshot) {
+function taskScript(snapshot: Snapshot, touchpointKey: string, channel: ClaimedTouchpoint["channel"]) {
   const name = firstName(snapshot.contact_name);
+  if (channel === "support") {
+    return `Check the reported portal issue for ${name} at ${snapshot.company_name ?? "this workspace"}. Confirm the user can continue, then document the resolution.`;
+  }
+  if (touchpointKey === "trial_behavior_no_login_24h") {
+    return `Hi ${name}, this is the Bizlee team. Your trial is ready, and I wanted to help you get started. Can we log in and complete the first setup step together?`;
+  }
+  if (touchpointKey === "trial_behavior_first_enquiry") {
+    return `Hi ${name}, your company setup is ready. Let’s add one live enquiry and show how Bizlee keeps the next follow-up organized.`;
+  }
+  if (touchpointKey === "trial_behavior_conversion_five_days") {
+    return `Hi ${name}, you are actively using Bizlee with five days left in the trial. What result has been most useful, and can I help you choose the right plan?`;
+  }
+  if (touchpointKey === "trial_behavior_rescue_five_days") {
+    return `Hi ${name}, there are five days left in your trial. We can complete one useful workflow together so you can decide whether Bizlee is a fit.`;
+  }
   return `Hi ${name}, this is the Bizlee team. I’m calling to help you complete one real solar workflow. We can start with one enquiry or customer and finish it together in about 15 minutes.`;
+}
+
+function inAppPrompt(touchpointKey: string) {
+  switch (touchpointKey) {
+    case "trial_behavior_follow_up_prompt":
+      return {
+        title: "Add the next follow-up",
+        message: "Your new enquiry is ready for a call, visit, or reminder. Add one next step so it does not go cold.",
+        module: "leads",
+        destination_route: "/leads",
+      };
+    case "trial_behavior_product_setup":
+      return {
+        title: "Add your first product",
+        message: "A small product list makes quotations much faster. Add one real product to continue setup.",
+        module: "product_master",
+        destination_route: "/products-materials",
+      };
+    case "trial_behavior_first_quotation":
+      return {
+        title: "Create your first quotation",
+        message: "Your products are ready. Create a quotation to see the workflow end to end.",
+        module: "quotations",
+        destination_route: "/quotations/new",
+      };
+    default:
+      return {
+        title: "Continue your Bizlee setup",
+        message: "One short next step will help you get value from the workspace.",
+        module: "dashboard",
+        destination_route: "/dashboard",
+      };
+  }
 }
 
 function firstName(value: string | null) {

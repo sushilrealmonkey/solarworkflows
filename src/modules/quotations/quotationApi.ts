@@ -230,6 +230,7 @@ function quotationPayload(values: QuotationFormValues) {
     customer_id: nullable(values.customer_id),
     lead_id: nullable(values.lead_id),
     site_survey_id: nullable(values.site_survey_id),
+    quotation_package_id: nullable(values.quotation_package_id),
     bom_template_id: null,
     quotation_date: nullable(values.quotation_date),
     company_name: null,
@@ -256,20 +257,12 @@ function quotationPayload(values: QuotationFormValues) {
       values.expected_annual_generation_kwh,
     ),
     generation_notes: nullable(values.generation_notes),
-    summary_module_brand: nullable(
-      values.summary_module_brand || materialSummary.summary_module_brand || "",
-    ),
+    summary_module_brand: nullable(materialSummary.summary_module_brand || ""),
     summary_module_wattage: nullableNumber(
-      values.summary_module_wattage ||
-        materialSummary.summary_module_wattage ||
-        "",
+      materialSummary.summary_module_wattage || "",
     ),
     summary_plant_size_kw: nullableNumber(values.summary_plant_size_kw),
-    summary_inverter_brand: nullable(
-      values.summary_inverter_brand ||
-        materialSummary.summary_inverter_brand ||
-        "",
-    ),
+    summary_inverter_brand: nullable(materialSummary.summary_inverter_brand || ""),
     summary_dcdb_included: summaryDcdbIncluded,
     summary_acdb_included: summaryAcdbIncluded,
     summary_earthing_count: nullableNumber(
@@ -355,6 +348,7 @@ function missingSchemaColumn(message: string) {
 
 const requiredQuotationStorageColumns = new Set([
   "quotation_detail_snapshot",
+  "quotation_package_id",
   "installation_location",
   "site_type",
   "expected_annual_generation_kwh",
@@ -1218,6 +1212,29 @@ async function syncQuotationPaymentTerms(
   if (insertError) {
     throw new Error(insertError.message);
   }
+}
+
+export async function updateQuotationPaymentTerms(
+  quotationId: string,
+  values: {
+    paymentTerms: string;
+    paymentTermRows: QuotationPaymentTermFormValues[];
+  },
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("quotations")
+    .update({ payment_terms: nullable(values.paymentTerms) })
+    .eq("id", quotationId)
+    .select("*")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  await syncQuotationPaymentTerms(quotationId, values.paymentTermRows);
+  return data as Quotation;
 }
 
 export async function recalculateQuotationTotals(quotationId: string) {

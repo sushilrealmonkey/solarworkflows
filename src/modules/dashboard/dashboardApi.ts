@@ -5,7 +5,8 @@ import type { Lead, LeadFollowupWithLead } from "../crm/types";
 import type { OrganizationDocumentWithRelations } from "../documents/types";
 import type { InventoryItem } from "../inventory/types";
 import type { PaymentWithRelations } from "../payments/types";
-import type { PaymentProjectSummary } from "../payments/types";
+import type { PaymentDueItem, PaymentProjectSummary } from "../payments/types";
+import { fetchPaymentDueItems } from "../payments/paymentApi";
 import type { ProjectWithRelations } from "../projects/types";
 import type { PurchaseOrderWithRelations } from "../purchases/types";
 import type { QuotationInventoryReservation, QuotationWithRelations } from "../quotations/types";
@@ -39,6 +40,7 @@ export type DashboardOperationalData = {
   upcomingSurveys: SiteSurveyWithRelations[];
   recentLeads: Lead[];
   recentPayments: PaymentWithRelations[];
+  paymentDueItems: PaymentDueItem[];
   recentB2BSales: B2BSaleWithRelations[];
   lowStockItems: InventoryItem[];
   pendingDocuments: OrganizationDocumentWithRelations[];
@@ -234,6 +236,7 @@ export async function fetchEpcAdminDashboardSnapshot(
     quotations,
     projects,
     paymentSummaries,
+    paymentDueItems,
     inventoryReservations,
     purchaseOrders,
     recentActivity,
@@ -251,6 +254,7 @@ export async function fetchEpcAdminDashboardSnapshot(
     fetchDashboardQuotations(profile),
     fetchDashboardProjects(profile),
     fetchDashboardPaymentSummaries(profile),
+    fetchPaymentDueItems(profile, { limit: 100 }),
     fetchDashboardInventoryReservations(profile),
     fetchDashboardPurchaseOrders(profile),
     fetchDashboardActivity(profile),
@@ -268,6 +272,7 @@ export async function fetchEpcAdminDashboardSnapshot(
     quotations,
     projects,
     paymentSummaries,
+    paymentDueItems,
     inventoryReservations,
     purchaseOrders,
     recentActivity,
@@ -411,8 +416,11 @@ export async function fetchDashboardRecentPayments(
     .select(
       `
       *,
-      customer:customers(id, customer_code, full_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to),
-      project:projects(id, organization_id, project_code, project_name, customer_id, quotation_id)
+      customer:customers(id, customer_code, full_name, business_name, phone, alternate_phone, email, address_line_1, address_line_2, city, district, state, pincode, assigned_to),
+      project:projects(id, organization_id, project_code, project_name, customer_id, quotation_id),
+      proforma_invoice:proforma_invoices(id, proforma_code, total_amount, balance_due, status),
+      invoice:invoices(id, invoice_code, total_amount, balance_due, status),
+      b2b_sale:b2b_sales(id, sale_code, total_amount, status)
     `,
     )
     .order("payment_date", { ascending: false })

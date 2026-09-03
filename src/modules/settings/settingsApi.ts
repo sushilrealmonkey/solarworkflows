@@ -212,6 +212,51 @@ export async function uploadCompanyLogo(
     .publicUrl;
 }
 
+export async function uploadCompanyUpiQrCode(
+  profile: UserProfile | null,
+  qrCode: File,
+) {
+  const client = requireSupabase();
+  const organizationId = requireOrganization(profile);
+
+  if (!["image/png", "image/jpeg"].includes(qrCode.type)) {
+    throw new Error("Choose a PNG or JPEG UPI QR code.");
+  }
+
+  if (qrCode.size > 1024 * 1024) {
+    throw new Error("The UPI QR code must be 1 MB or smaller.");
+  }
+
+  const extension = qrCode.type === "image/png" ? "png" : "jpg";
+  const filePath = `${organizationId}/payment/upi-qr-${Date.now()}.${extension}`;
+  const { error } = await client.storage
+    .from(companyBrandingBucket)
+    .upload(filePath, qrCode, {
+      contentType: qrCode.type,
+      upsert: false,
+    });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return client.storage.from(companyBrandingBucket).getPublicUrl(filePath).data
+    .publicUrl;
+}
+
+export async function setOrganizationUpiQrCode(url: string | null) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("set_organization_upi_qr_code", {
+    target_upi_qr_code_url: url,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as OrganizationSettings;
+}
+
 export async function fetchSettingsStaff() {
   const client = requireSupabase();
   const { data, error } = await client.rpc("get_settings_staff");

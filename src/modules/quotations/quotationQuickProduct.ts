@@ -36,13 +36,14 @@ export function quotationMaterialItemWithProduct(
       hsn_code: "",
       description: "",
       brand: "",
+      model_number: "",
       specification: "",
       make_specification: "",
       unit: "",
     };
   }
 
-  const specification = product.specifications ?? product.model_number ?? "";
+  const specification = product.specifications ?? "";
 
   return {
     ...item,
@@ -52,9 +53,10 @@ export function quotationMaterialItemWithProduct(
     hsn_code: product.hsn_code ?? "",
     description: product.product_name,
     brand: product.brand ?? "",
+    model_number: product.model_number ?? "",
     specification,
     make_specification:
-      [product.brand, specification].filter(Boolean).join(" / ") ||
+      [product.brand, product.model_number, specification].filter(Boolean).join(" / ") ||
       item.make_specification,
     unit: product.unit,
   };

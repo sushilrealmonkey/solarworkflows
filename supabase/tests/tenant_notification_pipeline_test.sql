@@ -44,5 +44,38 @@ begin
   ) then
     raise exception 'Tenant clients must not mutate recipient verification state';
   end if;
+
+  if pg_get_functiondef(
+    'public.list_due_daily_summary_recipients(integer)'::regprocedure
+  ) not like '%Asia/Kolkata%'
+    or pg_get_functiondef(
+      'public.list_due_daily_summary_recipients(integer)'::regprocedure
+    ) not like '%platform_fixed_daily_epc_admin_summary%' then
+    raise exception
+      'Daily summaries must use the fixed Asia/Kolkata EPC Admin delivery flow';
+  end if;
+
+  if pg_get_functiondef(
+    'public.list_due_daily_summary_recipients(integer)'::regprocedure
+  ) like '%profiles.phone_verified%' then
+    raise exception
+      'Daily summaries must include active EPC Admins with valid WhatsApp numbers even when OTP confirmation is pending';
+  end if;
+
+  if pg_get_functiondef(
+    'public.list_due_daily_summary_recipients(integer)'::regprocedure
+  ) like '%recipients.verification_status = ''verified''%' then
+    raise exception
+      'Daily summaries must not exclude active EPC Admins solely because OTP confirmation is pending';
+  end if;
+
+  if not exists (
+    select 1
+    from cron.job
+    where jobname = 'process-daily-summaries-at-10am-ist'
+      and schedule = '30 4 * * *'
+  ) then
+    raise exception 'The 10 AM IST daily-summary cron job is missing';
+  end if;
 end;
 $$;

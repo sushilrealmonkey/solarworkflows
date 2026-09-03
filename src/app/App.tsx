@@ -62,6 +62,7 @@ import { DemoBookingsPage } from "../modules/demo-bookings/DemoBookingsPage";
 import { DemoBookingDetailPage } from "../modules/demo-bookings/DemoBookingDetailPage";
 import { WhatsAppMessagingPage } from "../modules/whatsapp-messaging/WhatsAppMessagingPage";
 import { TrialOutreachPage } from "../modules/trial-outreach/TrialOutreachPage";
+import { PortalActivityTracker } from "../modules/trial-outreach/PortalActivityTracker";
 import { PlatformStaffPage } from "../modules/platform-staff/PlatformStaffPage";
 import {
   SettingsPage,
@@ -72,7 +73,9 @@ import { NotificationsPage } from "../modules/notifications/NotificationsPage";
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <PortalActivityTracker />
+      <Routes>
       <Route path="/login" element={<LoginDarkPage />} />
       <Route path="/login-light" element={<LoginPage />} />
       <Route path="/login-dark" element={<LoginDarkPage />} />
@@ -268,7 +271,8 @@ export default function App() {
       </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }
 

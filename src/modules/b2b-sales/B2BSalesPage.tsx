@@ -31,6 +31,9 @@ import {
   labelize,
 } from "../crm/crmUtils";
 import { formatMoney } from "../quotations/quotationUtils";
+import { PaymentDueBadge } from "../payments/PaymentComponents";
+import { fetchPaymentDueItems } from "../payments/paymentApi";
+import type { PaymentDueItem } from "../payments/types";
 import {
   recordPaletteCardClassName,
   recordPaletteTableRowClassName,
@@ -85,6 +88,7 @@ type B2BSaleFilters = {
   status: string;
   customerId: string;
   saleDate: string;
+  paymentStatus: string;
 };
 
 export function B2BSalesPage() {
@@ -94,6 +98,7 @@ export function B2BSalesPage() {
   const [searchParams] = useSearchParams();
   const handledCreateParamRef = useRef("");
   const [sales, setSales] = useState<B2BSaleWithRelations[]>([]);
+  const [paymentDueItems, setPaymentDueItems] = useState<PaymentDueItem[]>([]);
   const [options, setOptions] = useState<B2BSaleOptions>({
     customers: [],
     inventoryItems: [],
@@ -106,6 +111,7 @@ export function B2BSalesPage() {
     status: "",
     customerId: "",
     saleDate: "",
+    paymentStatus: searchParams.get("payment") === "overdue" ? "overdue" : "",
   });
   const [formState, setFormState] = useState<{
     values: B2BSaleFormValues;
@@ -142,6 +148,7 @@ export function B2BSalesPage() {
     subscription?.capability_access?.["documents.pro_sources"] === "full" &&
     hasPermission(profile, permissions, "documents", "create");
   const canCreatePayments = hasPermission(profile, permissions, "payments", "create");
+  const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canDispatchInventory =
     hasPermission(profile, permissions, "inventory", "create") ||
     hasPermission(profile, permissions, "inventory", "update");
@@ -175,12 +182,14 @@ export function B2BSalesPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextSales, nextOptions] = await Promise.all([
+      const [nextSales, nextOptions, nextPaymentDueItems] = await Promise.all([
         fetchB2BSales(profile, archiveScope),
         fetchB2BSaleOptions(profile, canViewPricing),
+        canViewPayments ? fetchPaymentDueItems(profile, { limit: 1000 }) : [],
       ]);
       setSales(nextSales);
       setOptions(nextOptions);
+      setPaymentDueItems(nextPaymentDueItems);
     } catch (nextError) {
       setError(
         nextError instanceof Error
@@ -196,7 +205,17 @@ export function B2BSalesPage() {
     void loadData();
     // loadData closes over permissions, role names, and the active profile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [archiveScope, canView, canViewPricing, profile?.id]);
+  }, [archiveScope, canView, canViewPayments, canViewPricing, profile?.id]);
+
+  const paymentDueBySaleId = useMemo(
+    () =>
+      new Map(
+        paymentDueItems
+          .filter((item) => item.source_type === "b2b_sale")
+          .map((item) => [item.source_id, item]),
+      ),
+    [paymentDueItems],
+  );
 
   useEffect(() => {
     if (!linkedCustomerId) {
@@ -274,15 +293,19 @@ export function B2BSalesPage() {
         !filters.customerId || sale.customer_id === filters.customerId;
       const matchesSaleDate =
         !filters.saleDate || sale.sale_date === filters.saleDate;
+      const paymentDueItem = paymentDueBySaleId.get(sale.id);
+      const matchesPaymentStatus =
+        !filters.paymentStatus || paymentDueItem?.payment_status === filters.paymentStatus;
 
       return (
         matchesSearch &&
         matchesStatus &&
         matchesCustomer &&
-        matchesSaleDate
+        matchesSaleDate &&
+        matchesPaymentStatus
       );
     });
-  }, [sales, filters]);
+  }, [sales, filters, paymentDueBySaleId]);
 
   const salePagination = useTablePagination(filteredSales);
   const paginatedSales = salePagination.pageItems;
@@ -697,9 +720,9 @@ export function B2BSalesPage() {
 
       <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
 
-      <Toolbar className="md:grid-cols-4">
+      <Toolbar className="md:grid-cols-5">
         <SearchInput
-          className="md:col-span-4"
+          className="md:col-span-5"
           placeholder="Search sale, customer, phone, or invoice"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
@@ -738,6 +761,22 @@ export function B2BSalesPage() {
             setFilters((current) => ({ ...current, saleDate }))
           }
         />
+        {canViewPayments ? (
+          <SelectInput
+            label="Payment Status"
+            value={filters.paymentStatus}
+            onChange={(paymentStatus) =>
+              setFilters((current) => ({ ...current, paymentStatus }))
+            }
+            options={[
+              { value: "", label: "All payment states" },
+              { value: "overdue", label: "Overdue" },
+              { value: "due_today", label: "Due today" },
+              { value: "partial", label: "Partially paid" },
+              { value: "pending", label: "Pending" },
+            ]}
+          />
+        ) : null}
       </Toolbar>
 
       {loading ? <LoadingSkeleton /> : null}
@@ -761,6 +800,7 @@ export function B2BSalesPage() {
                   <th className="px-4 py-3">Sale</th>
                   <th className="px-4 py-3">Customer</th>
                   <th className="px-4 py-3">Sale Date</th>
+                  {canViewPayments ? <th className="px-4 py-3">Payment</th> : null}
                   <th className="px-4 py-3">Invoice</th>
                   <th className="px-4 py-3">Final Invoice</th>
                   <th className="px-4 py-3">Total</th>
@@ -792,6 +832,22 @@ export function B2BSalesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">{formatDate(sale.sale_date)}</td>
+                    {canViewPayments ? (
+                      <td className="px-4 py-3">
+                        {paymentDueBySaleId.get(sale.id) ? (
+                          <div className="space-y-1">
+                            <PaymentDueBadge
+                              value={paymentDueBySaleId.get(sale.id)?.payment_status}
+                            />
+                            <p className="text-xs text-slate-500">
+                              {formatDate(paymentDueBySaleId.get(sale.id)?.payment_due_on ?? null)}
+                            </p>
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    ) : null}
                     <td className="px-4 py-3">
                       {sale.proforma_invoice?.proforma_code ?? "-"}
                     </td>
@@ -881,7 +937,24 @@ export function B2BSalesPage() {
                     label="Dispatch"
                     value={formatDate(sale.dispatch_date)}
                   />
+                  {canViewPayments ? (
+                    <CardItem
+                      label="Payment Due"
+                      value={
+                        paymentDueBySaleId.get(sale.id)
+                          ? formatDate(paymentDueBySaleId.get(sale.id)?.payment_due_on ?? null)
+                          : "-"
+                      }
+                    />
+                  ) : null}
                 </dl>
+                {canViewPayments && paymentDueBySaleId.get(sale.id) ? (
+                  <div className="mt-3">
+                    <PaymentDueBadge
+                      value={paymentDueBySaleId.get(sale.id)?.payment_status}
+                    />
+                  </div>
+                ) : null}
                 <div className="mt-4">
                   <B2BSaleNextStepActions
                     canAddPayment={canCreatePayments && canAddB2BPayment(sale)}

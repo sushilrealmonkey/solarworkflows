@@ -279,6 +279,7 @@ export function emptyQuotationForm(): QuotationFormValues {
     customer_id: "",
     lead_id: "",
     site_survey_id: "",
+    quotation_package_id: "",
     bom_template_id: "",
     quotation_date: toDateInput(today),
     company_name: "",
@@ -366,6 +367,8 @@ export function quotationToForm(quotation: QuotationWithRelations): QuotationFor
     customer_id: quotation.customer_id ?? snapshotValues.customer_id ?? "",
     lead_id: quotation.lead_id ?? snapshotValues.lead_id ?? "",
     site_survey_id: quotation.site_survey_id ?? snapshotValues.site_survey_id ?? "",
+    quotation_package_id:
+      quotation.quotation_package_id ?? snapshotValues.quotation_package_id ?? "",
     bom_template_id:
       quotation.bom_template_id ?? snapshotValues.bom_template_id ?? "",
     quotation_date: quotation.quotation_date ?? snapshotValues.quotation_date ?? "",
@@ -410,27 +413,15 @@ export function quotationToForm(quotation: QuotationWithRelations): QuotationFor
         quotation.estimated_generation_units,
     ) || snapshotValues.expected_annual_generation_kwh || "",
     generation_notes: quotation.generation_notes ?? snapshotValues.generation_notes ?? "",
-    summary_module_brand:
-      quotation.summary_module_brand ??
-      snapshotValues.summary_module_brand ??
-      materialSummary.summary_module_brand ??
-      "",
-    summary_module_wattage:
-      numberToInput(quotation.summary_module_wattage) ||
-      snapshotValues.summary_module_wattage ||
-      materialSummary.summary_module_wattage ||
-      "",
+    summary_module_brand: materialSummary.summary_module_brand ?? "",
+    summary_module_wattage: materialSummary.summary_module_wattage ?? "",
     summary_plant_size_kw:
       numberToInput(quotation.summary_plant_size_kw) ||
       snapshotValues.summary_plant_size_kw ||
       numberToInput(quotation.system_capacity_kw) ||
       snapshotValues.system_capacity_kw ||
       "",
-    summary_inverter_brand:
-      quotation.summary_inverter_brand ??
-      snapshotValues.summary_inverter_brand ??
-      materialSummary.summary_inverter_brand ??
-      "",
+    summary_inverter_brand: materialSummary.summary_inverter_brand ?? "",
     summary_dcdb_included:
       booleanToInput(quotation.summary_dcdb_included) ||
       snapshotValues.summary_dcdb_included ||
@@ -463,7 +454,12 @@ export function quotationToForm(quotation: QuotationWithRelations): QuotationFor
     summary_amount_in_words:
       quotation.summary_amount_in_words ?? snapshotValues.summary_amount_in_words ?? "",
     panel_type: quotation.panel_type ?? snapshotValues.panel_type ?? "",
-    inverter_type: quotation.inverter_type ?? snapshotValues.inverter_type ?? "",
+    inverter_type:
+      quotation.system_type ??
+      snapshotValues.system_type ??
+      quotation.inverter_type ??
+      snapshotValues.inverter_type ??
+      "",
     estimated_generation_units:
       numberToInput(quotation.estimated_generation_units) ||
       snapshotValues.estimated_generation_units ||
@@ -813,6 +809,7 @@ function normalizeQuotationMaterialItem(
     hsn_code: item.hsn_code ?? "",
     description: item.description ?? "",
     brand: item.brand ?? "",
+    model_number: item.model_number ?? "",
     specification: item.specification ?? item.make_specification ?? "",
     make_specification: item.make_specification ?? "",
     quantity: item.quantity ?? "",
@@ -945,6 +942,7 @@ export function numberToInput(value: number | null | undefined) {
 function hasMeaningfulMaterialDetails(item: QuotationMaterialItem) {
   return [
     item.brand,
+    item.model_number,
     item.specification,
     item.make_specification,
     item.quantity,
@@ -964,6 +962,7 @@ function materialMatches(item: QuotationMaterialItem, terms: string[]) {
     [
       item.description,
       item.brand,
+      item.model_number,
       item.specification,
       item.make_specification,
     ].join(" "),

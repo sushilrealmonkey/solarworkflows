@@ -39,6 +39,7 @@ export type Project = {
   priority: ProjectPriority | null;
   start_date: string | null;
   expected_completion_date: string | null;
+  payment_due_on: string | null;
   completed_at: string | null;
   assigned_project_manager: string | null;
   assigned_installation_team: unknown[] | null;
@@ -110,6 +111,7 @@ export type ProjectFormValues = {
   priority: ProjectPriority;
   start_date: string;
   expected_completion_date: string;
+  payment_due_on: string;
   assigned_project_manager: string;
   assigned_installation_team: string;
   notes: string;

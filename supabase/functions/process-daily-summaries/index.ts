@@ -1,19 +1,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import {
+  chooseDailyTrialFallback,
+  hasDailySummaryInsights,
+  isActiveTrial,
+  type DailySummaryMessage,
+  type DailySummarySnapshot,
+  type TrialSubscription,
+} from "../_shared/daily-summary-fallback.ts";
 
-type DueRecipient = {
+type DueCompany = {
   company_id: string;
   organization_id: string;
-  recipient_id: string;
   local_date: string;
-  timezone: string;
 };
 
-type Snapshot = {
-  overdue_followups: number;
-  overdue_invoices: number;
-  low_stock_items: number;
-  new_enquiries_today: number;
-};
+type Snapshot = DailySummarySnapshot;
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
@@ -33,19 +34,20 @@ Deno.serve(async (request) => {
   );
   const { data, error } = await service.rpc(
     "list_due_daily_summary_recipients",
-    { p_limit: 100 },
+    { p_limit: 5000 },
   );
   if (error) return json({ error: error.message }, 500);
 
   let queued = 0;
   let skipped = 0;
-  for (const recipient of (data ?? []) as DueRecipient[]) {
+  let noInsights = 0;
+  for (const company of (data ?? []) as DueCompany[]) {
     const idempotencyKey =
-      `daily-summary:${recipient.recipient_id}:${recipient.local_date}`;
+      `daily-summary:${company.company_id}:${company.local_date}`;
     const { data: existing } = await service
       .from("notification_events")
       .select("id")
-      .eq("company_id", recipient.company_id)
+      .eq("company_id", company.company_id)
       .eq("idempotency_key", idempotencyKey)
       .maybeSingle();
     if (existing) {
@@ -56,26 +58,37 @@ Deno.serve(async (request) => {
     try {
       const snapshot = await gatherCompanySnapshot(
         service,
-        recipient.organization_id,
-        recipient.local_date,
+        company.organization_id,
+        company.local_date,
       );
-      const summary = await generateSummary(snapshot, recipient.local_date);
+      const summary = hasDailySummaryInsights(snapshot)
+        ? await generateSummary(snapshot, company.local_date)
+        : await getTrialFallbackSummary(
+          service,
+          company.company_id,
+          company.local_date,
+        );
+
+      if (!summary) {
+        noInsights += 1;
+        continue;
+      }
+
       const { data: result, error: queueError } = await service.rpc(
         "queue_notification_event",
         {
-          p_company_id: recipient.company_id,
+          p_company_id: company.company_id,
           p_event_type: "requested_daily_summary",
           p_source_type: "daily_summary",
-          p_source_record_id: recipient.local_date,
+          p_source_record_id: company.local_date,
           p_idempotency_key: idempotencyKey,
           p_payload: {
-            summary_date: formatDate(recipient.local_date),
+            summary_date: formatDate(company.local_date),
             headline: summary.headline,
             summary: summary.summary,
           },
           p_notification_key: "requested_daily_summary",
           p_scheduled_at: new Date().toISOString(),
-          p_recipient_id: recipient.recipient_id,
         },
       );
       if (queueError) throw new Error(queueError.message);
@@ -85,15 +98,37 @@ Deno.serve(async (request) => {
       );
     } catch (summaryError) {
       console.error("Daily summary generation failed", {
-        companyId: recipient.company_id,
-        recipientId: recipient.recipient_id,
+        companyId: company.company_id,
+        organizationId: company.organization_id,
         message: safeMessage(summaryError),
       });
     }
   }
 
-  return json({ processed: data?.length ?? 0, queued, skipped });
+  return json({
+    processed: data?.length ?? 0,
+    queued,
+    skipped,
+    no_insights: noInsights,
+  });
 });
+
+async function getTrialFallbackSummary(
+  service: ReturnType<typeof createClient>,
+  companyId: string,
+  localDate: string,
+): Promise<DailySummaryMessage | null> {
+  const { data, error } = await service
+    .from("company_subscriptions")
+    .select("status, trial_ends_at")
+    .eq("company_id", companyId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!isActiveTrial(data as TrialSubscription | null)) return null;
+
+  return chooseDailyTrialFallback(companyId, localDate);
+}
 
 async function gatherCompanySnapshot(
   service: ReturnType<typeof createClient>,

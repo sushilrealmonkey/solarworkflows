@@ -278,6 +278,7 @@ function emptyTemplateItem(): QuotationMaterialItem {
     hsn_code: "",
     description: "",
     brand: "",
+    model_number: "",
     specification: "",
     make_specification: "",
     quantity: "",

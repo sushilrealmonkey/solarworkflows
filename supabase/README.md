@@ -73,8 +73,7 @@ recovery, signup, and email-change messages share this project-wide quota.
 
 Tenant lifecycle, billing, requested daily-summary, security, and optional
 marketing notifications use the separate notification queue. Deploy
-`notification-settings`, `process-notifications`, and
-`process-daily-summaries`. Production sending remains disabled while
+`process-notifications` and `process-daily-summaries`. Production sending remains disabled while
 `NOTIFICATION_TEST_MODE=true`; only numbers in
 `NOTIFICATION_TEST_RECIPIENTS` can be claimed.
 
@@ -113,10 +112,15 @@ npx supabase functions deploy process-trial-signups --no-verify-jwt
 Run `supabase/tests/trial_signup_notification_test.sql` after applying the
 migration.
 
-## 14-day trial outreach
+## Behavior-driven trial engagement
 
-The `trial_outreach_enrollments`, `trial_outreach_touchpoints`, and
-`trial_outreach_interactions` tables power the behavior-based activation queue.
+The `trial_outreach_enrollments`, `trial_outreach_touchpoints`,
+`trial_outreach_interactions`, and `portal_activity_events` tables power the
+behavior-based activation queue. The worker uses portal sessions, navigation,
+safe client errors, setup, enquiries, follow-ups, products, quotations, team
+invites, intent, and recent activity to create only relevant interventions.
+The exact rules, delivery safeguards, and staff workflow are documented in
+`docs/trial-engagement-flow.md`.
 Deploy `process-trial-outreach` with JWT verification disabled and set
 `TRIAL_OUTREACH_WORKER_SECRET`, `RESEND_API_KEY`,
 `TRIAL_REMINDER_FROM_EMAIL`, and `APP_BASE_URL`. Keep

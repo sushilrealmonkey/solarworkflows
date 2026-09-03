@@ -28,6 +28,8 @@ import {
   fetchSettingsStaff,
   resendStaffInvite,
   uploadCompanyLogo,
+  uploadCompanyUpiQrCode,
+  setOrganizationUpiQrCode,
   updateOrganizationSettings,
   updateStaff,
 } from "./settingsApi";
@@ -47,10 +49,11 @@ import {
   validateStaffForm,
 } from "./settingsUtils";
 import { CompanyLogoUploader } from "./CompanyLogoUploader";
-import { NotificationPreferencesSection } from "./NotificationPreferencesSection";
+import { CompanyUpiQrCodeUploader } from "./CompanyUpiQrCodeUploader";
 import { BillingInvoicesSection } from "./BillingInvoicesSection";
 import { BillingPlansSection } from "../billing/BillingPlansPage";
 import { QuotationTemplateSection } from "./QuotationTemplateSection";
+import { QuotationPackagesSection } from "../quotation-packages/QuotationPackagesSection";
 
 type StaffFormState = {
   mode: "create" | "edit";
@@ -61,15 +64,15 @@ type StaffFormState = {
 type SettingsTabId =
   | "company-profile"
   | "quotation-template"
+  | "quotation-packages"
   | "staff-management"
-  | "whatsapp-message"
   | "billing-invoices";
 
 const settingsTabs = [
   { id: "company-profile", label: "Company Profile" },
   { id: "quotation-template", label: "Quotation Template" },
+  { id: "quotation-packages", label: "Quotation Packages" },
   { id: "staff-management", label: "Staff Management" },
-  { id: "whatsapp-message", label: "WhatsApp Message" },
   { id: "billing-invoices", label: "Billing & Invoices" },
 ] satisfies ReadonlyArray<{ id: SettingsTabId; label: string }>;
 
@@ -142,6 +145,16 @@ export function SettingsPage() {
       <OrganizationSettingsPage activeTab={activeTab} readOnly={readOnly} />
 
       <section
+        aria-labelledby="settings-tab-quotation-packages"
+        className="scroll-mt-24 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-6"
+        hidden={activeTab !== "quotation-packages"}
+        id="settings-panel-quotation-packages"
+        role="tabpanel"
+      >
+        <QuotationPackagesSection readOnly={readOnly} />
+      </section>
+
+      <section
         aria-labelledby="settings-tab-staff-management"
         className="scroll-mt-24"
         hidden={activeTab !== "staff-management"}
@@ -149,16 +162,6 @@ export function SettingsPage() {
         role="tabpanel"
       >
         <StaffManagementPage readOnly={readOnly} reductionOnly={canReduceSeats} />
-      </section>
-
-      <section
-        aria-labelledby="settings-tab-whatsapp-message"
-        className="scroll-mt-24"
-        hidden={activeTab !== "whatsapp-message"}
-        id="settings-panel-whatsapp-message"
-        role="tabpanel"
-      >
-        <NotificationPreferencesSection readOnly={readOnly} />
       </section>
 
       <section
@@ -335,6 +338,14 @@ export function OrganizationSettingsPage({
     showToast("Company logo updated.", "success");
   }
 
+  async function handleUpiQrCodeUpload(qrCode: File) {
+    const publicUrl = await uploadCompanyUpiQrCode(profile, qrCode);
+    const updatedSettings = await setOrganizationUpiQrCode(publicUrl);
+    setValues(organizationSettingsToForm(updatedSettings));
+    await refresh();
+    showToast("UPI payment QR code updated.", "success");
+  }
+
   if (loading) {
     return <LoadingSkeleton />;
   }
@@ -389,6 +400,31 @@ export function OrganizationSettingsPage({
               disabled={saving || readOnly}
               readOnly={readOnly}
               onUpload={handleLogoUpload}
+            />
+          </section>
+
+          <section aria-labelledby="upi-qr-code-heading">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3
+                  id="upi-qr-code-heading"
+                  className="text-sm font-semibold text-slate-950"
+                >
+                  UPI payment QR code
+                </h3>
+                <p className="mt-0.5 text-xs leading-5 text-slate-500">
+                  Add a QR code customers can scan from your quotation to pay your company.
+                </p>
+              </div>
+              <span className="hidden rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 sm:inline-flex">
+                Quotation payments
+              </span>
+            </div>
+            <CompanyUpiQrCodeUploader
+              currentUrl={values.upi_qr_code_url}
+              disabled={saving || readOnly}
+              readOnly={readOnly}
+              onUpload={handleUpiQrCodeUpload}
             />
           </section>
 

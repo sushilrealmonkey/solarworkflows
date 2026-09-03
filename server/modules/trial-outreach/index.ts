@@ -25,6 +25,19 @@ type QueueSnapshot = {
   quotation_count: number | string | null;
   site_survey_count: number | string | null;
   project_count: number | string | null;
+  onboarding_status: string | null;
+  onboarding_step: string | null;
+  product_count: number | string | null;
+  enquiry_without_followup_count: number | string | null;
+  login_event_count: number | string | null;
+  team_invite_count: number | string | null;
+  feature_error_count_24h: number | string | null;
+  latest_activity_event: string | null;
+  intent_score: number | string | null;
+  intent_tier: string | null;
+  is_high_intent: boolean;
+  value_reached: boolean;
+  adoption_signal: boolean;
 };
 
 class TrialOutreachApiError extends Error {
@@ -88,9 +101,26 @@ export async function handleTrialOutreachRequest(request: Request) {
     return ok({ error: "Method not allowed" }, 405);
   } catch (error) {
     if (error instanceof TrialOutreachApiError) return ok({ error: error.message }, error.status);
+    if (isMissingBehaviorOutreachSchema(error)) {
+      return ok(
+        {
+          error: "Trial outreach is not set up for this project yet. Apply the behavior-driven trial engagement database migration, then refresh this page.",
+        },
+        503,
+      );
+    }
     console.error("Trial outreach API error", error instanceof Error ? error.message : error);
     return ok({ error: "Trial outreach request failed" }, 500);
   }
+}
+
+function isMissingBehaviorOutreachSchema(error: unknown) {
+  if (!error || typeof error !== "object") return false;
+  const details = error as { code?: unknown; message?: unknown };
+  return details.code === "PGRST202" &&
+    typeof details.message === "string" &&
+    (details.message.includes("get_trial_outreach_behavior_snapshots") ||
+      details.message.includes("trial_outreach_behavior_dashboard_summary"));
 }
 
 async function requirePlatformAccess(request: Request) {
@@ -121,12 +151,12 @@ async function requirePlatformAccess(request: Request) {
 
 async function queue(url: URL) {
   const client = getServerSupabaseClient();
-  const { data: snapshotData, error: snapshotError } = await client.rpc("get_trial_outreach_snapshots", { p_company_id: null });
+  const { data: snapshotData, error: snapshotError } = await client.rpc("get_trial_outreach_behavior_snapshots", { p_company_id: null });
   if (snapshotError) throw snapshotError;
 
   const { data: touchpointData, error: touchpointError } = await client
     .from("trial_outreach_touchpoints")
-    .select("id,company_id,enrollment_id,sequence_day,touchpoint_key,channel,status,scheduled_at,assigned_to_profile_id,attempt_count,outcome,failure_message")
+    .select("id,company_id,enrollment_id,sequence_day,touchpoint_key,trigger_key,channel,priority,reason,status,scheduled_at,assigned_to_profile_id,attempt_count,outcome,failure_message")
     .order("scheduled_at", { ascending: true });
   if (touchpointError) throw touchpointError;
 
@@ -157,7 +187,7 @@ async function queue(url: URL) {
   const companies = snapshots.filter((snapshot) => Boolean(snapshot.enrollment_id)).map((snapshot) => {
     const companyTouchpoints = touchpointsByCompany.get(snapshot.company_id) ?? [];
     const nextTouchpoint = companyTouchpoints.find((touchpoint) => ["queued", "due", "processing"].includes(touchpoint.status));
-    const dueCall = companyTouchpoints.find((touchpoint) => touchpoint.channel === "call" && touchpoint.status === "due");
+    const dueTask = companyTouchpoints.find((touchpoint) => ["call", "support"].includes(touchpoint.channel) && touchpoint.status === "due");
     return {
       ...snapshot,
       trial_day: Math.max(1, Math.min(14, Math.floor((now - new Date(snapshot.trial_started_at).getTime()) / 86400000) + 1)),
@@ -170,15 +200,22 @@ async function queue(url: URL) {
       next_touchpoint: nextTouchpoint ? {
         id: nextTouchpoint.id,
         key: nextTouchpoint.touchpoint_key,
+        trigger_key: nextTouchpoint.trigger_key,
         channel: nextTouchpoint.channel,
         status: nextTouchpoint.status,
         scheduled_at: nextTouchpoint.scheduled_at,
+        priority: nextTouchpoint.priority,
+        reason: nextTouchpoint.reason,
       } : null,
-      due_call: dueCall ? {
-        id: dueCall.id,
-        assigned_to_profile_id: dueCall.assigned_to_profile_id,
-        assigned_to_name: dueCall.assigned_to_profile_id ? staffById.get(dueCall.assigned_to_profile_id) ?? null : null,
-        outcome: dueCall.outcome,
+      due_task: dueTask ? {
+        id: dueTask.id,
+        channel: dueTask.channel,
+        key: dueTask.touchpoint_key,
+        priority: dueTask.priority,
+        reason: dueTask.reason,
+        assigned_to_profile_id: dueTask.assigned_to_profile_id,
+        assigned_to_name: dueTask.assigned_to_profile_id ? staffById.get(dueTask.assigned_to_profile_id) ?? null : null,
+        outcome: dueTask.outcome,
       } : null,
     };
   }).filter((company) => {
@@ -191,7 +228,7 @@ async function queue(url: URL) {
       const day = Math.max(1, Math.min(14, Math.floor((now - new Date(company.trial_started_at).getTime()) / 86400000) + 1));
       if (day !== requestedDay) return false;
     }
-    if (dueOnly && !company.due_call) return false;
+    if (dueOnly && !company.due_task) return false;
     return true;
   });
 
@@ -200,23 +237,34 @@ async function queue(url: URL) {
 
 async function company(companyId: string) {
   const client = getServerSupabaseClient();
-  const [snapshotResult, touchpointResult, interactionResult] = await Promise.all([
-    client.rpc("get_trial_outreach_snapshots", { p_company_id: companyId }),
+  const [snapshotResult, touchpointResult, interactionResult, activityResult] = await Promise.all([
+    client.rpc("get_trial_outreach_behavior_snapshots", { p_company_id: companyId }),
     client.from("trial_outreach_touchpoints")
-      .select("id,company_id,enrollment_id,sequence_day,touchpoint_key,channel,status,scheduled_at,claimed_at,sent_at,completed_at,assigned_to_profile_id,attempt_count,provider_message_id,failure_code,failure_message,outcome,metadata")
+      .select("id,company_id,enrollment_id,sequence_day,touchpoint_key,trigger_key,channel,priority,reason,status,scheduled_at,claimed_at,sent_at,completed_at,assigned_to_profile_id,recipient_profile_id,attempt_count,provider_message_id,failure_code,failure_message,outcome,metadata")
       .eq("company_id", companyId)
       .order("scheduled_at", { ascending: true }),
     client.from("trial_outreach_interactions")
       .select("id,company_id,enrollment_id,touchpoint_id,channel,interaction_type,outcome,blocker,notes,recorded_by_profile_id,metadata,occurred_at,created_at")
       .eq("company_id", companyId)
       .order("occurred_at", { ascending: false }),
+    client.from("portal_activity_events")
+      .select("id,company_id,organization_id,user_profile_id,event_key,event_category,module,route,source,metadata,occurred_at")
+      .eq("company_id", companyId)
+      .order("occurred_at", { ascending: false })
+      .limit(30),
   ]);
   if (snapshotResult.error) throw snapshotResult.error;
   if (touchpointResult.error) throw touchpointResult.error;
   if (interactionResult.error) throw interactionResult.error;
+  if (activityResult.error) throw activityResult.error;
   const snapshot = snapshotResult.data?.[0] ?? null;
   if (!snapshot) throw new TrialOutreachApiError(404, "Trial outreach enrollment was not found");
-  return { snapshot, touchpoints: touchpointResult.data ?? [], interactions: interactionResult.data ?? [] };
+  return {
+    snapshot,
+    touchpoints: touchpointResult.data ?? [],
+    interactions: interactionResult.data ?? [],
+    activities: activityResult.data ?? [],
+  };
 }
 
 async function dashboard(accessToken: string) {
@@ -224,7 +272,7 @@ async function dashboard(accessToken: string) {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const { data, error } = await client.rpc("trial_outreach_dashboard_summary", {
+  const { data, error } = await client.rpc("trial_outreach_behavior_dashboard_summary", {
     report_start: formatDate(start),
     report_end: formatDate(end),
   });
@@ -249,6 +297,7 @@ async function claimTouchpoint(id: string, profileId: string) {
     .from("trial_outreach_touchpoints")
     .update({ assigned_to_profile_id: profileId, status: "due" })
     .eq("id", id)
+    .in("channel", ["call", "support"])
     .in("status", ["queued", "due"])
     .select("id,assigned_to_profile_id,status")
     .maybeSingle();

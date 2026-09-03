@@ -3,6 +3,12 @@
 Notable project changes should be recorded here in reverse chronological order.
 Keep entries short and factual.
 
+## 2026-09-03
+
+- Added rotating positive WhatsApp fallback messages for active 14-day trials
+  with no daily operational insights, including short Hinglish options; empty
+  snapshots no longer call OpenAI.
+
 ## 2026-09-01 (current worktree)
 
 - Restored the WhatsApp daily-summary cron worker and made it automatically

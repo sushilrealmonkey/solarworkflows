@@ -14,6 +14,25 @@ export type PaymentStatus = "received" | "failed" | "cancelled";
 
 export type ProjectPaymentStatus = "pending" | "partial" | "paid" | "overdue";
 
+export type PaymentDueStatus = "pending" | "partial" | "due_today" | "overdue";
+
+export type PaymentDueSourceType = "project" | "b2b_sale";
+
+export type PaymentDueItem = {
+  source_type: PaymentDueSourceType;
+  source_id: string;
+  organization_id: string;
+  source_code: string | null;
+  source_name: string | null;
+  customer_name: string | null;
+  payment_due_on: string;
+  total_amount: number | null;
+  amount_received: number | null;
+  balance_due: number | null;
+  payment_status: PaymentDueStatus;
+  days_overdue: number | null;
+};
+
 export type Payment = {
   id: string;
   organization_id: string;

@@ -44,6 +44,7 @@ export function emptyB2BSaleForm(): B2BSaleFormValues {
     delivery_address: "",
     gst_number: "",
     sale_date: todayInput(),
+    payment_due_on: "",
     notes: "",
     items: [emptyB2BSaleItem()],
   };
@@ -59,6 +60,7 @@ export function saleToForm(
     delivery_address: sale.delivery_address ?? "",
     gst_number: sale.gst_number ?? "",
     sale_date: sale.sale_date ?? todayInput(),
+    payment_due_on: sale.payment_due_on ?? "",
     notes: sale.notes ?? "",
     items:
       items.length > 0

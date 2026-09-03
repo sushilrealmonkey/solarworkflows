@@ -17,6 +17,7 @@ export type B2BSale = {
   gst_number: string | null;
   sale_date: string | null;
   dispatch_date: string | null;
+  payment_due_on: string | null;
   status: B2BSaleStatus | null;
   base_amount: number | null;
   gst_amount: number | null;
@@ -118,6 +119,7 @@ export type B2BSaleFormValues = {
   delivery_address: string;
   gst_number: string;
   sale_date: string;
+  payment_due_on: string;
   notes: string;
   items: B2BSaleFormItem[];
 };

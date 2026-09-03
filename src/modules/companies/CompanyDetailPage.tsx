@@ -418,7 +418,17 @@ export function CompanyDetailPage() {
       <DetailSection title="Primary EPC Admin">
         <DetailItem label="Full Name" value={company.admin?.full_name} />
         <DetailItem label="Email" value={company.admin?.email} />
-        <DetailItem label="Phone" value={company.admin?.phone} />
+        <DetailItem label="WhatsApp Number" value={company.admin?.phone} />
+        <DetailItem
+          label="WhatsApp Verification"
+          value={
+            company.admin?.phone
+              ? company.admin.phone_verified
+                ? "Verified"
+                : "Unverified"
+              : "Missing"
+          }
+        />
         <DetailItem label="Profile Status" value={labelize(company.admin?.status)} />
         <DetailItem
           label="Auth Link"
@@ -755,8 +765,10 @@ function CompanyEditModal({
         value={editState.values.admin_email}
       />
       <TextInput
-        label="Primary Admin Phone"
+        label="Primary Admin WhatsApp Number"
         onChange={(value) => update("admin_phone", value)}
+        required
+        type="tel"
         value={editState.values.admin_phone}
       />
     </Modal>

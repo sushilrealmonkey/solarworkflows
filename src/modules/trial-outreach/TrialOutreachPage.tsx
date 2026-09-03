@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { PageLoader } from "../../components/PageLoader";
@@ -22,7 +23,7 @@ import type {
 
 type QueueRow = TrialEngagementSnapshot;
 
-const inputClass = "w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-orange-500 focus:ring-2 focus:ring-orange-100";
+const inputClass = "mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100";
 
 export function TrialOutreachPage() {
   const { profile } = useAuth();
@@ -38,7 +39,6 @@ export function TrialOutreachPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-
   const canAccess = Boolean(profile?.is_super_admin || profile?.platform_role === "backend_staff");
 
   const load = useCallback(async () => {
@@ -69,26 +69,29 @@ export function TrialOutreachPage() {
       return;
     }
     let cancelled = false;
+    setDetail(null);
     setDetailLoading(true);
     void fetchTrialOutreachCompany(selectedCompanyId)
       .then((value) => {
         if (!cancelled) setDetail(value);
       })
       .catch((nextError) => {
-        if (!cancelled) showToast(nextError instanceof Error ? nextError.message : "Unable to load company outreach.", "error");
+        if (!cancelled) showToast(nextError instanceof Error ? nextError.message : "Unable to load workspace details.", "error");
       })
       .finally(() => {
         if (!cancelled) setDetailLoading(false);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCompanyId, showToast]);
 
-  async function refreshAfter(action: () => Promise<unknown>, message: string) {
+  async function runAction(action: () => Promise<unknown>, message: string) {
     try {
       setBusy(message);
       await action();
       await load();
-      if (selectedCompanyId) setDetail((await fetchTrialOutreachCompany(selectedCompanyId)));
+      if (selectedCompanyId) setDetail(await fetchTrialOutreachCompany(selectedCompanyId));
       showToast(message, "success");
     } catch (nextError) {
       showToast(nextError instanceof Error ? nextError.message : "Trial outreach action failed.", "error");
@@ -102,100 +105,105 @@ export function TrialOutreachPage() {
   }
 
   const metrics: Array<[string, number | string | null | undefined]> = [
-    ["Enrolled this month", dashboard?.enrolled_count],
-    ["No login", dashboard?.no_login_count],
-    ["No first value", dashboard?.no_first_value_count],
-    ["Calls due today", dashboard?.calls_due_today_count],
-    ["First value by day 7", dashboard?.first_value_day_7_count],
-    ["Converted", dashboard?.converted_count],
-    ["Replies", dashboard?.replies_count],
-    ["Delivery failures", dashboard?.failed_delivery_count],
+    ["Active trials", dashboard?.active_trial_count],
+    ["Interventions due", dashboard?.interventions_due_count],
+    ["No login in 24h", dashboard?.no_login_24h_count],
+    ["Setup stalled", dashboard?.setup_stalled_count],
+    ["No enquiry", dashboard?.no_enquiry_count],
+    ["Inactive 48h", dashboard?.inactive_48h_count],
+    ["High intent", dashboard?.high_intent_count],
+    ["Value reached", dashboard?.value_reached_count],
+    ["Team adoption", dashboard?.adoption_signal_count],
+    ["Conversion tasks", dashboard?.conversion_tasks_due_count],
+    ["Rescue tasks", dashboard?.rescue_tasks_due_count],
+    ["Support escalations", dashboard?.support_escalation_count],
   ];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <PageHeader title="Trial Outreach" description="Help trial workspaces reach their first useful solar workflow before the 14-day trial ends." />
+        <PageHeader title="Trial Engagement" description="Review complete trial behavior and take the next best engagement action." />
         <button className="rounded-lg border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-sm hover:border-orange-400 disabled:opacity-60" disabled={loading} onClick={() => void load()} type="button">{loading ? "Refreshing…" : "Refresh"}</button>
       </div>
-
       {error ? <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</div> : null}
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map(([label, value]) => <MetricCard key={label} label={label} value={numberValue(value)} />)}
-      </section>
-
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(([label, value]) => <MetricCard key={label} label={label} value={numberValue(value)} />)}</section>
       <section className="grid gap-3 rounded-xl border border-stone-200 bg-white p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_15rem_auto] md:items-end">
-        <label className="text-sm font-semibold text-slate-700">Search company or contact<input className={`${inputClass} mt-1 font-normal`} onChange={(event) => setSearch(event.target.value)} placeholder="Company, name, phone, email" value={search} /></label>
-        <label className="text-sm font-semibold text-slate-700">Engagement state<select className={`${inputClass} mt-1 font-normal`} onChange={(event) => setStateFilter(event.target.value)} value={stateFilter}><option value="">All states</option><option value="never_started">Never started</option><option value="started_stalled">Started, stalled</option><option value="activated_inactive">Activated, inactive</option><option value="engaged">Engaged</option><option value="converted">Converted</option><option value="expired">Expired</option></select></label>
-        <label className="flex items-center gap-2 pb-2 text-sm font-semibold text-slate-700"><input checked={dueOnly} onChange={(event) => setDueOnly(event.target.checked)} type="checkbox" />Calls due today</label>
+        <label className="text-sm font-semibold text-slate-700">Search company or contact<input className={inputClass} onChange={(event) => setSearch(event.target.value)} placeholder="Company, name, phone, email" value={search} /></label>
+        <label className="text-sm font-semibold text-slate-700">Engagement state<select className={inputClass} onChange={(event) => setStateFilter(event.target.value)} value={stateFilter}><option value="">All states</option><option value="never_started">Never started</option><option value="started_stalled">Started, stalled</option><option value="activated_inactive">Activated, inactive</option><option value="engaged">Engaged</option><option value="converted">Converted</option><option value="expired">Expired</option></select></label>
+        <label className="flex items-center gap-2 pb-2 text-sm font-semibold text-slate-700"><input checked={dueOnly} onChange={(event) => setDueOnly(event.target.checked)} type="checkbox" />Tasks due now</label>
       </section>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)]">
-        <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
-          <div className="border-b border-stone-200 px-4 py-4"><h2 className="font-semibold text-slate-950">Activation queue</h2><p className="mt-1 text-sm text-slate-600">{rows.length} workspace{rows.length === 1 ? "" : "s"} match the current filters.</p></div>
-          {loading ? <PageLoader label="Loading trial outreach queue…" /> : rows.length === 0 ? <div className="p-6 text-sm text-slate-500">No trial workspaces match these filters.</div> : (
-            <>
-              <div className="divide-y divide-stone-200 md:hidden">{rows.map((row) => <QueueCard key={row.company_id} row={row} selected={row.company_id === selectedCompanyId} onSelect={() => setSelectedCompanyId(row.company_id)} />)}</div>
-              <div className="hidden overflow-x-auto md:block"><table className="min-w-[920px] w-full text-left text-sm"><thead className="bg-stone-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Company</th><th className="px-4 py-3">Trial</th><th className="px-4 py-3">State</th><th className="px-4 py-3">First value</th><th className="px-4 py-3">Next touch</th><th className="px-4 py-3" /></tr></thead><tbody className="divide-y divide-stone-200">{rows.map((row) => <QueueTableRow key={row.company_id} row={row} selected={row.company_id === selectedCompanyId} onSelect={() => setSelectedCompanyId(row.company_id)} />)}</tbody></table></div>
-            </>
-          )}
-        </section>
-
-        <DetailPanel detail={detail} loading={detailLoading} busy={busy} onAction={refreshAfter} />
-      </div>
+      <section className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-2 border-b border-stone-200 px-4 py-4 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="font-semibold text-slate-950">Behavior queue</h2><p className="mt-1 text-sm text-slate-600">{rows.length} workspace{rows.length === 1 ? "" : "s"} match the current filters. Click a row to view every detail.</p></div><p className="text-xs text-slate-500">Scroll horizontally on smaller screens to see all columns.</p></div>
+        {loading ? <PageLoader label="Loading trial outreach queue…" /> : rows.length === 0 ? <div className="p-6 text-sm text-slate-500">No trial workspaces match these filters.</div> : <div className="overflow-x-auto"><table className="min-w-[1420px] w-full text-left text-sm"><thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Company & contact</th><th className="px-4 py-3">Trial</th><th className="px-4 py-3">State</th><th className="px-4 py-3">Activity</th><th className="px-4 py-3">Intent</th><th className="px-4 py-3">Next intervention</th><th className="px-4 py-3">Last activity</th><th className="px-4 py-3"><span className="sr-only">Open details</span></th></tr></thead><tbody className="divide-y divide-stone-200">{rows.map((row) => <QueueTableRow key={row.company_id} onSelect={() => setSelectedCompanyId(row.company_id)} row={row} selected={row.company_id === selectedCompanyId} />)}</tbody></table></div>}
+      </section>
+      <TrialOutreachModal busy={busy} detail={detail} loading={detailLoading} onAction={runAction} onClose={() => setSelectedCompanyId(null)} open={Boolean(selectedCompanyId)} />
     </div>
   );
 }
 
-function DetailPanel({ detail, loading, busy, onAction }: { detail: TrialOutreachCompanyDetail | null; loading: boolean; busy: string | null; onAction: (action: () => Promise<unknown>, message: string) => Promise<void> }) {
+function TrialOutreachModal({ busy, detail, loading, onAction, onClose, open }: { busy: string | null; detail: TrialOutreachCompanyDetail | null; loading: boolean; onAction: (action: () => Promise<unknown>, message: string) => Promise<void>; onClose: () => void; open: boolean }) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose, open]);
+  if (!open) return null;
+  const snapshot = detail?.snapshot;
+  const title = snapshot?.company_name ?? (loading ? "Loading workspace" : "Workspace details");
+  const contact = snapshot ? [snapshot.contact_name, snapshot.contact_phone ?? snapshot.contact_email].filter(Boolean).join(" · ") : "Behavior, evidence, interventions, and history";
+  return createPortal(<div className="fixed inset-0 z-[80] flex items-end justify-center bg-slate-950/50 p-0 sm:items-center sm:p-4" onMouseDown={onClose}><section aria-labelledby="trial-outreach-detail-title" aria-modal="true" className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-stone-200 bg-stone-50 shadow-2xl sm:max-w-6xl sm:rounded-2xl" onMouseDown={(event) => event.stopPropagation()} role="dialog"><header className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-stone-200 bg-white px-4 py-4 sm:px-6"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Trial workspace</p><h2 className="mt-1 truncate text-xl font-semibold text-slate-950 sm:text-2xl" id="trial-outreach-detail-title">{title}</h2><p className="mt-1 truncate text-sm text-slate-600">{contact}</p></div><button aria-label="Close workspace details" className="inline-flex size-10 shrink-0 items-center justify-center rounded-full text-2xl leading-none text-slate-500 hover:bg-stone-100 hover:text-slate-950" onClick={onClose} type="button">×</button></header><div className="p-4 sm:p-6">{loading ? <PageLoader label="Loading workspace details…" /> : detail ? <DetailBody busy={busy} detail={detail} onAction={onAction} /> : <p className="rounded-xl border border-stone-200 bg-white p-5 text-sm text-slate-600">Workspace details are unavailable.</p>}</div></section></div>, document.body);
+}
+
+function DetailBody({ busy, detail, onAction }: { busy: string | null; detail: TrialOutreachCompanyDetail; onAction: (action: () => Promise<unknown>, message: string) => Promise<void> }) {
   const [outcome, setOutcome] = useState("connected");
   const [blocker, setBlocker] = useState("setup");
   const [notes, setNotes] = useState("");
   const [rescheduleAt, setRescheduleAt] = useState("");
-  const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const dueCall = detail?.touchpoints.find((touchpoint) => touchpoint.channel === "call" && touchpoint.status === "due") ?? null;
-    setSelectedCallId(dueCall?.id ?? null);
-    setNotes("");
-    setRescheduleAt(dueCall ? toDateTimeInput(dueCall.scheduled_at) : "");
-  }, [detail]);
-
-  if (loading) return <section className="rounded-xl border border-stone-200 bg-white p-5 shadow-sm"><PageLoader label="Loading outreach timeline…" /></section>;
-  if (!detail) return <section className="rounded-xl border border-dashed border-stone-300 bg-white p-6 text-sm text-slate-500">Select a workspace to review its progress, touchpoints, and call history.</section>;
-
   const { snapshot } = detail;
-  const call = selectedCallId ? detail.touchpoints.find((touchpoint) => touchpoint.id === selectedCallId) : null;
+  const task = detail.touchpoints.find((touchpoint) => ["call", "support"].includes(touchpoint.channel) && touchpoint.status === "due") ?? null;
   const paused = snapshot.enrollment_status === "paused";
   const terminal = ["converted", "expired", "opted_out", "completed"].includes(snapshot.enrollment_status ?? "");
-
-  return <section className="space-y-4 rounded-xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
-    <div><p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Selected workspace</p><h2 className="mt-1 text-xl font-semibold text-slate-950">{snapshot.company_name ?? "Unnamed company"}</h2><p className="mt-1 text-sm text-slate-600">{snapshot.contact_name ?? "No contact"} · {snapshot.contact_phone ?? snapshot.contact_email ?? "No contact details"}</p></div>
-    <div className="grid grid-cols-2 gap-3"><MiniMetric label="Trial day" value={`${snapshot.trial_day}/14`} /><MiniMetric label="Remaining" value={`${snapshot.days_remaining}d`} /><MiniMetric label="State" value={labelize(snapshot.engagement_state)} /><MiniMetric label="First value" value={snapshot.first_value_reached ? labelize(snapshot.first_value_kind) : "Not yet"} /></div>
-    <div className="rounded-lg border border-orange-100 bg-orange-50 p-3 text-sm text-slate-700"><p className="font-semibold text-slate-950">First-value progress</p><p className="mt-1">{snapshot.first_value_progress.input_count} lead/customer record{snapshot.first_value_progress.input_count === 1 ? "" : "s"} · {snapshot.first_value_progress.workflow_count} workflow record{snapshot.first_value_progress.workflow_count === 1 ? "" : "s"}</p><p className="mt-1 text-xs text-slate-600">Last activity: {formatDisplayDateTime(snapshot.last_activity_at)}</p></div>
-    <div className="flex flex-wrap gap-2"><button className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50" disabled={!snapshot.enrollment_id || Boolean(busy)} onClick={() => snapshot.enrollment_id && void onAction(() => updateTrialOutreachEnrollment(snapshot.enrollment_id!, paused ? "resume" : "pause"), paused ? "Outreach resumed." : "Outreach paused.")} type="button">{paused ? "Resume outreach" : "Pause outreach"}</button><button className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50" disabled={terminal || Boolean(busy)} onClick={() => snapshot.enrollment_id && void onAction(() => updateTrialOutreachEnrollment(snapshot.enrollment_id!, "stop"), "Outreach stopped.")} type="button">Stop outreach</button></div>
-
-    {call ? <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3"><div><p className="font-semibold text-blue-950">Call due</p><p className="mt-1 text-sm text-blue-900">{typeof call.metadata?.call_script === "string" ? call.metadata.call_script : "Help the client complete one real workflow."}</p></div><button className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={Boolean(busy)} onClick={() => void onAction(() => claimTrialOutreachCall(call.id), "Call task claimed.")} type="button">Claim call</button><select className={inputClass} onChange={(event) => setOutcome(event.target.value)} value={outcome}><option value="connected">Connected</option><option value="no_answer">No answer</option><option value="requested_callback">Requested callback</option><option value="wrong_number">Wrong number</option><option value="do_not_contact">Do not contact</option></select><select className={inputClass} onChange={(event) => setBlocker(event.target.value)} value={blocker}><option value="setup">Setup</option><option value="time">No time</option><option value="unclear_next_step">Unclear next step</option><option value="technical_issue">Technical issue</option><option value="pricing">Pricing</option><option value="other">Other</option></select><textarea className={`${inputClass} min-h-20`} onChange={(event) => setNotes(event.target.value)} placeholder="Call notes" value={notes} /><button className="rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={Boolean(busy)} onClick={() => void onAction(() => recordTrialOutreachOutcome(call.id, { outcome, blocker, notes }), "Call outcome saved.")} type="button">Save call outcome</button><div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end"><label className="text-xs font-semibold text-blue-950">Reschedule<input className={`${inputClass} mt-1`} onChange={(event) => setRescheduleAt(event.target.value)} type="datetime-local" value={rescheduleAt} /></label><button className="rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-900 disabled:opacity-50" disabled={!rescheduleAt || Boolean(busy)} onClick={() => void onAction(() => rescheduleTrialOutreachTouchpoint(call.id, new Date(rescheduleAt).toISOString()), "Call rescheduled.")} type="button">Reschedule</button></div></div> : null}
-
-    {!terminal && snapshot.enrollment_id ? <div className="space-y-3 rounded-lg border border-stone-200 p-3"><p className="font-semibold text-slate-950">Record blocker</p><select className={inputClass} onChange={(event) => setBlocker(event.target.value)} value={blocker}><option value="setup">Setup</option><option value="time">No time</option><option value="unclear_next_step">Unclear next step</option><option value="technical_issue">Technical issue</option><option value="pricing">Pricing</option><option value="other">Other</option></select><textarea className={`${inputClass} min-h-20`} onChange={(event) => setNotes(event.target.value)} placeholder="What should the team know?" value={notes} /><button className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50" disabled={Boolean(busy)} onClick={() => void onAction(() => recordTrialOutreachBlocker(snapshot.enrollment_id!, { blocker, notes }), "Blocker saved.")} type="button">Save blocker</button></div> : null}
-
-    <div><p className="mb-2 font-semibold text-slate-950">Touchpoint timeline</p><div className="space-y-2">{detail.touchpoints.slice().reverse().slice(0, 8).map((touchpoint) => <div className="flex items-start justify-between gap-3 rounded-lg border border-stone-100 bg-stone-50 p-3 text-sm" key={touchpoint.id}><div><p className="font-medium text-slate-800">Day {touchpoint.sequence_day} · {labelize(touchpoint.touchpoint_key)} · {touchpoint.channel}</p><p className="mt-1 text-xs text-slate-500">{formatDisplayDateTime(touchpoint.scheduled_at)}</p></div><StatusBadge value={touchpoint.status} /></div>)}</div></div>
-    <div><p className="mb-2 font-semibold text-slate-950">Interaction history</p>{detail.interactions.length ? <div className="space-y-2">{detail.interactions.slice(0, 6).map((interaction) => <div className="rounded-lg border border-stone-100 p-3 text-sm" key={interaction.id}><div className="flex items-center justify-between gap-3"><span className="font-medium text-slate-800">{labelize(interaction.interaction_type)}</span><span className="text-xs text-slate-500">{formatDisplayDateTime(interaction.occurred_at)}</span></div>{interaction.blocker ? <p className="mt-1 text-xs text-orange-700">Blocker: {labelize(interaction.blocker)}</p> : null}{interaction.notes ? <p className="mt-1 text-xs text-slate-600">{interaction.notes}</p> : null}</div>)}</div> : <p className="text-sm text-slate-500">No interactions recorded yet.</p>}</div>
-  </section>;
+  useEffect(() => {
+    setNotes("");
+    setRescheduleAt(task ? toDateTimeInput(task.scheduled_at) : "");
+  }, [detail, task]);
+  return <div className="space-y-5">
+    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"><MiniMetric label="Trial day" value={"Day " + snapshot.trial_day + "/14"} /><MiniMetric label="Remaining" value={snapshot.days_remaining + " days"} /><MiniMetric label="State" value={labelize(snapshot.engagement_state)} /><MiniMetric label="Intent score" value={numberValue(snapshot.intent_score) + "/100"} /><MiniMetric label="Intent tier" value={labelize(snapshot.intent_tier)} /><MiniMetric label="Next task" value={task ? labelize(task.channel) : "No task due"} /></section>
+    <section className="rounded-xl border border-orange-100 bg-orange-50 p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-semibold text-slate-950">Behavior evidence</h3><p className="mt-1 text-sm text-slate-600">All key evidence collected for this trial workspace.</p></div><div className="flex flex-wrap gap-2">{snapshot.is_high_intent ? <SignalBadge label="High intent" /> : null}{snapshot.value_reached ? <SignalBadge label="Value reached" /> : null}{snapshot.adoption_signal ? <SignalBadge label="Team adoption" /> : null}</div></div><dl className="mt-4 grid gap-x-5 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"><EvidenceItem label="Subscription" value={labelize(snapshot.subscription_status)} /><EvidenceItem label="Onboarding" value={labelize(snapshot.onboarding_status) + " · " + labelize(snapshot.onboarding_step)} /><EvidenceItem label="First login" value={formatDisplayDateTime(snapshot.first_login_at)} /><EvidenceItem label="Last login" value={formatDisplayDateTime(snapshot.last_login_at)} /><EvidenceItem label="Last activity" value={formatDisplayDateTime(snapshot.last_activity_at)} /><EvidenceItem label="Sessions" value={String(numberValue(snapshot.login_event_count))} /><EvidenceItem label="Enquiries" value={numberValue(snapshot.lead_count) + " total · " + numberValue(snapshot.enquiry_without_followup_count) + " no follow-up"} /><EvidenceItem label="Products" value={String(numberValue(snapshot.product_count))} /><EvidenceItem label="Quotations" value={String(numberValue(snapshot.quotation_count))} /><EvidenceItem label="Customers" value={String(numberValue(snapshot.customer_count))} /><EvidenceItem label="Projects" value={String(numberValue(snapshot.project_count))} /><EvidenceItem label="Team invites" value={String(numberValue(snapshot.team_invite_count))} /><EvidenceItem label="Feature errors, 24h" value={String(numberValue(snapshot.feature_error_count_24h))} /><EvidenceItem label="Trial start" value={formatDisplayDateTime(snapshot.trial_started_at)} /><EvidenceItem label="Trial end" value={formatDisplayDateTime(snapshot.trial_ends_at)} /><EvidenceItem label="Timezone" value={snapshot.timezone} /></dl></section>
+    <section className="grid gap-5 xl:grid-cols-2"><div className="space-y-4 rounded-xl border border-stone-200 bg-white p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><h3 className="font-semibold text-slate-950">Engagement controls</h3><p className="mt-1 text-sm text-slate-600">Manage outreach and record the result of the current task.</p></div><div className="flex flex-wrap gap-2"><button className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50" disabled={!snapshot.enrollment_id || Boolean(busy)} onClick={() => snapshot.enrollment_id && void onAction(() => updateTrialOutreachEnrollment(snapshot.enrollment_id!, paused ? "resume" : "pause"), paused ? "Outreach resumed." : "Outreach paused.")} type="button">{paused ? "Resume outreach" : "Pause outreach"}</button><button className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 disabled:opacity-50" disabled={terminal || Boolean(busy)} onClick={() => snapshot.enrollment_id && void onAction(() => updateTrialOutreachEnrollment(snapshot.enrollment_id!, "stop"), "Outreach stopped.")} type="button">Stop outreach</button></div></div>
+      {task ? <div className="space-y-3 rounded-lg border border-blue-200 bg-blue-50 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-blue-950">{task.channel === "support" ? "Support escalation due" : "Call due"}</p><p className="mt-1 text-sm text-blue-900">{task.reason ?? "Help the client complete one real workflow."}</p></div><StatusBadge value={task.status} /></div><button className="rounded-lg bg-blue-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={Boolean(busy)} onClick={() => void onAction(() => claimTrialOutreachCall(task.id), task.channel === "support" ? "Support task claimed." : "Call task claimed.")} type="button">Claim task</button><div className="grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold text-blue-950">Outcome<select className={inputClass} onChange={(event) => setOutcome(event.target.value)} value={outcome}><option value="connected">Connected</option><option value="no_answer">No answer</option><option value="requested_callback">Requested callback</option><option value="wrong_number">Wrong number</option><option value="do_not_contact">Do not contact</option><option value="resolved">Resolved</option><option value="not_resolved">Not resolved</option></select></label><label className="text-xs font-semibold text-blue-950">Blocker<select className={inputClass} onChange={(event) => setBlocker(event.target.value)} value={blocker}><option value="setup">Setup</option><option value="time">No time</option><option value="unclear_next_step">Unclear next step</option><option value="technical_issue">Technical issue</option><option value="pricing">Pricing</option><option value="other">Other</option></select></label></div><textarea className={inputClass + " min-h-20"} onChange={(event) => setNotes(event.target.value)} placeholder="Task notes" value={notes} /><div className="grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-end"><button className="rounded-lg bg-orange-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={Boolean(busy)} onClick={() => void onAction(() => recordTrialOutreachOutcome(task.id, { outcome, blocker, notes }), "Task outcome saved.")} type="button">Save outcome</button><label className="text-xs font-semibold text-blue-950">Reschedule<input className={inputClass} onChange={(event) => setRescheduleAt(event.target.value)} type="datetime-local" value={rescheduleAt} /></label><button className="rounded-lg border border-blue-300 px-3 py-2 text-sm font-semibold text-blue-900 disabled:opacity-50" disabled={!rescheduleAt || Boolean(busy)} onClick={() => void onAction(() => rescheduleTrialOutreachTouchpoint(task.id, new Date(rescheduleAt).toISOString()), "Task rescheduled.")} type="button">Reschedule</button></div></div> : <p className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-3 text-sm text-slate-600">No call or support task is due right now.</p>}
+      {!terminal && snapshot.enrollment_id ? <div className="space-y-2 rounded-lg border border-stone-200 p-3"><p className="font-semibold text-slate-950">Record blocker</p><textarea className={inputClass + " min-h-20"} onChange={(event) => setNotes(event.target.value)} placeholder="What should the team know?" value={notes} /><button className="rounded-lg border border-stone-300 px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50" disabled={Boolean(busy)} onClick={() => void onAction(() => recordTrialOutreachBlocker(snapshot.enrollment_id!, { blocker, notes }), "Blocker saved.")} type="button">Save blocker</button></div> : null}
+    </div><History title="Portal activity" emptyLabel="No portal activity captured yet.">{detail.activities.map((activity) => <HistoryItem key={activity.id} title={labelize(activity.event_key)} meta={labelize(activity.module) + (activity.route ? " · " + activity.route : "") + " · " + labelize(activity.source)} time={activity.occurred_at} />)}</History></section>
+    <section className="grid gap-5 xl:grid-cols-2"><History title="Intervention timeline" emptyLabel="No interventions have been scheduled yet.">{detail.touchpoints.slice().reverse().map((touchpoint) => <HistoryItem key={touchpoint.id} badge={touchpoint.status} meta={labelize(touchpoint.channel) + " · " + labelize(touchpoint.priority) + " · " + (touchpoint.reason ?? labelize(touchpoint.touchpoint_key))} time={touchpoint.scheduled_at} title={labelize(touchpoint.trigger_key ?? touchpoint.touchpoint_key)} />)}</History><History title="Interaction history" emptyLabel="No interactions recorded yet.">{detail.interactions.map((interaction) => <HistoryItem key={interaction.id} meta={labelize(interaction.channel) + (interaction.outcome ? " · " + labelize(interaction.outcome) : "") + (interaction.blocker ? " · Blocker: " + labelize(interaction.blocker) : "") + (interaction.notes ? " · " + interaction.notes : "")} time={interaction.occurred_at} title={labelize(interaction.interaction_type)} />)}</History></section>
+  </div>;
 }
 
-function QueueCard({ row, selected, onSelect }: { row: QueueRow; selected: boolean; onSelect: () => void }) {
-  return <button className={`w-full p-4 text-left transition ${selected ? "bg-orange-50" : "hover:bg-stone-50"}`} onClick={onSelect} type="button"><div className="flex items-start justify-between gap-3"><div><p className="font-semibold text-slate-950">{row.company_name ?? "Unnamed company"}</p><p className="mt-1 text-sm text-slate-600">{row.contact_name ?? "No contact"} · {row.contact_phone ?? "No phone"}</p></div><StatusBadge value={row.engagement_state} /></div><div className="mt-3 grid grid-cols-3 gap-2 text-xs text-slate-600"><span>Day <strong className="text-slate-950">{row.trial_day}/14</strong></span><span>Left <strong className="text-slate-950">{row.days_remaining}d</strong></span><span>Value <strong className="text-slate-950">{row.first_value_reached ? "Yes" : "No"}</strong></span></div><p className="mt-3 text-xs text-orange-700">{row.due_call ? "Call due today" : row.next_touchpoint ? `${labelize(row.next_touchpoint.key)} · ${formatDisplayDateTime(row.next_touchpoint.scheduled_at)}` : "No next touchpoint"}</p></button>;
+function QueueTableRow({ onSelect, row, selected }: { onSelect: () => void; row: QueueRow; selected: boolean }) {
+  const nextAction = row.due_task ? (row.due_task.channel === "support" ? "Support task" : "Call task") + " · " + labelize(row.due_task.priority) : row.next_touchpoint ? labelize(row.next_touchpoint.trigger_key ?? row.next_touchpoint.key) : "No intervention scheduled";
+  const nextAt = row.next_touchpoint?.scheduled_at ?? null;
+  return <tr aria-label={"Open details for " + (row.company_name ?? "workspace")} className={"cursor-pointer transition focus-visible:bg-orange-50 " + (selected ? "bg-orange-50" : "hover:bg-stone-50")} onClick={onSelect} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect(); } }} tabIndex={0}>
+    <td className="min-w-[250px] px-4 py-4 align-top"><p className="font-semibold text-slate-950">{row.company_name ?? "Unnamed company"}</p><p className="mt-1 text-xs text-slate-600">{row.contact_name ?? "No contact"}{row.contact_phone || row.contact_email ? " · " + (row.contact_phone ?? row.contact_email) : ""}</p></td>
+    <td className="min-w-[115px] px-4 py-4 align-top"><p className="font-semibold text-slate-800">Day {row.trial_day}/14</p><p className="mt-1 text-xs text-slate-500">{row.days_remaining} days left</p></td>
+    <td className="min-w-[145px] px-4 py-4 align-top"><StatusBadge value={row.engagement_state} /><p className="mt-2 text-xs text-slate-500">{labelize(row.enrollment_status)}</p></td>
+    <td className="min-w-[275px] px-4 py-4 align-top"><div className="grid grid-cols-2 gap-x-5 gap-y-2 text-xs text-slate-600"><span>Sessions <strong className="text-slate-950">{numberValue(row.login_event_count)}</strong></span><span>Setup <strong className="text-slate-950">{labelize(row.onboarding_status)}</strong></span><span>Enquiries <strong className="text-slate-950">{numberValue(row.lead_count)}</strong></span><span>No follow-up <strong className="text-slate-950">{numberValue(row.enquiry_without_followup_count)}</strong></span><span>Products <strong className="text-slate-950">{numberValue(row.product_count)}</strong></span><span>Quotations <strong className="text-slate-950">{numberValue(row.quotation_count)}</strong></span></div></td>
+    <td className="min-w-[155px] px-4 py-4 align-top"><p className="font-semibold text-slate-800">{numberValue(row.intent_score)}/100</p><p className="mt-1 text-xs text-slate-600">{labelize(row.intent_tier)}</p><div className="mt-2 flex flex-wrap gap-1">{row.is_high_intent ? <SmallSignal label="High" /> : null}{row.value_reached ? <SmallSignal label="Value" /> : null}{row.adoption_signal ? <SmallSignal label="Team" /> : null}</div></td>
+    <td className="min-w-[245px] px-4 py-4 align-top"><p className="font-medium text-slate-800">{nextAction}</p><p className="mt-1 text-xs text-slate-500">{nextAt ? formatDisplayDateTime(nextAt) : "No date scheduled"}</p></td>
+    <td className="min-w-[165px] px-4 py-4 align-top text-xs text-slate-600">{formatDisplayDateTime(row.last_activity_at)}</td>
+    <td className="w-28 px-4 py-4 align-top text-right"><button className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-orange-400 hover:text-orange-800" onClick={(event) => { event.stopPropagation(); onSelect(); }} type="button">View details</button></td>
+  </tr>;
 }
 
-function QueueTableRow({ row, selected, onSelect }: { row: QueueRow; selected: boolean; onSelect: () => void }) {
-  return <tr className={selected ? "bg-orange-50" : undefined}><td className="px-4 py-3"><button className="text-left" onClick={onSelect} type="button"><p className="font-semibold text-slate-950">{row.company_name ?? "Unnamed company"}</p><p className="mt-1 text-xs text-slate-500">{row.contact_name ?? "No contact"} · {row.contact_phone ?? "No phone"}</p></button></td><td className="px-4 py-3 text-slate-700">Day {row.trial_day}/14<br /><span className="text-xs text-slate-500">{row.days_remaining} days left</span></td><td className="px-4 py-3"><StatusBadge value={row.engagement_state} /></td><td className="px-4 py-3 text-slate-700">{row.first_value_reached ? labelize(row.first_value_kind) : "Not reached"}<br /><span className="text-xs text-slate-500">{row.first_value_progress.input_count} inputs · {row.first_value_progress.workflow_count} workflows</span></td><td className="px-4 py-3 text-xs text-slate-600">{row.due_call ? "Call due today" : row.next_touchpoint ? `${labelize(row.next_touchpoint.key)}\n${formatDisplayDateTime(row.next_touchpoint.scheduled_at)}` : "—"}</td><td className="px-4 py-3"><button className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-semibold text-slate-700" onClick={onSelect} type="button">Review</button></td></tr>;
-}
-
+function History({ children, emptyLabel, title }: { children: Array<React.ReactElement>; emptyLabel: string; title: string }) { return <section className="rounded-xl border border-stone-200 bg-white p-4"><h3 className="font-semibold text-slate-950">{title}</h3><div className="mt-3 space-y-2">{children.length ? children : <p className="text-sm text-slate-500">{emptyLabel}</p>}</div></section>; }
+function HistoryItem({ badge, meta, time, title }: { badge?: string; meta: string; time: string; title: string }) { return <div className="rounded-lg border border-stone-100 bg-stone-50 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-medium text-slate-800">{title}</p><p className="mt-1 break-words text-xs text-slate-600">{meta}</p></div>{badge ? <StatusBadge value={badge} /> : <time className="shrink-0 text-right text-xs text-slate-500">{formatDisplayDateTime(time)}</time>}</div>{badge ? <p className="mt-1 text-xs text-slate-500">{formatDisplayDateTime(time)}</p> : null}</div>; }
 function MetricCard({ label, value }: { label: string; value: number }) { return <div className="rounded-xl border border-stone-200 bg-white p-4 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p><p className="mt-2 text-2xl font-semibold text-slate-950">{value}</p></div>; }
-function MiniMetric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-stone-200 bg-stone-50 p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-sm font-semibold text-slate-950">{value}</p></div>; }
-function StatusBadge({ value }: { value: string | null | undefined }) { const tone = ["engaged", "converted", "delivered", "read", "sent"].includes(value ?? "") ? "green" : ["expired", "failed", "opted_out", "cancelled"].includes(value ?? "") ? "red" : "amber"; return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "red" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700"}`}>{labelize(value)}</span>; }
+function MiniMetric({ label, value }: { label: string; value: string }) { return <div className="rounded-lg border border-stone-200 bg-white p-3"><p className="text-xs text-slate-500">{label}</p><p className="mt-1 text-sm font-semibold text-slate-950">{value}</p></div>; }
+function EvidenceItem({ label, value }: { label: string; value: string }) { return <div><dt className="text-xs font-medium text-slate-500">{label}</dt><dd className="mt-1 break-words font-semibold text-slate-800">{value}</dd></div>; }
+function SignalBadge({ label }: { label: string }) { return <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">{label}</span>; }
+function SmallSignal({ label }: { label: string }) { return <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800">{label}</span>; }
+function StatusBadge({ value }: { value: string | null | undefined }) { const tone = ["engaged", "converted", "delivered", "read", "sent"].includes(value ?? "") ? "green" : ["expired", "failed", "opted_out", "cancelled"].includes(value ?? "") ? "red" : "amber"; return <span className={"inline-flex rounded-full px-2.5 py-1 text-xs font-semibold " + (tone === "green" ? "bg-emerald-50 text-emerald-700" : tone === "red" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-700")}>{labelize(value)}</span>; }
 function numberValue(value: number | string | null | undefined) { const number = Number(value ?? 0); return Number.isFinite(number) ? number : 0; }
 function toDateTimeInput(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 16); }
 function labelize(value: string | null | undefined) { return (value ?? "—").replace(/_/g, " ").replace(/\b\w/g, (character: string) => character.toUpperCase()); }

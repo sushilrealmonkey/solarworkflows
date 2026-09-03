@@ -6,7 +6,7 @@ import {
   TextArea,
   TextInput,
 } from "../crm/CrmComponents";
-import { labelize } from "../crm/crmUtils";
+import { formatDate, labelize } from "../crm/crmUtils";
 import { formatMoney } from "../quotations/quotationUtils";
 import {
   paymentModeOptions,
@@ -17,6 +17,7 @@ import {
 } from "./paymentUtils";
 import type {
   PaymentFormValues,
+  PaymentDueItem,
   PaymentProjectOption,
   PaymentProjectSummary,
   PaymentSource,
@@ -30,14 +31,26 @@ export function PaymentStatusBadge({
   return <Badge tone={paymentStatusTone(value)}>{labelize(value)}</Badge>;
 }
 
+export function PaymentDueBadge({
+  value,
+}: {
+  value: PaymentDueItem["payment_status"] | null | undefined;
+}) {
+  return <Badge tone={paymentStatusTone(value)}>{labelize(value)}</Badge>;
+}
+
 export function PaymentSummaryCards({
   summary,
   className = "grid gap-3 sm:grid-cols-2 xl:grid-cols-3",
   compact = false,
+  paymentDueOn,
+  dueItem,
 }: {
   summary: PaymentProjectSummary;
   className?: string;
   compact?: boolean;
+  paymentDueOn?: string | null;
+  dueItem?: PaymentDueItem | null;
 }) {
   const cards = [
     {
@@ -61,8 +74,12 @@ export function PaymentSummaryCards({
       value: formatMoney(summary.balance_due),
     },
     {
+      label: "Payment Due On",
+      value: formatDate(dueItem?.payment_due_on ?? paymentDueOn ?? null),
+    },
+    {
       label: "Payment Status",
-      value: <PaymentStatusBadge value={summary.payment_status} />,
+      value: <PaymentStatusBadge value={dueItem?.payment_status ?? summary.payment_status} />,
     },
   ];
 

@@ -3,15 +3,13 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import mascotUrl from "../../assets/mascots/bizlee-solar-mascot.png";
 import { PageLoader } from "../../components/PageLoader";
-import { hasPermission } from "../crm/crmUtils";
-import { NotificationPreferencesSection } from "../settings/NotificationPreferencesSection";
 import { fetchDailyBrief } from "./assistantApi";
 import { AssistantChat, useAssistantChat } from "./AssistantChat";
 import { BriefCard } from "./BriefCard";
 import type { BriefResponse } from "./types";
 
 export function TodayPage() {
-  const { profile, permissions } = useAuth();
+  const { profile } = useAuth();
   const [brief, setBrief] = useState<BriefResponse | null>(null);
   const [briefLoading, setBriefLoading] = useState(true);
   const [briefRefreshing, setBriefRefreshing] = useState(false);
@@ -54,13 +52,6 @@ export function TodayPage() {
   }
 
   const firstName = profile?.full_name?.split(" ")[0];
-  const canManageNotificationSettings = hasPermission(
-    profile,
-    permissions,
-    "settings",
-    "update",
-  );
-
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -95,10 +86,6 @@ export function TodayPage() {
           {briefRefreshing ? "Refreshing…" : "Refresh"}
         </button>
       </header>
-
-      {canManageNotificationSettings ? (
-        <NotificationPreferencesSection hideWhenConfigured />
-      ) : null}
 
       {briefLoading ? (
         <div className="space-y-3">

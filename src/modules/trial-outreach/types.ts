@@ -22,19 +22,37 @@ export type TrialOutreachTouchpoint = {
   enrollment_id: string;
   sequence_day: number;
   touchpoint_key: string;
-  channel: "email" | "whatsapp" | "call";
+  channel: "email" | "whatsapp" | "call" | "in_app" | "support";
   status: string;
   scheduled_at: string;
+  trigger_key?: string;
+  priority?: "low" | "normal" | "high" | "urgent";
+  reason?: string | null;
   claimed_at?: string | null;
   sent_at?: string | null;
   completed_at?: string | null;
   assigned_to_profile_id?: string | null;
+  recipient_profile_id?: string | null;
   attempt_count?: number;
   provider_message_id?: string | null;
   failure_code?: string | null;
   failure_message?: string | null;
   outcome?: string | null;
   metadata?: Record<string, unknown>;
+};
+
+export type PortalActivityEvent = {
+  id: string;
+  company_id: string;
+  organization_id: string | null;
+  user_profile_id: string | null;
+  event_key: string;
+  event_category: "session" | "navigation" | "workflow" | "onboarding" | "error" | "support" | "system";
+  module: string | null;
+  route: string | null;
+  source: "portal" | "database" | "system";
+  metadata: Record<string, unknown>;
+  occurred_at: string;
 };
 
 export type TrialOutreachInteraction = {
@@ -87,6 +105,24 @@ export type TrialEngagementSnapshot = {
   whatsapp_recipient_id: string | null;
   whatsapp_opted_in: boolean;
   email_opted_in: boolean;
+  onboarding_status: string | null;
+  onboarding_step: string | null;
+  onboarding_completed_at: string | null;
+  product_count: number | string | null;
+  first_product_at: string | null;
+  enquiry_without_followup_count: number | string | null;
+  last_unfollowed_enquiry_at: string | null;
+  login_event_count: number | string | null;
+  team_invite_count: number | string | null;
+  first_team_invite_at: string | null;
+  feature_error_count_24h: number | string | null;
+  latest_feature_error_at: string | null;
+  latest_activity_event: string | null;
+  intent_score: number | string | null;
+  intent_tier: "low" | "warming" | "high" | "value_reached" | "adoption_signal" | null;
+  is_high_intent: boolean;
+  value_reached: boolean;
+  adoption_signal: boolean;
   trial_day: number;
   days_remaining: number;
   first_value_reached: boolean;
@@ -97,12 +133,19 @@ export type TrialEngagementSnapshot = {
   next_touchpoint: {
     id: string;
     key: string;
+    trigger_key?: string;
     channel: string;
     status: string;
     scheduled_at: string;
+    priority?: string;
+    reason?: string | null;
   } | null;
-  due_call: {
+  due_task: {
     id: string;
+    channel: "call" | "support";
+    key: string;
+    priority: string;
+    reason: string | null;
     assigned_to_profile_id: string | null;
     assigned_to_name: string | null;
     outcome: string | null;
@@ -113,22 +156,22 @@ export type TrialOutreachCompanyDetail = {
   snapshot: TrialEngagementSnapshot;
   touchpoints: TrialOutreachTouchpoint[];
   interactions: TrialOutreachInteraction[];
+  activities: PortalActivityEvent[];
 };
 
 export type TrialOutreachDashboard = {
-  enrolled_count: number | string;
-  no_login_count: number | string;
-  no_first_value_count: number | string;
-  calls_due_today_count: number | string;
-  first_value_day_1_count: number | string;
-  first_value_day_3_count: number | string;
-  first_value_day_7_count: number | string;
-  first_value_day_14_count: number | string;
-  converted_count: number | string;
-  replies_count: number | string;
-  connected_calls_count: number | string;
-  opt_out_count: number | string;
-  failed_delivery_count: number | string;
+  active_trial_count: number | string;
+  interventions_due_count: number | string;
+  no_login_24h_count: number | string;
+  setup_stalled_count: number | string;
+  no_enquiry_count: number | string;
+  inactive_48h_count: number | string;
+  high_intent_count: number | string;
+  value_reached_count: number | string;
+  adoption_signal_count: number | string;
+  conversion_tasks_due_count: number | string;
+  rescue_tasks_due_count: number | string;
+  support_escalation_count: number | string;
 };
 
 export type TrialOutreachStaff = {

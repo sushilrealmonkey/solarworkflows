@@ -6,6 +6,7 @@ export type OrganizationSettings = {
   company_name: string | null;
   company_details: string | null;
   company_logo_url: string | null;
+  upi_qr_code_url: string | null;
   favicon_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
@@ -36,6 +37,7 @@ export type OrganizationSettingsFormValues = {
   company_name: string;
   company_details: string;
   company_logo_url: string;
+  upi_qr_code_url: string;
   favicon_url: string;
   primary_color: string;
   secondary_color: string;

@@ -5,7 +5,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { PageHeader } from "../../components/PageHeader";
 import { TablePagination, useTablePagination } from "../../components/TablePagination";
@@ -69,6 +69,9 @@ import type {
 } from "../site-surveys/types";
 import { customerOptionLabel } from "../site-surveys/surveyUtils";
 import type { QuotationWithRelations } from "../quotations/types";
+import { PaymentDueBadge } from "../payments/PaymentComponents";
+import { fetchPaymentDueItems } from "../payments/paymentApi";
+import type { PaymentDueItem } from "../payments/types";
 
 type ProjectFilters = {
   search: string;
@@ -76,12 +79,15 @@ type ProjectFilters = {
   priority: string;
   manager: string;
   startDate: string;
+  paymentStatus: string;
 };
 
 export function ProjectsPage() {
   const { profile, permissions } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectWithRelations[]>([]);
+  const [paymentDueItems, setPaymentDueItems] = useState<PaymentDueItem[]>([]);
   const [staff, setStaff] = useState<StaffOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [archiveScope, setArchiveScope] = useState<ArchiveScope>("active");
@@ -92,9 +98,11 @@ export function ProjectsPage() {
     priority: "",
     manager: "",
     startDate: "",
+    paymentStatus: searchParams.get("payment") === "overdue" ? "overdue" : "",
   });
 
   const canView = hasPermission(profile, permissions, "projects", "view");
+  const canViewPayments = hasPermission(profile, permissions, "payments", "view");
   const canCreateEnquiry = hasPermission(profile, permissions, "leads", "create");
 
   async function loadData() {
@@ -106,12 +114,14 @@ export function ProjectsPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextProjects, nextStaff] = await Promise.all([
+      const [nextProjects, nextStaff, nextPaymentDueItems] = await Promise.all([
         fetchProjects(profile, archiveScope),
         fetchStaffOptions(profile),
+        canViewPayments ? fetchPaymentDueItems(profile, { limit: 1000 }) : [],
       ]);
       setProjects(nextProjects);
       setStaff(nextStaff);
+      setPaymentDueItems(nextPaymentDueItems);
     } catch (nextError) {
       setError(
         nextError instanceof Error ? nextError.message : "Unable to load projects.",
@@ -125,7 +135,17 @@ export function ProjectsPage() {
     void loadData();
     // loadData closes over current permission/profile state for this module.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [archiveScope, canView, profile?.id]);
+  }, [archiveScope, canView, canViewPayments, profile?.id]);
+
+  const paymentDueByProjectId = useMemo(
+    () =>
+      new Map(
+        paymentDueItems
+          .filter((item) => item.source_type === "project")
+          .map((item) => [item.source_id, item]),
+      ),
+    [paymentDueItems],
+  );
 
   const filteredProjects = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -150,16 +170,20 @@ export function ProjectsPage() {
         !filters.manager || project.assigned_project_manager === filters.manager;
       const matchesStart =
         !filters.startDate || project.start_date === filters.startDate;
+      const paymentDueItem = paymentDueByProjectId.get(project.id);
+      const matchesPaymentStatus =
+        !filters.paymentStatus || paymentDueItem?.payment_status === filters.paymentStatus;
 
       return (
         matchesSearch &&
         matchesStatus &&
         matchesPriority &&
         matchesManager &&
-        matchesStart
+        matchesStart &&
+        matchesPaymentStatus
       );
     });
-  }, [projects, filters]);
+  }, [projects, filters, paymentDueByProjectId]);
 
   const projectPagination = useTablePagination(filteredProjects);
   const paginatedProjects = projectPagination.pageItems;
@@ -204,9 +228,9 @@ export function ProjectsPage() {
         <ArchiveScopeFilter value={archiveScope} onChange={setArchiveScope} />
       ) : null}
 
-      {!isNewAccount ? <Toolbar className="md:grid-cols-4">
+      {!isNewAccount ? <Toolbar className="md:grid-cols-5">
         <SearchInput
-          className="md:col-span-4"
+          className="md:col-span-5"
           placeholder="Search project, customer, or phone"
           value={filters.search}
           onChange={(search) => setFilters((current) => ({ ...current, search }))}
@@ -259,6 +283,22 @@ export function ProjectsPage() {
             setFilters((current) => ({ ...current, startDate }))
           }
         />
+        {canViewPayments ? (
+          <SelectInput
+            label="Payment Status"
+            value={filters.paymentStatus}
+            onChange={(paymentStatus) =>
+              setFilters((current) => ({ ...current, paymentStatus }))
+            }
+            options={[
+              { value: "", label: "All payment states" },
+              { value: "overdue", label: "Overdue" },
+              { value: "due_today", label: "Due today" },
+              { value: "partial", label: "Partially paid" },
+              { value: "pending", label: "Pending" },
+            ]}
+          />
+        ) : null}
       </Toolbar> : null}
 
       {loading ? <LoadingSkeleton /> : null}
@@ -281,6 +321,7 @@ export function ProjectsPage() {
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Priority</th>
+                  {canViewPayments ? <th className="px-4 py-3">Payment</th> : null}
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
                 </tr>
@@ -288,6 +329,7 @@ export function ProjectsPage() {
               <tbody className="divide-y divide-stone-100">
                 {paginatedProjects.map((project) => {
                   const contact = getProjectContact(project);
+                  const paymentDueItem = paymentDueByProjectId.get(project.id);
                   return (
                     <tr
                       key={project.id}
@@ -317,6 +359,20 @@ export function ProjectsPage() {
                       <td className="px-4 py-3">
                         <PriorityBadge value={project.priority} />
                       </td>
+                      {canViewPayments ? (
+                        <td className="px-4 py-3">
+                          {paymentDueItem ? (
+                            <div className="space-y-1">
+                              <PaymentDueBadge value={paymentDueItem.payment_status} />
+                              <p className="text-xs text-slate-500">
+                                {formatDate(paymentDueItem.payment_due_on)}
+                              </p>
+                            </div>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                      ) : null}
                       <td className="px-4 py-3">
                         {staffName(staff, project.assigned_project_manager)}
                       </td>
@@ -331,6 +387,7 @@ export function ProjectsPage() {
           <div className="grid gap-3 xl:hidden">
             {paginatedProjects.map((project) => {
               const contact = getProjectContact(project);
+              const paymentDueItem = paymentDueByProjectId.get(project.id);
               return (
                 <article
                   key={project.id}
@@ -379,6 +436,23 @@ export function ProjectsPage() {
                         {staffName(staff, project.assigned_project_manager)}
                       </dd>
                     </div>
+                    {canViewPayments ? (
+                      <div>
+                        <dt className="text-xs text-slate-500">Payment</dt>
+                        <dd className="mt-1">
+                          {paymentDueItem ? (
+                            <span className="inline-flex flex-col items-start gap-1">
+                              <PaymentDueBadge value={paymentDueItem.payment_status} />
+                              <span className="text-xs text-slate-600">
+                                {formatDate(paymentDueItem.payment_due_on)}
+                              </span>
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </dd>
+                      </div>
+                    ) : null}
                   </dl>
                 </article>
               );
@@ -603,6 +677,12 @@ export function ProjectFormModal({
         label="Expected Completion"
         value={values.expected_completion_date}
         onChange={(value) => update("expected_completion_date", value)}
+        type="date"
+      />
+      <TextInput
+        label="Payment Due On"
+        value={values.payment_due_on}
+        onChange={(value) => update("payment_due_on", value)}
         type="date"
       />
       <StaffSelect

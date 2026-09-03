@@ -168,7 +168,7 @@ async function invokeCompanyAction(body: Record<string, unknown>) {
 }
 
 async function getFunctionErrorMessage(error: unknown) {
-  if (error instanceof FunctionsHttpError) {
+  if (error instanceof FunctionsHttpError || hasJsonErrorContext(error)) {
     try {
       const body = (await error.context.json()) as unknown;
 
@@ -176,7 +176,7 @@ async function getFunctionErrorMessage(error: unknown) {
         return body.error;
       }
     } catch {
-      return error.message;
+      return error instanceof Error ? error.message : "Action failed.";
     }
   }
 
@@ -190,5 +190,19 @@ function isErrorBody(value: unknown): value is { error: string } {
     "error" in value &&
     typeof value.error === "string" &&
     value.error.trim().length > 0
+  );
+}
+
+function hasJsonErrorContext(
+  value: unknown,
+): value is { context: { json: () => Promise<unknown> } } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "context" in value &&
+    typeof value.context === "object" &&
+    value.context !== null &&
+    "json" in value.context &&
+    typeof value.context.json === "function"
   );
 }

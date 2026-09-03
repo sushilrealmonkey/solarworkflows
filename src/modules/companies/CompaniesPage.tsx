@@ -20,7 +20,6 @@ import {
 import {
   billingStatusLabel,
   companyContactName,
-  companyContactPhone,
   companyPlanLabel,
 } from "./companyUtils";
 import type {
@@ -435,7 +434,7 @@ export function CompaniesPage() {
                     <div className="grid grid-cols-[minmax(240px,1.4fr)_minmax(180px,1fr)_160px_180px_190px] border-b border-stone-200 bg-stone-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:px-5">
                       <span>Company name</span>
                       <span>Contact person</span>
-                      <span>Mobile</span>
+                      <span>WhatsApp mobile</span>
                       <span>Plan</span>
                       <span>Status</span>
                     </div>
@@ -515,10 +514,12 @@ function CreateCompanyForm({
           value={values.admin_email}
         />
         <TextField
-          helpText="Optional. Email is enough for password setup."
-          label="Primary admin phone"
+          helpText="Required for the daily Bizlee AI WhatsApp summary. Include the country code."
+          label="Primary admin WhatsApp number"
           onChange={(value) => onUpdateValue("admin_phone", value)}
           placeholder="+91 98765 43210"
+          required
+          type="tel"
           value={values.admin_phone}
         />
       </div>
@@ -541,6 +542,8 @@ function CompanyRow({
   company: PlatformCompany;
   onSelect: () => void;
 }) {
+  const adminPhone = company.admin?.phone?.trim() ?? "";
+
   return (
     <button
       aria-label={`Open ${company.name}`}
@@ -560,8 +563,23 @@ function CompanyRow({
       <span className="truncate pr-4 text-sm text-slate-700">
         {companyContactName(company)}
       </span>
-      <span className="truncate pr-4 text-sm text-slate-700">
-        {companyContactPhone(company)}
+      <span className="min-w-0 pr-4 text-sm text-slate-700">
+        <span className="block truncate">{adminPhone || "—"}</span>
+        {adminPhone ? (
+          <span
+            className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+              company.admin?.phone_verified
+                ? "bg-emerald-50 text-emerald-700"
+                : "bg-amber-50 text-amber-800"
+            }`}
+          >
+            {company.admin?.phone_verified ? "✓ Verified" : "Unverified"}
+          </span>
+        ) : (
+          <span className="mt-1 inline-flex rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+            Missing
+          </span>
+        )}
       </span>
       <span className="truncate pr-4 text-sm text-slate-700">
         {companyPlanLabel(company)}
@@ -691,7 +709,7 @@ function TextField({
   onChange: (value: string) => void;
   placeholder?: string;
   required?: boolean;
-  type?: "email" | "text";
+  type?: "email" | "tel" | "text";
   value: string;
 }) {
   return (
@@ -775,6 +793,15 @@ function validateForm(values: CreatePlatformCompanyFormValues) {
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.admin_email.trim())) {
     return "Enter a valid primary admin email.";
+  }
+
+  const whatsappNumber = values.admin_phone.trim();
+  if (!whatsappNumber || whatsappNumber === "+91") {
+    return "Primary admin WhatsApp number is required.";
+  }
+
+  if (!/^[0-9+() -]{6,20}$/.test(whatsappNumber)) {
+    return "Enter a valid primary admin WhatsApp number with country code.";
   }
 
   return null;

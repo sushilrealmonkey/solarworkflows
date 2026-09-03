@@ -540,14 +540,18 @@ export async function createEpcWorkspaceForCurrentUser(
     throw new Error("Full name must be between 2 and 120 characters.");
   }
 
-  if (phone && !isValidPhoneNumber(phone)) {
-    throw new Error("Enter a valid phone number.");
+  if (!phone) {
+    throw new Error("A WhatsApp number is required.");
+  }
+
+  if (!isValidPhoneNumber(phone)) {
+    throw new Error("Enter a valid WhatsApp number.");
   }
 
   const { data, error } = await supabase.rpc("self_create_epc_workspace", {
     workspace_name: workspaceName,
     admin_full_name: fullName,
-    admin_phone: phone || null,
+    admin_phone: phone,
     welcome_whatsapp_consent: input.welcomeWhatsAppConsent,
   });
 

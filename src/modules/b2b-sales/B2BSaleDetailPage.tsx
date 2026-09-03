@@ -24,7 +24,8 @@ import {
 } from "../crm/crmUtils";
 import { formatMoney } from "../quotations/quotationUtils";
 import { PaymentStatusBadge } from "../payments/PaymentComponents";
-import type { PaymentWithRelations } from "../payments/types";
+import { fetchPaymentDueItems } from "../payments/paymentApi";
+import type { PaymentDueItem, PaymentWithRelations } from "../payments/types";
 import {
   createB2BSalePayment,
   dispatchB2BSale,
@@ -77,6 +78,7 @@ export function B2BSaleDetailPage() {
   const [sale, setSale] = useState<B2BSaleWithRelations | null>(null);
   const [items, setItems] = useState<B2BSaleItem[]>([]);
   const [payments, setPayments] = useState<PaymentWithRelations[]>([]);
+  const [paymentDueItem, setPaymentDueItem] = useState<PaymentDueItem | null>(null);
   const [options, setOptions] = useState<B2BSaleOptions>({
     customers: [],
     inventoryItems: [],
@@ -131,16 +133,24 @@ export function B2BSaleDetailPage() {
     try {
       setLoading(true);
       setError(null);
-      const [nextSale, nextItems, nextOptions, nextPayments] = await Promise.all([
+      const [nextSale, nextItems, nextOptions, nextPayments, nextDueItems] = await Promise.all([
         fetchB2BSale(profile, id),
         fetchB2BSaleItems(profile, id),
         fetchB2BSaleOptions(profile, canViewPricing),
         canViewPayments ? fetchB2BSalePayments(profile, id) : [],
+        canViewPayments
+          ? fetchPaymentDueItems(profile, {
+              sourceType: "b2b_sale",
+              sourceId: id,
+              limit: 1,
+            })
+          : [],
       ]);
       setSale(nextSale);
       setItems(nextItems);
       setOptions(nextOptions);
       setPayments(nextPayments);
+      setPaymentDueItem(nextDueItems[0] ?? null);
       if (nextSale?.proforma_invoice_id) {
         await loadProformaPdfPreview(nextSale.proforma_invoice_id);
       } else {
@@ -534,6 +544,7 @@ export function B2BSaleDetailPage() {
                   label="Dispatch Date"
                   value={formatDate(sale.dispatch_date)}
                 />
+                <DetailItem label="Payment Due On" value={formatDate(sale.payment_due_on)} />
                 <DetailItem label="Status" value={<B2BSaleStatusBadge value={sale.status} />} />
                 <DetailItem label="Proforma Invoice" value={proformaInvoiceLink(sale, canViewInvoices)} />
                 <DetailItem label="Invoice" value={invoiceLink(sale, canViewInvoices)} />
@@ -584,7 +595,7 @@ export function B2BSaleDetailPage() {
                 onDispatch={() => setConfirmingDispatch(true)}
                 onRecordPayment={openPaymentForm}
               />
-              <B2BSaleTotalsCard sale={sale} />
+              <B2BSaleTotalsCard dueItem={paymentDueItem} sale={sale} />
             </aside>
           </div>
 

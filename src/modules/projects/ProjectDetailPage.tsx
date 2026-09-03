@@ -60,10 +60,16 @@ import type {
 } from "../site-surveys/types";
 import type {
   QuotationInventoryReservation,
+  QuotationPaymentTermFormValues,
   QuotationWithRelations,
 } from "../quotations/types";
 import {
+  fetchQuotation,
+  updateQuotationPaymentTerms,
+} from "../quotations/quotationApi";
+import {
   createPayment,
+  fetchPaymentDueItems,
   fetchProjectPaymentSummary,
 } from "../payments/paymentApi";
 import {
@@ -77,6 +83,7 @@ import {
 } from "../payments/paymentUtils";
 import type {
   PaymentFormValues,
+  PaymentDueItem,
   PaymentProjectOption,
   PaymentProjectSummary,
 } from "../payments/types";
@@ -127,12 +134,19 @@ type MaterialIssueFormValues = {
   notes: string;
 };
 
+type ProjectPaymentTermsFormValues = {
+  paymentTerms: string;
+  paymentTermRows: QuotationPaymentTermFormValues[];
+};
+
 export function ProjectDetailPage() {
   const { id } = useParams();
   const { profile, permissions } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [project, setProject] = useState<ProjectWithRelations | null>(null);
+  const [linkedQuotation, setLinkedQuotation] =
+    useState<QuotationWithRelations | null>(null);
   const [customers, setCustomers] = useState<SurveyCustomerSummary[]>([]);
   const [quotations, setQuotations] = useState<QuotationWithRelations[]>([]);
   const [siteSurveys, setSiteSurveys] = useState<SiteSurveyWithRelations[]>([]);
@@ -148,11 +162,15 @@ export function ProjectDetailPage() {
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [paymentSummary, setPaymentSummary] =
     useState<PaymentProjectSummary | null>(null);
+  const [paymentDueItem, setPaymentDueItem] = useState<PaymentDueItem | null>(null);
   const [paymentForm, setPaymentForm] = useState<PaymentFormValues | null>(null);
   const [paymentFormErrors, setPaymentFormErrors] = useState<Record<string, string>>(
     {},
   );
   const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentTermsForm, setPaymentTermsForm] =
+    useState<ProjectPaymentTermsFormValues | null>(null);
+  const [savingPaymentTerms, setSavingPaymentTerms] = useState(false);
   const [documents, setDocuments] = useState<OrganizationDocumentWithRelations[]>(
     [],
   );
@@ -180,6 +198,12 @@ export function ProjectDetailPage() {
 
   const canView = hasPermission(profile, permissions, "projects", "view");
   const canUpdate = hasPermission(profile, permissions, "projects", "update");
+  const canUpdateQuotations = hasPermission(
+    profile,
+    permissions,
+    "quotations",
+    "update",
+  );
   const canAssign = hasPermission(profile, permissions, "projects", "assign");
   const canDelete = hasPermission(profile, permissions, "projects", "delete");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
@@ -265,6 +289,10 @@ export function ProjectDetailPage() {
         canViewInvoices ? fetchProjectInvoices(profile, id) : Promise.resolve([]),
       ]);
       setProject(nextProject);
+      const nextLinkedQuotation = nextProject?.quotation_id
+        ? await fetchQuotation(profile, nextProject.quotation_id).catch(() => null)
+        : null;
+      setLinkedQuotation(nextLinkedQuotation);
       setCustomers(nextCustomers);
       setQuotations(nextQuotations);
       setSiteSurveys(nextSiteSurveys);
@@ -295,11 +323,20 @@ export function ProjectDetailPage() {
         setInvoicePdfUrls({});
       }
       if (nextProject && canViewPayments) {
-        const nextSummary = await fetchProjectPaymentSummary(profile, nextProject.id);
+        const [nextSummary, nextDueItems] = await Promise.all([
+          fetchProjectPaymentSummary(profile, nextProject.id),
+          fetchPaymentDueItems(profile, {
+            sourceType: "project",
+            sourceId: nextProject.id,
+            limit: 1,
+          }),
+        ]);
         const paymentProject = projectToPaymentOption(nextProject);
         setPaymentSummary(nextSummary ?? fallbackSummaryForProject(paymentProject));
+        setPaymentDueItem(nextDueItems[0] ?? null);
       } else {
         setPaymentSummary(null);
+        setPaymentDueItem(null);
       }
       if (nextProject && canViewDocuments) {
         const nextDocuments = await fetchDocuments(profile, {
@@ -327,7 +364,7 @@ export function ProjectDetailPage() {
     void loadProject();
     // loadProject closes over current route and permission/profile state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canView, id, profile?.id]);
+  }, [canView, canViewPayments, id, profile?.id]);
 
   if (!canView) {
     return (
@@ -414,6 +451,55 @@ export function ProjectDetailPage() {
 
     setPaymentFormErrors({});
     setPaymentForm(emptyPaymentForm(projectToPaymentOption(project)));
+  }
+
+  function openPaymentTermsForm() {
+    if (!linkedQuotation) {
+      return;
+    }
+
+    setPaymentTermsForm({
+      paymentTerms: linkedQuotation.payment_terms ?? "",
+      paymentTermRows: (linkedQuotation.quotation_payment_terms ?? []).map(
+        (term) => ({
+          id: term.id,
+          milestone: term.milestone ?? "",
+          percentage:
+            term.percentage === null || term.percentage === undefined
+              ? ""
+              : String(term.percentage),
+          amount:
+            term.amount === null || term.amount === undefined
+              ? ""
+              : String(term.amount),
+        }),
+      ),
+    });
+  }
+
+  async function handlePaymentTermsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!linkedQuotation || !paymentTermsForm) {
+      return;
+    }
+
+    try {
+      setSavingPaymentTerms(true);
+      await updateQuotationPaymentTerms(linkedQuotation.id, paymentTermsForm);
+      setPaymentTermsForm(null);
+      showToast("Payment terms updated in the linked quotation.", "success");
+      await loadProject();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "Payment terms could not be updated.",
+        "error",
+      );
+    } finally {
+      setSavingPaymentTerms(false);
+    }
   }
 
   function openProjectInvoiceForm() {
@@ -705,6 +791,17 @@ export function ProjectDetailPage() {
                 />
                 <DetailItem label="Project Type" value={labelize(project.project_type)} />
               </DetailSection>
+
+              <ProjectPaymentTermsSection
+                quotation={linkedQuotation ?? project.quotation ?? null}
+                canEdit={
+                  canUpdate &&
+                  canUpdateQuotations &&
+                  !project.archived_at &&
+                  Boolean(linkedQuotation)
+                }
+                onEdit={openPaymentTermsForm}
+              />
             </div>
 
             <aside className="space-y-6">
@@ -727,7 +824,13 @@ export function ProjectDetailPage() {
                     </div>
                   </div>
                   <div className="mt-3">
-                    <PaymentSummaryCards compact className="grid gap-2" summary={paymentSummary} />
+                    <PaymentSummaryCards
+                      compact
+                      className="grid gap-2"
+                      dueItem={paymentDueItem}
+                      paymentDueOn={project.payment_due_on}
+                      summary={paymentSummary}
+                    />
                   </div>
                 </section>
               ) : null}
@@ -848,6 +951,17 @@ export function ProjectDetailPage() {
           onClose={() => setPaymentForm(null)}
           onSubmit={handlePaymentSubmit}
           saving={savingPayment}
+        />
+      ) : null}
+
+      {paymentTermsForm && linkedQuotation ? (
+        <ProjectPaymentTermsModal
+          quotationCode={linkedQuotation.quotation_code}
+          values={paymentTermsForm}
+          setValues={setPaymentTermsForm}
+          onClose={() => setPaymentTermsForm(null)}
+          onSubmit={handlePaymentTermsSubmit}
+          saving={savingPaymentTerms}
         />
       ) : null}
 
@@ -1462,6 +1576,206 @@ function validateMaterialIssueForm(
     item_id: requiredError(values.item_id, "Item"),
     quantity: quantityError,
   };
+}
+
+function ProjectPaymentTermsSection({
+  quotation,
+  canEdit,
+  onEdit,
+}: {
+  quotation: QuotationWithRelations | null;
+  canEdit: boolean;
+  onEdit: () => void;
+}) {
+  const paymentTermRows = quotation?.quotation_payment_terms ?? [];
+
+  return (
+    <section className="rounded-xl border border-sky-200 bg-sky-50/40 p-4 shadow-sm sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-base font-semibold text-slate-950">Payment Terms</p>
+          <p className="mt-1 text-sm text-slate-600">
+            Shared with {quotation?.quotation_code ?? "the linked quotation"} so the client sees the same terms throughout the project.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {quotation ? (
+            <Link
+              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-sky-50"
+              to={`/quotations/${quotation.id}`}
+            >
+              Open quotation
+            </Link>
+          ) : null}
+          {canEdit ? <Button onClick={onEdit}>Edit terms</Button> : null}
+        </div>
+      </div>
+
+      {!quotation ? (
+        <p className="mt-4 rounded-lg border border-dashed border-sky-200 bg-white/80 p-3 text-sm leading-6 text-slate-600">
+          Link a quotation to this project to make its payment terms visible here.
+        </p>
+      ) : null}
+
+      {quotation?.payment_terms ? (
+        <p className="mt-4 whitespace-pre-line rounded-lg border border-sky-100 bg-white/80 p-3 text-sm leading-6 text-slate-700">
+          {quotation.payment_terms}
+        </p>
+      ) : null}
+
+      {quotation && paymentTermRows.length === 0 && !quotation.payment_terms ? (
+        <p className="mt-4 rounded-lg border border-dashed border-sky-200 bg-white/80 p-3 text-sm text-slate-600">
+          No payment milestones have been added yet.
+        </p>
+      ) : null}
+
+      {paymentTermRows.length > 0 ? (
+        <div className="mt-4 overflow-x-auto rounded-lg border border-sky-100 bg-white">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-sky-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="px-3 py-2.5">Milestone</th>
+                <th className="px-3 py-2.5 text-right">Share</th>
+                <th className="px-3 py-2.5 text-right">Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-sky-50">
+              {paymentTermRows.map((term) => (
+                <tr key={term.id}>
+                  <td className="px-3 py-2.5 font-medium text-slate-900">
+                    {term.milestone || "Payment milestone"}
+                  </td>
+                  <td className="px-3 py-2.5 text-right text-slate-700">
+                    {term.percentage == null ? "-" : `${term.percentage}%`}
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold text-slate-900">
+                    {term.amount == null ? "-" : formatMoney(term.amount)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ProjectPaymentTermsModal({
+  quotationCode,
+  values,
+  setValues,
+  onClose,
+  onSubmit,
+  saving,
+}: {
+  quotationCode: string | null;
+  values: ProjectPaymentTermsFormValues;
+  setValues: (values: ProjectPaymentTermsFormValues) => void;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  saving: boolean;
+}) {
+  function updatePaymentTerm(
+    index: number,
+    key: keyof QuotationPaymentTermFormValues,
+    value: string,
+  ) {
+    setValues({
+      ...values,
+      paymentTermRows: values.paymentTermRows.map((paymentTerm, termIndex) =>
+        termIndex === index ? { ...paymentTerm, [key]: value } : paymentTerm,
+      ),
+    });
+  }
+
+  return (
+    <Modal
+      title="Edit Project Payment Terms"
+      maxWidthClass="sm:max-w-4xl"
+      onClose={onClose}
+      onSubmit={onSubmit}
+      submitLabel="Save shared terms"
+      submitting={saving}
+    >
+      <div className="rounded-lg border border-sky-100 bg-sky-50 p-3 text-sm leading-6 text-slate-700 md:col-span-2">
+        Changes are saved to {quotationCode ?? "the linked quotation"} and will appear on its quotation page immediately.
+      </div>
+      <div className="md:col-span-2">
+        <TextArea
+          label="Payment Terms Summary"
+          value={values.paymentTerms}
+          onChange={(paymentTerms) => setValues({ ...values, paymentTerms })}
+        />
+      </div>
+      <div className="space-y-3 md:col-span-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-900">Payment milestones</p>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              setValues({
+                ...values,
+                paymentTermRows: [
+                  ...values.paymentTermRows,
+                  { milestone: "", percentage: "", amount: "" },
+                ],
+              })
+            }
+          >
+            Add milestone
+          </Button>
+        </div>
+        {values.paymentTermRows.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-stone-200 p-3 text-sm text-slate-600">
+            Add a milestone to create a clear payment schedule for the client.
+          </p>
+        ) : null}
+        {values.paymentTermRows.map((paymentTerm, index) => (
+          <div
+            className="grid gap-3 rounded-lg border border-stone-200 p-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.65fr)_minmax(0,0.85fr)_auto] md:items-end"
+            key={paymentTerm.id ?? `payment-term-${index}`}
+          >
+            <TextInput
+              label="Milestone"
+              value={paymentTerm.milestone}
+              onChange={(milestone) => updatePaymentTerm(index, "milestone", milestone)}
+            />
+            <TextInput
+              label="Percentage"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={paymentTerm.percentage}
+              onChange={(percentage) => updatePaymentTerm(index, "percentage", percentage)}
+            />
+            <TextInput
+              label="Amount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={paymentTerm.amount}
+              onChange={(amount) => updatePaymentTerm(index, "amount", amount)}
+            />
+            <Button
+              variant="ghost"
+              onClick={() =>
+                setValues({
+                  ...values,
+                  paymentTermRows: values.paymentTermRows.filter(
+                    (_, termIndex) => termIndex !== index,
+                  ),
+                })
+              }
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
 }
 
 function projectToPaymentOption(project: ProjectWithRelations): PaymentProjectOption {

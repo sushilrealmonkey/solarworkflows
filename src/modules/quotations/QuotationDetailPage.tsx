@@ -255,28 +255,16 @@ export function QuotationDetailPage() {
   const panelCategory =
     quotation?.module_category || snapshotValues.module_category || "-";
   const panelTechnology = quotation?.panel_type || snapshotValues.panel_type || "-";
-  const inverterType = quotation?.inverter_type || snapshotValues.inverter_type || "-";
   const siteType =
     quotation?.site_type ||
     snapshotValues.site_type ||
     quotation?.lead?.roof_type ||
     quotation?.lead?.property_type ||
     "-";
-  const moduleBrand =
-    quotation?.summary_module_brand ||
-    snapshotValues.summary_module_brand ||
-    materialSummary?.summary_module_brand ||
-    "-";
+  const moduleBrand = materialSummary?.summary_module_brand || "-";
   const moduleWattage =
-    quotation?.summary_module_wattage ??
-    numberFromFormValue(snapshotValues.summary_module_wattage) ??
-    materialSummary?.summary_module_wattage ??
-    null;
-  const inverterBrand =
-    quotation?.summary_inverter_brand ||
-    snapshotValues.summary_inverter_brand ||
-    materialSummary?.summary_inverter_brand ||
-    "-";
+    materialSummary?.summary_module_wattage ?? null;
+  const inverterBrand = materialSummary?.summary_inverter_brand || "-";
   const totalTurnkeyCost =
     quotation?.summary_total_turnkey_cost ??
     numberFromFormValue(snapshotValues.summary_total_turnkey_cost) ??
@@ -514,10 +502,6 @@ export function QuotationDetailPage() {
                   label="Panel Technology"
                   value={panelTechnology}
                 />
-                <DetailItem
-                  label="Inverter Type"
-                  value={inverterType}
-                />
                 <DetailItem label="Site Type" value={siteType} />
                 <DetailItem
                   label="Expected Generation p.a. (kWh)"
@@ -559,6 +543,7 @@ export function QuotationDetailPage() {
                           <th className="px-4 py-3">Sr.</th>
                           <th className="px-4 py-3">Material</th>
                           <th className="px-4 py-3">Brand</th>
+                          <th className="px-4 py-3">Model</th>
                           <th className="px-4 py-3">Specifications</th>
                           <th className="px-4 py-3">Quantity</th>
                           <th className="px-4 py-3">Unit</th>
@@ -570,6 +555,7 @@ export function QuotationDetailPage() {
                             <td className="px-4 py-3">{index + 1}</td>
                             <td className="px-4 py-3">{item.description || "-"}</td>
                             <td className="px-4 py-3">{item.brand || "-"}</td>
+                            <td className="px-4 py-3">{item.model_number || "-"}</td>
                             <td className="px-4 py-3">
                               {item.specification || item.make_specification || "-"}
                             </td>

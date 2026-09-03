@@ -56,12 +56,11 @@ request is made.
 
 ## Daily Summaries
 
-`process-daily-summaries` runs only for active tenant administrators who:
-
-- have a verified notification recipient;
-- explicitly enabled `requested_daily_summary`;
-- selected a delivery time; and
-- have no active opt-out.
+`process-daily-summaries` runs at 10:00 AM Asia/Kolkata (04:30 UTC) for every
+active EPC Admin with a valid workspace WhatsApp number. Bizlee automatically
+keeps the notification destination and daily-summary delivery enabled, so an
+admin does not need to configure a recipient, opt in, or select a delivery
+time in Settings. A global WhatsApp `STOP` or `UNSUBSCRIBE` remains respected.
 
 The generator reads aggregate counts using an explicit organization ID resolved
 from the recipient's company. It does not reuse the logged-in user's personal
@@ -69,19 +68,25 @@ brief and does not send customer names, phone numbers, addresses, invoice
 amounts, raw notes, or record content to WhatsApp. OpenAI turns only the bounded
 aggregate snapshot into a short headline and summary.
 
-## Consent and Opt-Outs
+When all four daily operational counts are zero, an active 14-day trial receives
+one short, positive fallback message selected deterministically per company and
+day. This avoids an AI request and varies the onboarding prompt across the
+trial. After the trial, an empty snapshot is not sent; data-based summaries are
+unaffected.
 
-The Settings screen records consent independently for every notification type.
-Disabling a type creates an active `notification_unsubscribes` row.
+## Opt-Outs
+
+Daily summaries are platform-managed rather than configurable in Settings. The
+fixed delivery still respects a global WhatsApp opt-out.
 
 Inbound case-insensitive `STOP` or `UNSUBSCRIBE`:
 
 - disables all WhatsApp preferences for the matching verified number; and
 - creates an `all_whatsapp` opt-out.
 
-Inbound `START` clears the global opt-out but does not silently re-enable
-individual preferences. The tenant administrator must select the desired types
-again in Bizlee.
+Inbound `START` clears the global opt-out. The next scheduled run restores the
+fixed daily summary for an eligible EPC Admin; it does not re-enable other
+notification types.
 
 ## Required Function Secrets
 
@@ -116,11 +121,11 @@ secrets must exactly match the corresponding Edge Function secrets.
 ## Rollout Checklist
 
 1. Apply migrations in staging and run both notification SQL test files.
-2. Deploy `notification-settings`, `process-notifications`, and
-   `process-daily-summaries`.
+2. Deploy `process-notifications` and `process-daily-summaries`.
 3. Configure all required Function secrets and Vault entries.
 4. Keep `NOTIFICATION_TEST_MODE=true` and allowlist internal numbers only.
-5. Enable preferences for an internal tenant admin.
+5. Ensure an internal EPC Admin has an active account and verified workspace
+   phone number.
 6. Queue one trial event and confirm sent, delivered, and read transitions.
 7. Reply `STOP`; confirm all preferences are disabled before another send.
 8. Verify the daily summary contains aggregate counts only.

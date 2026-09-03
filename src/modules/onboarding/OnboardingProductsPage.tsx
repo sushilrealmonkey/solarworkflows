@@ -91,15 +91,17 @@ export function OnboardingProductsView({
         </div>
 
         <div className="mt-5 grid gap-4">
-          {productSetupOptions.map((option) => (
-            <ProductSetupOptionCard
-              action={action}
-              disabled={busy}
-              key={option.choice}
-              onChoose={onChoose}
-              option={option}
-            />
-          ))}
+          {productSetupOptions
+            .filter((option) => option.choice !== "skip")
+            .map((option) => (
+              <ProductSetupOptionCard
+                action={action}
+                disabled={busy}
+                key={option.choice}
+                onChoose={onChoose}
+                option={option}
+              />
+            ))}
         </div>
 
         {error ? (
@@ -111,9 +113,12 @@ export function OnboardingProductsView({
           </p>
         ) : null}
 
-        <div className="mt-6 [&>button]:!text-slate-200 [&>button:hover]:!bg-white/10">
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-2 [&>button]:!text-slate-200 [&>button:hover]:!bg-white/10">
           <Button disabled={busy} onClick={onBack} variant="ghost">
             {action === "back" ? "Going back..." : "Back"}
+          </Button>
+          <Button disabled={busy} onClick={() => onChoose("skip")} variant="ghost">
+            {action === "skip" ? "Saving choice..." : "Do It Later"}
           </Button>
         </div>
       </AuthThemeCard>

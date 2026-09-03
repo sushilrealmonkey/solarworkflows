@@ -23,6 +23,7 @@ export type PlatformCompanyAdmin = {
   full_name: string | null;
   email: string | null;
   phone: string | null;
+  phone_verified: boolean;
   status: PlatformAdminStatus | null;
   auth_user_id: string | null;
   invited_at: string | null;

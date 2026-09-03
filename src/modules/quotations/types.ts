@@ -25,6 +25,7 @@ export type Quotation = {
   customer_id: string | null;
   lead_id: string | null;
   site_survey_id: string | null;
+  quotation_package_id: string | null;
   bom_template_id: string | null;
   bom_status: QuotationBomStatus | null;
   quotation_date: string | null;
@@ -127,6 +128,7 @@ export type QuotationMaterialItem = {
   hsn_code?: string;
   description: string;
   brand?: string;
+  model_number?: string;
   specification?: string;
   make_specification: string;
   quantity: string;
@@ -309,6 +311,7 @@ export type QuotationFormValues = {
   customer_id: string;
   lead_id: string;
   site_survey_id: string;
+  quotation_package_id: string;
   bom_template_id: string;
   quotation_date: string;
   company_name: string;

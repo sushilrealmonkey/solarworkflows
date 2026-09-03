@@ -28,7 +28,7 @@ import { documentRelatedLabel } from "../documents/documentUtils";
 import type { OrganizationDocumentWithRelations } from "../documents/types";
 import { formatStock } from "../inventory/inventoryUtils";
 import type { InventoryItem } from "../inventory/types";
-import type { PaymentWithRelations } from "../payments/types";
+import type { PaymentDueItem, PaymentWithRelations } from "../payments/types";
 import { formatKw } from "../projects/projectUtils";
 import { projectStatusOptions } from "../projects/projectWorkflow";
 import type { PurchaseOrderWithRelations } from "../purchases/types";
@@ -174,6 +174,7 @@ function EpcAdminDashboard() {
           overdueFollowups={adminData.overdueFollowups.length}
           pendingSurveyReports={adminData.pendingSurveyReports}
           overdueAmount={adminData.overdueAmount}
+          overduePayments={adminData.overduePaymentItems}
           delayedProjects={adminData.delayedProjects.length}
           currencyFormatter={compactCurrencyFormatter}
         />
@@ -266,6 +267,12 @@ function EpcAdminDashboard() {
         />
       </section>
 
+      <PaymentDuesPanel
+        currencyFormatter={compactCurrencyFormatter}
+        loading={loading}
+        paymentDueBuckets={adminData.paymentDueBuckets}
+      />
+
       <section className="grid gap-3 sm:gap-4 lg:grid-cols-3">
         <SalesPipelinePanel
           currencyFormatter={compactCurrencyFormatter}
@@ -340,6 +347,7 @@ function buildEpcDashboardModel(
   const quotations = snapshot?.quotations ?? [];
   const projects = snapshot?.projects ?? [];
   const paymentSummaries = snapshot?.paymentSummaries ?? [];
+  const paymentDueItems = snapshot?.paymentDueItems ?? [];
   const followups = snapshot?.followups.filter(isActiveFollowup) ?? [];
   const surveys = snapshot?.upcomingSurveys ?? [];
   const reservations = snapshot?.inventoryReservations ?? [];
@@ -381,13 +389,14 @@ function buildEpcDashboardModel(
       startOfLocalDay(new Date(`${project.expected_completion_date}T00:00:00`)) <
         today,
   );
-  const overduePaymentSummaries = paymentSummaries.filter(
-    (row) => row.payment_status === "overdue" && Number(row.balance_due ?? 0) > 0,
+  const overduePaymentItems = paymentDueItems.filter(
+    (item) => item.payment_status === "overdue" && Number(item.balance_due ?? 0) > 0,
   );
-  const overdueAmount = overduePaymentSummaries.reduce(
-    (total, row) => total + Number(row.balance_due ?? 0),
+  const overdueAmount = overduePaymentItems.reduce(
+    (total, item) => total + Number(item.balance_due ?? 0),
     0,
   );
+  const paymentDueBuckets = groupPaymentDueItems(paymentDueItems, today);
   const receivedTotal = Number(summary.total_received_amount ?? 0);
   const dueTotal = Number(summary.total_balance_due ?? 0);
   const collectionEfficiency =
@@ -499,7 +508,8 @@ function buildEpcDashboardModel(
     newEnquiriesThisMonth,
     overdueAmount,
     overdueFollowups,
-    overduePaymentSummaries,
+    overduePaymentItems,
+    paymentDueBuckets,
     pendingSurveyReports,
     pipelineRows,
     projectedPipelineValue,
@@ -521,7 +531,7 @@ function buildEpcDashboardModel(
       overdueFollowups.length +
       delayedProjects.length +
       shortageReservations.length +
-      overduePaymentSummaries.length,
+      overduePaymentItems.length,
     monthlyRows,
     wonQuotations,
   };
@@ -909,11 +919,141 @@ function TodaysWorkPanel({
   );
 }
 
+function PaymentDuesPanel({
+  loading,
+  paymentDueBuckets,
+  currencyFormatter,
+}: {
+  loading: boolean;
+  paymentDueBuckets: EpcDashboardModel["paymentDueBuckets"];
+  currencyFormatter: Intl.NumberFormat;
+}) {
+  const bucketConfig = [
+    {
+      key: "overdue" as const,
+      title: "Overdue",
+      emptyLabel: "No overdue payments.",
+      className: "border-rose-200 bg-rose-50/70",
+      labelClassName: "text-rose-800",
+    },
+    {
+      key: "today" as const,
+      title: "Due today",
+      emptyLabel: "Nothing is due today.",
+      className: "border-amber-200 bg-amber-50/70",
+      labelClassName: "text-amber-800",
+    },
+    {
+      key: "tomorrow" as const,
+      title: "Due tomorrow",
+      emptyLabel: "Nothing is due tomorrow.",
+      className: "border-sky-200 bg-sky-50/70",
+      labelClassName: "text-sky-800",
+    },
+  ];
+
+  return (
+    <section className="rounded-lg border border-stone-200 bg-white p-3 shadow-sm sm:p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-950 sm:text-base">
+            Payment Dues
+          </h2>
+          <p className="mt-1 text-xs text-slate-600 sm:text-sm">
+            Overdue, today, and tomorrow—open a record to follow up with the client.
+          </p>
+        </div>
+        <div className="flex gap-3 text-sm font-semibold">
+          <Link className="text-indigo-700 hover:text-indigo-900" to="/projects?payment=overdue">
+            Projects
+          </Link>
+          <Link className="text-orange-700 hover:text-orange-900" to="/b2b-sales?payment=overdue">
+            B2B sales
+          </Link>
+        </div>
+      </div>
+
+      {loading ? <LoadingRows count={3} /> : null}
+      {!loading ? (
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          {bucketConfig.map((bucket) => {
+            const dueItems = paymentDueBuckets[bucket.key];
+            return (
+              <section
+                className={`rounded-lg border p-3 ${bucket.className}`}
+                key={bucket.key}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-sm font-semibold ${bucket.labelClassName}`}>
+                    {bucket.title}
+                  </p>
+                  <span className={`rounded-full bg-white/80 px-2 py-0.5 text-xs font-semibold ${bucket.labelClassName}`}>
+                    {dueItems.length}
+                  </span>
+                </div>
+                {dueItems.length === 0 ? (
+                  <p className="mt-3 text-sm text-slate-600">{bucket.emptyLabel}</p>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {dueItems.slice(0, 4).map((item) => {
+                      const isB2BSale = item.source_type === "b2b_sale";
+                      return (
+                        <Link
+                          className={`block rounded-md border border-l-4 bg-white p-2.5 shadow-sm transition hover:shadow-md ${
+                            isB2BSale
+                              ? "border-stone-200 border-l-orange-500 hover:bg-orange-50"
+                              : "border-stone-200 border-l-indigo-500 hover:bg-indigo-50"
+                          }`}
+                          key={`${item.source_type}-${item.source_id}`}
+                          to={paymentDueItemRoute(item)}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-semibold text-slate-950">
+                                {item.customer_name ?? item.source_name ?? "Payment due"}
+                              </p>
+                              <p className="mt-0.5 truncate text-xs text-slate-600">
+                                {item.source_code ?? (isB2BSale ? "B2B Sale" : "Project")}
+                              </p>
+                            </div>
+                            <span
+                              className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                                isB2BSale
+                                  ? "bg-orange-100 text-orange-800"
+                                  : "bg-indigo-100 text-indigo-800"
+                              }`}
+                            >
+                              {isB2BSale ? "B2B sale" : "Project"}
+                            </span>
+                          </div>
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
+                            <span className="font-semibold text-slate-700">
+                              Due {formatPaymentDueDate(item.payment_due_on)}
+                            </span>
+                            <span className="font-semibold text-slate-950">
+                              {currencyFormatter.format(Number(item.balance_due ?? 0))}
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function OverduePanel({
   loading,
   overdueFollowups,
   pendingSurveyReports,
   overdueAmount,
+  overduePayments,
   delayedProjects,
   currencyFormatter,
 }: {
@@ -921,6 +1061,7 @@ function OverduePanel({
   overdueFollowups: number;
   pendingSurveyReports: number;
   overdueAmount: number;
+  overduePayments: PaymentDueItem[];
   delayedProjects: number;
   currencyFormatter: Intl.NumberFormat;
 }) {
@@ -936,18 +1077,13 @@ function OverduePanel({
       value: pendingSurveyReports,
     },
     {
-      label: `${currencyFormatter.format(overdueAmount)} payment overdue`,
-      to: "/payments",
-      value: overdueAmount,
-    },
-    {
       label: `${delayedProjects} installation/project delayed`,
       to: "/projects",
       value: delayedProjects,
     },
   ].filter(({ value }) => value > 0);
 
-  if (!loading && alerts.length === 0) {
+  if (!loading && alerts.length === 0 && overduePayments.length === 0) {
     return null;
   }
 
@@ -970,6 +1106,49 @@ function OverduePanel({
               </Link>
             </div>
           ))}
+          {overduePayments.length > 0 ? (
+            <section className="rounded-lg border border-rose-100 bg-rose-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-rose-800 sm:text-sm">
+                  {currencyFormatter.format(overdueAmount)} payment overdue
+                </p>
+                <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-rose-700">
+                  {overduePayments.length}
+                </span>
+              </div>
+              <div className="mt-2 space-y-2">
+                {overduePayments.slice(0, 3).map((payment) => (
+                  <Link
+                    className="block rounded-md border border-rose-100 bg-white px-3 py-2 hover:bg-rose-50"
+                    key={`${payment.source_type}-${payment.source_id}`}
+                    to={paymentDueItemRoute(payment)}
+                  >
+                    <span className="block truncate text-xs font-semibold text-slate-900 sm:text-sm">
+                      {payment.customer_name ?? payment.source_name ?? "Payment due"}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-slate-600">
+                      {payment.source_code ?? payment.source_name ?? "Record"} · Due {formatDate(payment.payment_due_on)} · {payment.days_overdue ?? 0} days overdue
+                    </span>
+                    <span className="mt-1 block text-xs font-semibold text-rose-700">
+                      {currencyFormatter.format(Number(payment.balance_due ?? 0))} — Open details
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs font-semibold">
+                {overduePayments.some((payment) => payment.source_type === "project") ? (
+                  <Link className="text-[#06173f] hover:text-orange-700" to="/projects?payment=overdue">
+                    View overdue projects
+                  </Link>
+                ) : null}
+                {overduePayments.some((payment) => payment.source_type === "b2b_sale") ? (
+                  <Link className="text-[#06173f] hover:text-orange-700" to="/b2b-sales?payment=overdue">
+                    View overdue sales
+                  </Link>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
         </div>
       ) : null}
     </AdminPanel>
@@ -1844,6 +2023,66 @@ function b2bCustomerActivePercent(summary: DashboardSummaryRow) {
     : 0;
 }
 
+function paymentDueItemRoute(item: PaymentDueItem) {
+  return item.source_type === "b2b_sale"
+    ? `/b2b-sales/${item.source_id}`
+    : `/projects/${item.source_id}`;
+}
+
+function groupPaymentDueItems(paymentDueItems: PaymentDueItem[], today: Date) {
+  const tomorrow = addDays(today, 1);
+  const dueItems = paymentDueItems
+    .filter((item) => Number(item.balance_due ?? 0) > 0)
+    .slice()
+    .sort(
+      (first, second) =>
+        new Date(`${first.payment_due_on}T00:00:00`).getTime() -
+        new Date(`${second.payment_due_on}T00:00:00`).getTime(),
+    );
+
+  return {
+    overdue: dueItems.filter(
+      (item) =>
+        startOfLocalDay(new Date(`${item.payment_due_on}T00:00:00`)) < today,
+    ),
+    today: dueItems.filter(
+      (item) =>
+        startOfLocalDay(new Date(`${item.payment_due_on}T00:00:00`)).getTime() ===
+        today.getTime(),
+    ),
+    tomorrow: dueItems.filter(
+      (item) =>
+        startOfLocalDay(new Date(`${item.payment_due_on}T00:00:00`)).getTime() ===
+        tomorrow.getTime(),
+    ),
+  };
+}
+
+function formatPaymentDueDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
+}
+
+function paymentContextLabel(payment: PaymentWithRelations) {
+  return (
+    payment.project?.project_code ??
+    payment.project?.project_name ??
+    payment.b2b_sale?.sale_code ??
+    payment.proforma_invoice?.proforma_code ??
+    payment.invoice?.invoice_code ??
+    "Payment"
+  );
+}
+
 function b2bSaleCustomerName(sale: B2BSaleWithRelations) {
   return (
     sale.customer?.business_name ??
@@ -2313,8 +2552,8 @@ function PlatformDashboard() {
       to: "/companies?tab=invites",
     },
     {
-      label: "Trials without first value",
-      value: Number(trialOutreach?.no_first_value_count ?? 0),
+      label: "Trials needing activation",
+      value: Number(trialOutreach?.no_enquiry_count ?? 0),
       to: "/trial-outreach?state=never_started",
     },
   ] satisfies Array<{ label: string; value: ReactNode; to?: string }>;
@@ -2390,14 +2629,14 @@ function PlatformDashboard() {
             to="/companies?tab=clients&status=subscription_risk"
           />
           <AttentionCard
-            count={Number(trialOutreach?.calls_due_today_count ?? 0)}
-            description="Call tasks due today for clients who still need activation help."
+            count={Number(trialOutreach?.interventions_due_count ?? 0)}
+            description="Behavior-driven engagement tasks that are due now."
             loading={loading}
-            title="Calls due today"
+            title="Interventions due"
             to="/trial-outreach?due=true"
           />
           <AttentionCard
-            count={Number(trialOutreach?.no_first_value_count ?? 0)}
+            count={Number(trialOutreach?.no_enquiry_count ?? 0)}
             description="Active trials that have not reached the first-value milestone."
             loading={loading}
             title="Trial activation gap"
@@ -2722,7 +2961,7 @@ function RecentPaymentsWidget({
 }) {
   return (
     <WidgetFrame
-      title="Recent Payments"
+      title="Latest Payments"
       locked={locked}
       action={
         !locked ? (
@@ -2742,10 +2981,11 @@ function RecentPaymentsWidget({
             key: payment.id,
             to: `/payments/${payment.id}`,
             title:
+              payment.customer?.business_name ??
               payment.customer?.full_name ??
               payment.project?.project_name ??
               "Payment",
-            meta: `${labelize(payment.payment_source)} - ${formatDate(
+            meta: `${paymentContextLabel(payment)} - ${labelize(payment.payment_source)} - ${formatDate(
               payment.payment_date,
             )}`,
             value: currencyFormatter.format(Number(payment.amount ?? 0)),
