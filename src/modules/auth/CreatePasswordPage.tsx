@@ -7,6 +7,11 @@ import {
   isValidNewPassword,
   verifyInviteToken,
 } from "../../services/authAccess";
+import {
+  hasVerifiedPasswordSetupSession,
+  isPasswordSetupLinkAwaitingVerification,
+  shouldRedirectReadyPasswordSetupUser,
+} from "./createPasswordFlow";
 
 type InviteNotice = {
   title: string;
@@ -37,19 +42,23 @@ export function CreatePasswordPage() {
 
   const isVerifyingInvite = inviteVerificationStatus === "verifying";
   const isAwaitingInviteConfirmation =
-    inviteLink.kind === "token" &&
-    inviteVerificationStatus === "pending" &&
-    !session;
+    isPasswordSetupLinkAwaitingVerification(
+      inviteLink.kind,
+      inviteVerificationStatus,
+    );
   const isConfirmingInvite =
     isAwaitingInviteConfirmation || isVerifyingInvite;
-  const isCompletingInvitedPassword =
-    inviteLink.kind === "token" && inviteVerificationStatus === "complete";
 
-  if (status === "ready" && !isCompletingInvitedPassword) {
+  if (shouldRedirectReadyPasswordSetupUser(status === "ready", inviteLink.kind)) {
     return <Navigate to="/" replace />;
   }
 
-  const hasInviteSession = Boolean(session) && !isVerifyingInvite;
+  const hasInviteSession = hasVerifiedPasswordSetupSession({
+    hasSession: Boolean(session),
+    isVerifying: isVerifyingInvite,
+    linkKind: inviteLink.kind,
+    verificationStatus: inviteVerificationStatus,
+  });
   const canCreatePassword = hasInviteSession && !isConfirmingInvite;
   const cardDescription = canCreatePassword
     ? "Create a password to finish setting up your workspace access."
