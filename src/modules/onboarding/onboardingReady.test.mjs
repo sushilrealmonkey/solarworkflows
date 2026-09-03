@@ -3,8 +3,10 @@ import test from "node:test";
 import {
   loadReadySummary,
   productSummaryCopy,
+  readyActionForSubscription,
   readyDestinations,
   readyScreenContent,
+  readyScreenContentForAction,
   runReadyActionLock,
   runReadyBack,
   runReadyCompletion,
@@ -29,11 +31,18 @@ const completedProgress = {
   updated_at: "2026-08-17T00:00:00Z",
 };
 
-test("Ready defines the payment-first Step 5 completion experience", () => {
+test("Ready defines the self-signup payment and invitation-trial enquiry experiences", () => {
   assert.equal(readyScreenContent.badge, "Step 5 of 5");
   assert.equal(readyScreenContent.title, "Your Bizlee workspace is set up");
   assert.equal(readyDestinations.payment, "/onboarding/payment");
+  assert.equal(readyDestinations.firstEnquiry, "/leads?new=1&onboarding=complete");
   assert.equal(readyDestinations.back, "/onboarding/team");
+  assert.equal(readyActionForSubscription(false), "payment");
+  assert.equal(readyActionForSubscription(true), "first_enquiry");
+  assert.match(
+    readyScreenContentForAction("first_enquiry").description,
+    /free trial/i,
+  );
 });
 
 test("loading the Ready summary does not complete onboarding", async () => {
@@ -137,6 +146,25 @@ test("payment follows successful onboarding completion", async () => {
   assert.deepEqual(events, [
     "complete",
     ["finish", "completed", "/onboarding/payment", { replace: true }],
+  ]);
+});
+
+test("an invitation trial skips payment and opens the first enquiry", async () => {
+  const events = [];
+
+  await runReadyCompletion("first_enquiry", {
+    complete: async () => completedProgress,
+    finish: (progress, route, options) =>
+      events.push(["finish", progress.status, route, options]),
+  });
+
+  assert.deepEqual(events, [
+    [
+      "finish",
+      "completed",
+      "/leads?new=1&onboarding=complete",
+      { replace: true },
+    ],
   ]);
 });
 

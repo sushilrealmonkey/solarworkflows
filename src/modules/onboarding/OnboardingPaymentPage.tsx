@@ -1,15 +1,21 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../app/AuthProvider";
 import { AuthThemeCard, AuthThemeShell } from "../auth/AuthTheme";
 import { BillingPlansSection } from "../billing/BillingPlansPage";
+import { readyDestinations } from "./onboardingReady";
 
 export function OnboardingPaymentPage() {
   const navigate = useNavigate();
   const { refreshSubscription, subscription } = useAuth();
   const isActive = subscription?.status === "active";
+  const isInvitationTrial = subscription?.is_invitation_trial === true;
 
   useEffect(() => {
+    if (isInvitationTrial) {
+      return;
+    }
+
     if (isActive) {
       navigate("/dashboard", { replace: true });
       return;
@@ -27,7 +33,11 @@ export function OnboardingPaymentPage() {
     }, 5_000);
 
     return () => window.clearInterval(intervalId);
-  }, [isActive, navigate, refreshSubscription]);
+  }, [isActive, isInvitationTrial, navigate, refreshSubscription]);
+
+  if (isInvitationTrial) {
+    return <Navigate replace to={readyDestinations.firstEnquiry} />;
+  }
 
   return (
     <AuthThemeShell

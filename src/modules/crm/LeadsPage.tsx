@@ -119,6 +119,8 @@ export function LeadsPage() {
     "quotations",
     "create",
   );
+  const shouldReturnToDashboardAfterCreate =
+    new URLSearchParams(location.search).get("onboarding") === "complete";
 
   async function loadData() {
     if (!canView) {
@@ -266,6 +268,11 @@ export function LeadsPage() {
         const createdLead = await createLead(profile, formState.values);
         setLeads((current) => [createdLead, ...current]);
         showToast("Enquiry created.", "success");
+
+        if (shouldReturnToDashboardAfterCreate) {
+          navigate("/dashboard", { replace: true });
+          return;
+        }
       } else if (formState.lead) {
         const updatedLead = await updateLead(formState.lead.id, formState.values);
         setLeads((current) =>

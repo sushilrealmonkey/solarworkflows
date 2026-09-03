@@ -17,7 +17,8 @@ import { useOnboarding } from "./OnboardingGate";
 import {
   loadReadySummary,
   productSummaryCopy,
-  readyScreenContent,
+  readyActionForSubscription,
+  readyScreenContentForAction,
   runReadyActionLock,
   runReadyBack,
   runReadyCompletion,
@@ -31,12 +32,15 @@ type PageAction = ReadyAction | "back" | null;
 
 export function OnboardingReadyPage() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, subscription } = useAuth();
   const { setProgress } = useOnboarding();
   const actionLock = useRef(false);
   const [summary, setSummary] = useState<ReadySummary | null>(null);
   const [action, setAction] = useState<PageAction>(null);
   const [error, setError] = useState<string | null>(null);
+  const primaryAction = readyActionForSubscription(
+    subscription?.is_invitation_trial === true,
+  );
 
   useEffect(() => {
     let active = true;
@@ -99,6 +103,7 @@ export function OnboardingReadyPage() {
       error={error}
       onBack={() => void goBack()}
       onComplete={(nextAction) => void completeAndContinue(nextAction)}
+      primaryAction={primaryAction}
       summary={summary}
     />
   );
@@ -109,32 +114,36 @@ export function OnboardingReadyView({
   error,
   onBack,
   onComplete,
+  primaryAction,
   summary,
 }: {
   action: PageAction;
   error: string | null;
   onBack: () => void;
   onComplete: (action: ReadyAction) => void;
+  primaryAction: ReadyAction;
   summary: ReadySummary | null;
 }) {
   const busy = action !== null;
+  const screenContent = readyScreenContentForAction(primaryAction);
+  const isInvitationTrial = primaryAction === "first_enquiry";
 
   return (
     <AuthThemeShell
-      badge={readyScreenContent.badge}
+      badge={screenContent.badge}
       contentMaxWidthClass="max-w-xl"
-      desktopDescription={readyScreenContent.description}
-      mobileDescription={readyScreenContent.description}
-      title={readyScreenContent.title}
+      desktopDescription={screenContent.description}
+      mobileDescription={screenContent.description}
+      title={screenContent.title}
     >
       <div className="[&>div]:!mt-4 [&>div]:!p-4 sm:[&>div]:!p-7 lg:[&>div]:!mt-0 lg:[&>div]:!p-8">
       <AuthThemeCard>
         <div className="flex items-center justify-between gap-4">
           <p className="text-sm font-semibold text-orange-200">
-            {readyScreenContent.badge}
+            {screenContent.badge}
           </p>
           <span className="text-xs font-medium text-slate-400">
-            {readyScreenContent.context}
+            {screenContent.context}
           </span>
         </div>
 
@@ -154,8 +163,9 @@ export function OnboardingReadyView({
           <div>
             <h2 className="text-xl font-semibold text-white">Setup summary</h2>
             <p className="mt-1 text-sm leading-6 text-slate-300">
-              Products and teammates can still be added later. Complete payment
-              to activate the workspace and open your dashboard.
+              {isInvitationTrial
+                ? "Products and teammates can still be added later. Start with your first enquiry, then continue to the dashboard."
+                : "Products and teammates can still be added later. Complete payment to activate the workspace and open your dashboard."}
             </p>
           </div>
         </div>
@@ -204,10 +214,14 @@ export function OnboardingReadyView({
 
         <div className="mt-6 space-y-3">
           <div className="[&>button]:min-h-12 [&>button]:w-full [&>button]:rounded-xl [&>button]:text-base">
-            <Button disabled={busy} onClick={() => onComplete("payment")}>
+            <Button disabled={busy} onClick={() => onComplete(primaryAction)}>
               {action === "payment"
                 ? "Opening payment…"
-                : "Choose plan and continue to payment"}
+                : action === "first_enquiry"
+                  ? "Opening enquiry…"
+                  : isInvitationTrial
+                    ? "Create your first enquiry"
+                    : "Choose plan and continue to payment"}
             </Button>
           </div>
           <div className="pt-1 text-center [&>button]:min-h-11 [&>button]:!text-slate-300 [&>button:hover]:!bg-white/10">

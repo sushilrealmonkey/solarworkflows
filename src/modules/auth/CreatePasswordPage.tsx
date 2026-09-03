@@ -54,8 +54,8 @@ export function CreatePasswordPage() {
   const cardDescription = canCreatePassword
     ? "Create a password to finish setting up your workspace access."
     : isConfirmingInvite
-      ? "Click the button below to confirm your invitation and create password."
-      : "Open the invite email link to confirm your invitation and create password.";
+      ? "Verify your email address before creating a password."
+      : "Open the invite email link to verify your email and create a password.";
   const linkNotice =
     inviteLink.kind === "error"
       ? {
@@ -154,7 +154,7 @@ export function CreatePasswordPage() {
     >
       <AuthThemeCard>
         <h2 className="mt-2 text-2xl font-semibold tracking-normal text-white">
-          Confirm Invitation
+          {canCreatePassword ? "Create your password" : "Verify your email"}
         </h2>
         <p className="mt-2 text-sm leading-6 text-slate-300">
           {cardDescription}
@@ -267,7 +267,7 @@ function InviteVerificationCard({
         onClick={onConfirm}
         type="button"
       >
-        {isVerifying ? "Verifying invitation" : "Confirm Invitation"}
+        {isVerifying ? "Verifying email" : "Verify email"}
       </button>
     </div>
   );

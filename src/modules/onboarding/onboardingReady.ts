@@ -9,12 +9,21 @@ export const readyScreenContent = {
     "Your basic setup is complete. Choose a plan and complete payment to open your dashboard.",
 } as const;
 
+export const invitationTrialReadyScreenContent = {
+  badge: "Step 5 of 5",
+  context: "Almost ready",
+  title: "Your Bizlee workspace is set up",
+  description:
+    "Your free trial is ready. Create your first enquiry to begin using your workspace.",
+} as const;
+
 export const readyDestinations = {
   payment: "/onboarding/payment",
+  firstEnquiry: "/leads?new=1&onboarding=complete",
   back: "/onboarding/team",
 } as const;
 
-export type ReadyAction = "payment";
+export type ReadyAction = "payment" | "first_enquiry";
 
 export type ReadySummary = {
   companyAvailable: boolean;
@@ -49,6 +58,16 @@ type BackDependencies = {
   commit: (progress: CompanyOnboardingProgress) => void;
   navigate: (route: string, options: { replace: true }) => void;
 };
+
+export function readyActionForSubscription(isInvitationTrial: boolean): ReadyAction {
+  return isInvitationTrial ? "first_enquiry" : "payment";
+}
+
+export function readyScreenContentForAction(action: ReadyAction) {
+  return action === "first_enquiry"
+    ? invitationTrialReadyScreenContent
+    : readyScreenContent;
+}
 
 export async function loadReadySummary({
   currentProfileId,
@@ -121,7 +140,13 @@ export async function runReadyCompletion(
 ) {
   const progress = await complete();
 
-  finish(progress, readyDestinations.payment, { replace: true });
+  finish(
+    progress,
+    action === "first_enquiry"
+      ? readyDestinations.firstEnquiry
+      : readyDestinations.payment,
+    { replace: true },
+  );
 
   return progress;
 }
