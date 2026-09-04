@@ -60,6 +60,27 @@ export type ProjectWithRelations = Project & {
   project_manager?: StaffOption | null;
 };
 
+export type ProjectPaymentMilestone = {
+  id: string;
+  company_id: string;
+  organization_id: string;
+  project_id: string;
+  milestone: string;
+  percentage: number | null;
+  amount: number | null;
+  due_date: string;
+  sort_order: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ProjectPaymentMilestoneFormValues = {
+  milestone: string;
+  percentage: string;
+  amount: string;
+  due_date: string;
+};
+
 export type FieldProject = {
   id: string;
   company_id: string;
@@ -111,7 +132,6 @@ export type ProjectFormValues = {
   priority: ProjectPriority;
   start_date: string;
   expected_completion_date: string;
-  payment_due_on: string;
   assigned_project_manager: string;
   assigned_installation_team: string;
   notes: string;

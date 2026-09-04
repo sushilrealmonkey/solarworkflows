@@ -10,6 +10,8 @@ import type { QuotationWithRelations } from "../quotations/types";
 import type {
   Project,
   ProjectFormValues,
+  ProjectPaymentMilestone,
+  ProjectPaymentMilestoneFormValues,
   ProjectStatus,
   ProjectWithRelations,
   FieldProject,
@@ -65,7 +67,6 @@ function projectPayload(values: ProjectFormValues) {
     priority: values.priority,
     start_date: nullable(values.start_date),
     expected_completion_date: nullable(values.expected_completion_date),
-    payment_due_on: nullable(values.payment_due_on),
     assigned_project_manager: nullable(values.assigned_project_manager),
     assigned_installation_team: parseTeamInput(values.assigned_installation_team),
     notes: nullable(values.notes),
@@ -238,6 +239,67 @@ export async function updateProjectStatus(
   }
 
   return data as Project;
+}
+
+export async function fetchProjectPaymentMilestones(
+  profile: UserProfile | null,
+  projectId: string,
+) {
+  const client = requireSupabase();
+  let query = client
+    .from("project_payment_milestones")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("due_date", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (!profile?.is_super_admin) {
+    query = query.eq("organization_id", requireOrganization(profile));
+  }
+
+  const { data, error } = await query;
+
+  // The table is added by the accompanying migration. Keep the project page
+  // available while an older database is being upgraded.
+  if (error?.code === "PGRST205") {
+    return [] as ProjectPaymentMilestone[];
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as ProjectPaymentMilestone[];
+}
+
+export async function replaceProjectPaymentMilestones(
+  projectId: string,
+  milestones: ProjectPaymentMilestoneFormValues[],
+) {
+  const { data, error } = await requireSupabase().rpc(
+    "replace_project_payment_milestones",
+    {
+      target_project_id: projectId,
+      target_milestones: milestones.map((milestone) => ({
+        milestone: milestone.milestone.trim(),
+        percentage: milestone.percentage.trim(),
+        amount: milestone.amount.trim(),
+        due_date: milestone.due_date,
+      })),
+    },
+  );
+
+  if (error?.code === "PGRST202") {
+    throw new Error(
+      "Payment schedules are still being prepared. Please refresh after the database update completes.",
+    );
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data ?? []) as ProjectPaymentMilestone[];
 }
 
 export async function fetchFieldProjects() {

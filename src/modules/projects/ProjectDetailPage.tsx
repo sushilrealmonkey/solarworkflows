@@ -33,8 +33,10 @@ import type { Vendor } from "../vendors/types";
 import {
   fetchProject,
   fetchProjectCustomers,
+  fetchProjectPaymentMilestones,
   fetchProjectQuotations,
   fetchProjectSiteSurveys,
+  replaceProjectPaymentMilestones,
   updateProject,
   updateProjectStatus,
 } from "./projectApi";
@@ -51,6 +53,8 @@ import {
 } from "./ProjectsPage";
 import type {
   ProjectFormValues,
+  ProjectPaymentMilestone,
+  ProjectPaymentMilestoneFormValues,
   ProjectStatus,
   ProjectWithRelations,
 } from "./types";
@@ -60,13 +64,9 @@ import type {
 } from "../site-surveys/types";
 import type {
   QuotationInventoryReservation,
-  QuotationPaymentTermFormValues,
   QuotationWithRelations,
 } from "../quotations/types";
-import {
-  fetchQuotation,
-  updateQuotationPaymentTerms,
-} from "../quotations/quotationApi";
+import { fetchQuotation } from "../quotations/quotationApi";
 import {
   createPayment,
   fetchPaymentDueItems,
@@ -134,11 +134,6 @@ type MaterialIssueFormValues = {
   notes: string;
 };
 
-type ProjectPaymentTermsFormValues = {
-  paymentTerms: string;
-  paymentTermRows: QuotationPaymentTermFormValues[];
-};
-
 export function ProjectDetailPage() {
   const { id } = useParams();
   const { profile, permissions } = useAuth();
@@ -168,9 +163,16 @@ export function ProjectDetailPage() {
     {},
   );
   const [savingPayment, setSavingPayment] = useState(false);
-  const [paymentTermsForm, setPaymentTermsForm] =
-    useState<ProjectPaymentTermsFormValues | null>(null);
-  const [savingPaymentTerms, setSavingPaymentTerms] = useState(false);
+  const [paymentMilestones, setPaymentMilestones] = useState<
+    ProjectPaymentMilestone[]
+  >([]);
+  const [paymentScheduleForm, setPaymentScheduleForm] = useState<
+    ProjectPaymentMilestoneFormValues[] | null
+  >(null);
+  const [paymentScheduleErrors, setPaymentScheduleErrors] = useState<
+    Record<string, string>
+  >({});
+  const [savingPaymentSchedule, setSavingPaymentSchedule] = useState(false);
   const [documents, setDocuments] = useState<OrganizationDocumentWithRelations[]>(
     [],
   );
@@ -198,12 +200,6 @@ export function ProjectDetailPage() {
 
   const canView = hasPermission(profile, permissions, "projects", "view");
   const canUpdate = hasPermission(profile, permissions, "projects", "update");
-  const canUpdateQuotations = hasPermission(
-    profile,
-    permissions,
-    "quotations",
-    "update",
-  );
   const canAssign = hasPermission(profile, permissions, "projects", "assign");
   const canDelete = hasPermission(profile, permissions, "projects", "delete");
   const canViewPayments = hasPermission(profile, permissions, "payments", "view");
@@ -263,6 +259,7 @@ export function ProjectDetailPage() {
       setError(null);
       const [
         nextProject,
+        nextPaymentMilestones,
         nextCustomers,
         nextQuotations,
         nextSiteSurveys,
@@ -274,6 +271,7 @@ export function ProjectDetailPage() {
         nextInvoices,
       ] = await Promise.all([
         fetchProject(profile, id),
+        fetchProjectPaymentMilestones(profile, id),
         fetchProjectCustomers(profile),
         fetchProjectQuotations(profile),
         fetchProjectSiteSurveys(profile),
@@ -289,6 +287,7 @@ export function ProjectDetailPage() {
         canViewInvoices ? fetchProjectInvoices(profile, id) : Promise.resolve([]),
       ]);
       setProject(nextProject);
+      setPaymentMilestones(nextPaymentMilestones);
       const nextLinkedQuotation = nextProject?.quotation_id
         ? await fetchQuotation(profile, nextProject.quotation_id).catch(() => null)
         : null;
@@ -453,52 +452,91 @@ export function ProjectDetailPage() {
     setPaymentForm(emptyPaymentForm(projectToPaymentOption(project)));
   }
 
-  function openPaymentTermsForm() {
-    if (!linkedQuotation) {
+  function openPaymentScheduleForm() {
+    setPaymentScheduleErrors({});
+    setPaymentScheduleForm(
+      paymentMilestones.length > 0
+        ? paymentMilestones.map(({ milestone, percentage, amount, due_date }) => ({
+            milestone,
+            percentage: percentage === null ? "" : String(percentage),
+            amount: amount === null ? "" : String(amount),
+            due_date,
+          }))
+        : (linkedQuotation?.quotation_payment_terms ?? []).map(
+            ({ milestone, percentage, amount }) => ({
+              milestone,
+              percentage: percentage === null ? "" : String(percentage),
+              amount: amount === null ? "" : String(amount),
+              due_date: "",
+            }),
+          ),
+    );
+  }
+
+  async function handlePaymentScheduleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!project || !paymentScheduleForm) {
       return;
     }
 
-    setPaymentTermsForm({
-      paymentTerms: linkedQuotation.payment_terms ?? "",
-      paymentTermRows: (linkedQuotation.quotation_payment_terms ?? []).map(
-        (term) => ({
-          id: term.id,
-          milestone: term.milestone ?? "",
-          percentage:
-            term.percentage === null || term.percentage === undefined
-              ? ""
-              : String(term.percentage),
-          amount:
-            term.amount === null || term.amount === undefined
-              ? ""
-              : String(term.amount),
-        }),
-      ),
+    const nextErrors: Record<string, string> = {};
+    const selectedMilestones = new Set<string>();
+
+    paymentScheduleForm.forEach((milestone, index) => {
+      const milestoneKey = `milestone-${index}`;
+      const dueDateKey = `due_date-${index}`;
+      const milestoneName = milestone.milestone.trim();
+
+      if (!milestoneName) {
+        nextErrors[milestoneKey] = "Payment milestone is required.";
+      } else if (selectedMilestones.has(milestoneName.toLowerCase())) {
+        nextErrors[milestoneKey] = "Each payment milestone can only appear once.";
+      } else {
+        selectedMilestones.add(milestoneName.toLowerCase());
+      }
+
+      if (!milestone.due_date) {
+        nextErrors[dueDateKey] = "Due date is required.";
+      }
+
+      if (
+        milestone.percentage &&
+        (!Number.isFinite(Number(milestone.percentage)) ||
+          Number(milestone.percentage) < 0 ||
+          Number(milestone.percentage) > 100)
+      ) {
+        nextErrors[`percentage-${index}`] = "Enter a percentage from 0 to 100.";
+      }
+
+      if (
+        milestone.amount &&
+        (!Number.isFinite(Number(milestone.amount)) || Number(milestone.amount) < 0)
+      ) {
+        nextErrors[`amount-${index}`] = "Enter an amount of zero or more.";
+      }
     });
-  }
 
-  async function handlePaymentTermsSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!linkedQuotation || !paymentTermsForm) {
+    setPaymentScheduleErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) {
       return;
     }
 
     try {
-      setSavingPaymentTerms(true);
-      await updateQuotationPaymentTerms(linkedQuotation.id, paymentTermsForm);
-      setPaymentTermsForm(null);
-      showToast("Payment terms updated in the linked quotation.", "success");
+      setSavingPaymentSchedule(true);
+      await replaceProjectPaymentMilestones(project.id, paymentScheduleForm);
+      setPaymentScheduleForm(null);
+      showToast("Project payment schedule updated.", "success");
       await loadProject();
     } catch (nextError) {
       showToast(
         nextError instanceof Error
           ? nextError.message
-          : "Payment terms could not be updated.",
+          : "Payment schedule could not be updated.",
         "error",
       );
     } finally {
-      setSavingPaymentTerms(false);
+      setSavingPaymentSchedule(false);
     }
   }
 
@@ -744,6 +782,13 @@ export function ProjectDetailPage() {
             </header>
           </div>
 
+          <ProjectPaymentScheduleSection
+            milestones={paymentMilestones}
+            quotation={linkedQuotation ?? project.quotation ?? null}
+            canEdit={canUpdate && !project.archived_at}
+            onEdit={openPaymentScheduleForm}
+          />
+
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.85fr)]">
             <div className="space-y-6">
               <DetailSection compact title="Customer & Installation Details">
@@ -791,17 +836,6 @@ export function ProjectDetailPage() {
                 />
                 <DetailItem label="Project Type" value={labelize(project.project_type)} />
               </DetailSection>
-
-              <ProjectPaymentTermsSection
-                quotation={linkedQuotation ?? project.quotation ?? null}
-                canEdit={
-                  canUpdate &&
-                  canUpdateQuotations &&
-                  !project.archived_at &&
-                  Boolean(linkedQuotation)
-                }
-                onEdit={openPaymentTermsForm}
-              />
             </div>
 
             <aside className="space-y-6">
@@ -954,14 +988,14 @@ export function ProjectDetailPage() {
         />
       ) : null}
 
-      {paymentTermsForm && linkedQuotation ? (
-        <ProjectPaymentTermsModal
-          quotationCode={linkedQuotation.quotation_code}
-          values={paymentTermsForm}
-          setValues={setPaymentTermsForm}
-          onClose={() => setPaymentTermsForm(null)}
-          onSubmit={handlePaymentTermsSubmit}
-          saving={savingPaymentTerms}
+      {paymentScheduleForm ? (
+        <ProjectPaymentScheduleModal
+          values={paymentScheduleForm}
+          setValues={setPaymentScheduleForm}
+          errors={paymentScheduleErrors}
+          onClose={() => setPaymentScheduleForm(null)}
+          onSubmit={handlePaymentScheduleSubmit}
+          saving={savingPaymentSchedule}
         />
       ) : null}
 
@@ -1578,195 +1612,207 @@ function validateMaterialIssueForm(
   };
 }
 
-function ProjectPaymentTermsSection({
+function ProjectPaymentScheduleSection({
+  milestones,
   quotation,
   canEdit,
   onEdit,
 }: {
+  milestones: ProjectPaymentMilestone[];
   quotation: QuotationWithRelations | null;
   canEdit: boolean;
   onEdit: () => void;
 }) {
-  const paymentTermRows = quotation?.quotation_payment_terms ?? [];
+  const rows =
+    milestones.length > 0
+      ? milestones.map((milestone) => ({
+          id: milestone.id,
+          milestone: milestone.milestone,
+          percentage: milestone.percentage,
+          amount: milestone.amount,
+          due_date: milestone.due_date,
+        }))
+      : (quotation?.quotation_payment_terms ?? []).map((term) => ({
+          id: term.id,
+          milestone: term.milestone,
+          percentage: term.percentage,
+          amount: term.amount,
+          due_date: null,
+        }));
 
   return (
     <section className="rounded-xl border border-sky-200 bg-sky-50/40 p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-base font-semibold text-slate-950">Payment Terms</p>
-          <p className="mt-1 text-sm text-slate-600">
-            Shared with {quotation?.quotation_code ?? "the linked quotation"} so the client sees the same terms throughout the project.
-          </p>
+          <h2 className="text-base font-semibold text-slate-950">Payment Schedule</h2>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {quotation ? (
-            <Link
-              className="inline-flex min-h-10 items-center justify-center rounded-lg border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-sky-50"
-              to={`/quotations/${quotation.id}`}
+        {canEdit ? (
+          milestones.length === 0 ? (
+            <Button onClick={onEdit}>Create Schedule</Button>
+          ) : (
+            <button
+              aria-label="Edit payment schedule"
+              className="inline-flex size-10 items-center justify-center rounded-lg border border-orange-600 bg-orange-600 text-white shadow-sm transition-colors hover:bg-orange-700"
+              onClick={onEdit}
+              title="Edit payment schedule"
+              type="button"
             >
-              Open quotation
-            </Link>
-          ) : null}
-          {canEdit ? <Button onClick={onEdit}>Edit terms</Button> : null}
-        </div>
+              <PencilIcon />
+            </button>
+          )
+        ) : null}
       </div>
 
-      {!quotation ? (
-        <p className="mt-4 rounded-lg border border-dashed border-sky-200 bg-white/80 p-3 text-sm leading-6 text-slate-600">
-          Link a quotation to this project to make its payment terms visible here.
-        </p>
-      ) : null}
-
-      {quotation?.payment_terms ? (
-        <p className="mt-4 whitespace-pre-line rounded-lg border border-sky-100 bg-white/80 p-3 text-sm leading-6 text-slate-700">
-          {quotation.payment_terms}
-        </p>
-      ) : null}
-
-      {quotation && paymentTermRows.length === 0 && !quotation.payment_terms ? (
+      {rows.length === 0 ? (
         <p className="mt-4 rounded-lg border border-dashed border-sky-200 bg-white/80 p-3 text-sm text-slate-600">
-          No payment milestones have been added yet.
+          Set payment dates to track payment and receive in-time.
         </p>
-      ) : null}
-
-      {paymentTermRows.length > 0 ? (
+      ) : (
         <div className="mt-4 overflow-x-auto rounded-lg border border-sky-100 bg-white">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-sky-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
               <tr>
-                <th className="px-3 py-2.5">Milestone</th>
-                <th className="px-3 py-2.5 text-right">Share</th>
-                <th className="px-3 py-2.5 text-right">Amount</th>
+                <th className="px-4 py-3">Milestone</th>
+                <th className="px-4 py-3">Share</th>
+                <th className="px-4 py-3">Amount</th>
+                <th className="px-4 py-3">Payment Due Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-sky-50">
-              {paymentTermRows.map((term) => (
-                <tr key={term.id}>
-                  <td className="px-3 py-2.5 font-medium text-slate-900">
-                    {term.milestone || "Payment milestone"}
+              {rows.map((milestone) => (
+                <tr key={milestone.id}>
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    {milestone.milestone}
                   </td>
-                  <td className="px-3 py-2.5 text-right text-slate-700">
-                    {term.percentage == null ? "-" : `${term.percentage}%`}
+                  <td className="px-4 py-3 text-slate-700">
+                    {milestone.percentage === null
+                      ? "—"
+                      : `${milestone.percentage}%`}
                   </td>
-                  <td className="px-3 py-2.5 text-right font-semibold text-slate-900">
-                    {term.amount == null ? "-" : formatMoney(term.amount)}
+                  <td className="px-4 py-3 text-slate-700">
+                    {milestone.amount === null
+                      ? "—"
+                      : formatMoney(milestone.amount)}
+                  </td>
+                  <td className="px-4 py-3 text-slate-700">
+                    {milestone.due_date
+                      ? formatDate(milestone.due_date)
+                      : "Not set"}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      ) : null}
+      )}
     </section>
   );
 }
 
-function ProjectPaymentTermsModal({
-  quotationCode,
+function ProjectPaymentScheduleModal({
   values,
   setValues,
+  errors,
   onClose,
   onSubmit,
   saving,
 }: {
-  quotationCode: string | null;
-  values: ProjectPaymentTermsFormValues;
-  setValues: (values: ProjectPaymentTermsFormValues) => void;
+  values: ProjectPaymentMilestoneFormValues[];
+  setValues: (values: ProjectPaymentMilestoneFormValues[]) => void;
+  errors: Record<string, string>;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
 }) {
-  function updatePaymentTerm(
+  function updateMilestone(
     index: number,
-    key: keyof QuotationPaymentTermFormValues,
+    key: keyof ProjectPaymentMilestoneFormValues,
     value: string,
   ) {
-    setValues({
-      ...values,
-      paymentTermRows: values.paymentTermRows.map((paymentTerm, termIndex) =>
-        termIndex === index ? { ...paymentTerm, [key]: value } : paymentTerm,
+    setValues(
+      values.map((milestone, milestoneIndex) =>
+        milestoneIndex === index ? { ...milestone, [key]: value } : milestone,
       ),
-    });
+    );
   }
 
   return (
     <Modal
-      title="Edit Project Payment Terms"
+      title="Edit Project Payment Schedule"
       maxWidthClass="sm:max-w-4xl"
       onClose={onClose}
       onSubmit={onSubmit}
-      submitLabel="Save shared terms"
+      submitLabel="Save payment schedule"
       submitting={saving}
     >
       <div className="rounded-lg border border-sky-100 bg-sky-50 p-3 text-sm leading-6 text-slate-700 md:col-span-2">
-        Changes are saved to {quotationCode ?? "the linked quotation"} and will appear on its quotation page immediately.
-      </div>
-      <div className="md:col-span-2">
-        <TextArea
-          label="Payment Terms Summary"
-          value={values.paymentTerms}
-          onChange={(paymentTerms) => setValues({ ...values, paymentTerms })}
-        />
+        Payment terms are pulled from the linked quotation. Set a project due date for each payment milestone to track it in Payment Dues.
       </div>
       <div className="space-y-3 md:col-span-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-slate-900">Payment milestones</p>
+          <p className="text-sm font-semibold text-slate-900">Payment terms</p>
           <Button
             variant="secondary"
             onClick={() =>
-              setValues({
+              setValues([
                 ...values,
-                paymentTermRows: [
-                  ...values.paymentTermRows,
-                  { milestone: "", percentage: "", amount: "" },
-                ],
-              })
+                { milestone: "", percentage: "", amount: "", due_date: "" },
+              ])
             }
           >
             Add milestone
           </Button>
         </div>
-        {values.paymentTermRows.length === 0 ? (
+        {values.length === 0 ? (
           <p className="rounded-lg border border-dashed border-stone-200 p-3 text-sm text-slate-600">
-            Add a milestone to create a clear payment schedule for the client.
+            Add a payment milestone to create the project payment schedule.
           </p>
         ) : null}
-        {values.paymentTermRows.map((paymentTerm, index) => (
+        {values.map((milestone, index) => (
           <div
-            className="grid gap-3 rounded-lg border border-stone-200 p-3 md:grid-cols-[minmax(0,1.6fr)_minmax(0,0.65fr)_minmax(0,0.85fr)_auto] md:items-end"
-            key={paymentTerm.id ?? `payment-term-${index}`}
+            className="grid gap-3 rounded-lg border border-stone-200 p-3 md:grid-cols-[minmax(0,1.2fr)_minmax(0,0.5fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_auto] md:items-end"
+            key={`${milestone.milestone}-${index}`}
           >
             <TextInput
               label="Milestone"
-              value={paymentTerm.milestone}
-              onChange={(milestone) => updatePaymentTerm(index, "milestone", milestone)}
+              value={milestone.milestone}
+              onChange={(value) => updateMilestone(index, "milestone", value)}
+              error={errors[`milestone-${index}`]}
+              required
             />
             <TextInput
-              label="Percentage"
+              label="Share (%)"
               type="number"
               min="0"
               max="100"
               step="0.01"
-              value={paymentTerm.percentage}
-              onChange={(percentage) => updatePaymentTerm(index, "percentage", percentage)}
+              value={milestone.percentage}
+              onChange={(value) => updateMilestone(index, "percentage", value)}
+              error={errors[`percentage-${index}`]}
             />
             <TextInput
               label="Amount"
               type="number"
               min="0"
               step="0.01"
-              value={paymentTerm.amount}
-              onChange={(amount) => updatePaymentTerm(index, "amount", amount)}
+              value={milestone.amount}
+              onChange={(value) => updateMilestone(index, "amount", value)}
+              error={errors[`amount-${index}`]}
+            />
+            <TextInput
+              label="Payment Due Date"
+              type="date"
+              value={milestone.due_date}
+              onChange={(value) => updateMilestone(index, "due_date", value)}
+              error={errors[`due_date-${index}`]}
+              required
             />
             <Button
               variant="ghost"
               onClick={() =>
-                setValues({
-                  ...values,
-                  paymentTermRows: values.paymentTermRows.filter(
-                    (_, termIndex) => termIndex !== index,
-                  ),
-                })
+                setValues(
+                  values.filter((_, milestoneIndex) => milestoneIndex !== index),
+                )
               }
             >
               Remove

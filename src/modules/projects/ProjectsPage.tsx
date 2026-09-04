@@ -137,15 +137,22 @@ export function ProjectsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [archiveScope, canView, canViewPayments, profile?.id]);
 
-  const paymentDueByProjectId = useMemo(
-    () =>
-      new Map(
-        paymentDueItems
-          .filter((item) => item.source_type === "project")
-          .map((item) => [item.source_id, item]),
-      ),
-    [paymentDueItems],
-  );
+  const paymentDueByProjectId = useMemo(() => {
+    const earliestDueByProject = new Map<string, PaymentDueItem>();
+
+    for (const item of paymentDueItems) {
+      if (item.source_type !== "project") {
+        continue;
+      }
+
+      const current = earliestDueByProject.get(item.source_id);
+      if (!current || item.payment_due_on < current.payment_due_on) {
+        earliestDueByProject.set(item.source_id, item);
+      }
+    }
+
+    return earliestDueByProject;
+  }, [paymentDueItems]);
 
   const filteredProjects = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -677,12 +684,6 @@ export function ProjectFormModal({
         label="Expected Completion"
         value={values.expected_completion_date}
         onChange={(value) => update("expected_completion_date", value)}
-        type="date"
-      />
-      <TextInput
-        label="Payment Due On"
-        value={values.payment_due_on}
-        onChange={(value) => update("payment_due_on", value)}
         type="date"
       />
       <StaffSelect
