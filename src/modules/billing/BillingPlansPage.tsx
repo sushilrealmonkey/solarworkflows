@@ -538,7 +538,6 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
                   ? plan.yearly_price_paise
                   : plan.price_paise;
               const gstAmountPaise = Math.round(displayPricePaise * 18 / 100);
-              const payablePricePaise = displayPricePaise + gstAmountPaise;
               return (
                 <article
                   className={`min-w-0 rounded-2xl border bg-white p-5 shadow-sm ${
@@ -557,7 +556,7 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
                     ) : null}
                   </div>
                   <p className="mt-4 text-4xl font-semibold text-slate-950">
-                    ₹{(payablePricePaise / 100).toLocaleString("en-IN", {
+                    ₹{(displayPricePaise / 100).toLocaleString("en-IN", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
                     })}
@@ -566,13 +565,10 @@ function BillingPlansContent({ showHeader }: { showHeader: boolean }) {
                     </span>
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
-                    Base ₹{(displayPricePaise / 100).toLocaleString("en-IN", {
+                    Excluding GST · GST @ 18% ₹{(gstAmountPaise / 100).toLocaleString("en-IN", {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
-                    })} + GST @ 18% ₹{(gstAmountPaise / 100).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })} · payable amount includes GST
+                    })} additional
                   </p>
                   {billingPeriod === "yearly" ? (
                     <p className="mt-1 text-sm font-semibold text-emerald-700">
