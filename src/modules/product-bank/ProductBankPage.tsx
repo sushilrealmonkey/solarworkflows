@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -29,6 +30,7 @@ import {
 import type { CatalogLibraryCategory } from "../catalog-library/types";
 import {
   createProductBankProduct,
+  fetchProductBankFilterOptions,
   fetchProductBankPage,
   fetchProductBankProducts,
   importProductBankProducts,
@@ -80,6 +82,9 @@ function TenantProductBankPage() {
   const navigate = useNavigate();
   const canCreate = hasPermission(profile, permissions, "product_master", "create");
   const [products, setProducts] = useState<ProductBankProduct[]>([]);
+  const [availableCategoryIds, setAvailableCategoryIds] = useState<string[]>([]);
+  const [brandsByCategory, setBrandsByCategory] = useState<Record<string, string[]>>({});
+  const [catalogCategories, setCatalogCategories] = useState<CatalogLibraryCategory[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -92,7 +97,7 @@ function TenantProductBankPage() {
     brand: "",
   });
 
-  async function loadProducts() {
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -104,25 +109,55 @@ function TenantProductBankPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [filters, page]);
 
   useEffect(() => {
     void loadProducts();
-  }, [filters.brand, filters.categoryId, filters.search, page]);
+  }, [loadProducts]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadFilterOptions() {
+      try {
+        const [options, nextCategories] = await Promise.all([
+          fetchProductBankFilterOptions(),
+          fetchCatalogLibraryCategories(),
+        ]);
+
+        if (!active) return;
+        setAvailableCategoryIds(options.categoryIds);
+        setBrandsByCategory(options.brandsByCategory);
+        setCatalogCategories(nextCategories);
+      } catch (nextError) {
+        if (!active) return;
+        setError(messageOf(nextError, "Product Bank filters could not be loaded."));
+      }
+    }
+
+    void loadFilterOptions();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const categories = useMemo(
-    () => uniqueOptions(products.map((product) => ({
-      value: product.category_id,
-      label: product.category.name,
-    }))),
-    [products],
+    () => catalogCategories
+      .filter((category) => availableCategoryIds.includes(category.id))
+      .map((category) => ({
+        value: category.id,
+        label: category.name,
+      })),
+    [availableCategoryIds, catalogCategories],
   );
   const brands = useMemo(
-    () => uniqueOptions(products
-      .filter((product) => !filters.categoryId || product.category_id === filters.categoryId)
-      .filter((product) => Boolean(product.brand))
-      .map((product) => ({ value: product.brand ?? "", label: product.brand ?? "" }))),
-    [filters.categoryId, products],
+    () => {
+      const values = filters.categoryId
+        ? (brandsByCategory[filters.categoryId] ?? [])
+        : Object.values(brandsByCategory).flat();
+      return uniqueOptions(values.map((brand) => ({ value: brand, label: brand })));
+    },
+    [brandsByCategory, filters.categoryId],
   );
 
   useEffect(() => {

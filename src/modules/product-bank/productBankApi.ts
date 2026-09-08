@@ -24,6 +24,16 @@ export type ProductBankPage = {
   total: number;
 };
 
+export type ProductBankFilterOptions = {
+  categoryIds: string[];
+  brandsByCategory: Record<string, string[]>;
+};
+
+type ProductBankFilterRow = {
+  brand: string | null;
+  category_id: string;
+};
+
 function requireSupabase() {
   if (!supabase) {
     throw new Error("Supabase environment variables are not configured.");
@@ -105,6 +115,56 @@ export async function fetchProductBankPage(
   return {
     products: rows.map((row) => row.product_data),
     total: rows.length ? Number(rows[0].total_count) : 0,
+  };
+}
+
+/**
+ * Loads the lightweight category/brand facets separately from a result page.
+ * This keeps dropdown options complete when the table shows only one page.
+ */
+export async function fetchProductBankFilterOptions(): Promise<ProductBankFilterOptions> {
+  const client = requireSupabase();
+  const pageSize = 1_000;
+  const rows: ProductBankFilterRow[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await client
+      .from("catalog_library_products")
+      .select("category_id, brand")
+      .eq("publication_status", "published")
+      .order("category_id", { ascending: true })
+      .order("brand", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+
+    const nextPage = (data ?? []) as ProductBankFilterRow[];
+    rows.push(...nextPage);
+
+    if (nextPage.length < pageSize) break;
+  }
+
+  const categoryIds = new Set<string>();
+  const brandSetsByCategory = new Map<string, Set<string>>();
+
+  for (const row of rows) {
+    categoryIds.add(row.category_id);
+    const brand = row.brand?.trim();
+    if (!brand) continue;
+
+    const brands = brandSetsByCategory.get(row.category_id) ?? new Set<string>();
+    brands.add(brand);
+    brandSetsByCategory.set(row.category_id, brands);
+  }
+
+  return {
+    categoryIds: [...categoryIds],
+    brandsByCategory: Object.fromEntries(
+      [...brandSetsByCategory.entries()].map(([categoryId, brands]) => [
+        categoryId,
+        [...brands].sort((left, right) => left.localeCompare(right)),
+      ]),
+    ),
   };
 }
 
