@@ -140,6 +140,10 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const activeUserIdRef = useRef<string | null>(null);
+  const pendingContextLoadRef = useRef<{
+    key: string;
+    promise: Promise<void>;
+  } | null>(null);
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -163,7 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setErrorMessage(null);
   }, []);
 
-  const loadUserContext = useCallback(
+  const loadUserContextNow = useCallback(
     async (activeSession: Session | null) => {
       activeUserIdRef.current = activeSession?.user.id ?? null;
 
@@ -210,24 +214,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const { data: organizationData } = loadedProfile.organization_id
-        ? await supabase
+      const organizationRequest = loadedProfile.organization_id
+        ? supabase
             .from("organizations")
             .select("id, name, status, created_at")
             .eq("id", loadedProfile.organization_id)
             .maybeSingle()
-        : { data: null };
+        : Promise.resolve({ data: null });
+      const settingsRequest = supabase.rpc("get_organization_settings", {});
+      const brandingRequest = supabase.rpc("get_current_organization_branding");
+      const needsTenantAccess =
+        !loadedProfile.is_super_admin &&
+        loadedProfile.platform_role !== "backend_staff";
+      const subscriptionRequest = needsTenantAccess
+        ? fetchSubscriptionAccess()
+        : Promise.resolve(null);
+      const roleRequests = needsTenantAccess
+        ? Promise.all([
+            supabase.rpc("get_current_user_role_names"),
+            supabase.rpc("get_current_user_role_keys"),
+            supabase.rpc("get_current_user_permissions"),
+          ])
+        : Promise.resolve(null);
 
-      const loadedOrganization = organizationData as OrganizationRow | null;
-
-      const { data: settingsData } = await supabase.rpc(
-        "get_organization_settings",
-        {},
-      );
-
-      const { data: brandingData } = await supabase.rpc(
-        "get_current_organization_branding",
-      );
+      const [organizationResult, settingsResult, brandingResult, loadedSubscription, roleResults] =
+        await Promise.all([
+          organizationRequest,
+          settingsRequest,
+          brandingRequest,
+          subscriptionRequest,
+          roleRequests,
+        ]);
+      const loadedOrganization = organizationResult.data as OrganizationRow | null;
+      const settingsData = settingsResult.data;
+      const brandingData = brandingResult.data;
       const loadedBranding = brandingData as OrganizationBrandingRow | null;
       const tenantLogoUrl =
         loadedBranding?.organization_id === loadedProfile.organization_id &&
@@ -304,14 +324,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const loadedSubscription = await fetchSubscriptionAccess();
       setSubscription(loadedSubscription);
+      const [roleResult, roleKeyResult, permissionResult] = roleResults ?? [];
 
-      const [roleResult, roleKeyResult, permissionResult] = await Promise.all([
-        supabase.rpc("get_current_user_role_names"),
-        supabase.rpc("get_current_user_role_keys"),
-        supabase.rpc("get_current_user_permissions"),
-      ]);
+      if (!roleResult || !roleKeyResult || !permissionResult) {
+        throw new Error("Workspace roles could not be loaded.");
+      }
 
       if (roleResult.error) {
         throw new Error(roleResult.error.message);
@@ -345,6 +363,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus("ready");
     },
     [resetUserState],
+  );
+
+  const loadUserContext = useCallback(
+    async (activeSession: Session | null) => {
+      const key = activeSession?.access_token ?? "unauthenticated";
+      const activeLoad = pendingContextLoadRef.current;
+
+      if (activeLoad?.key === key) {
+        return activeLoad.promise;
+      }
+
+      const promise = loadUserContextNow(activeSession);
+      pendingContextLoadRef.current = { key, promise };
+      void promise.then(
+        () => {
+          if (pendingContextLoadRef.current?.promise === promise) {
+            pendingContextLoadRef.current = null;
+          }
+        },
+        () => {
+          if (pendingContextLoadRef.current?.promise === promise) {
+            pendingContextLoadRef.current = null;
+          }
+        },
+      );
+      return promise;
+    },
+    [loadUserContextNow],
   );
 
   const refresh = useCallback(async () => {

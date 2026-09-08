@@ -52,6 +52,9 @@ import {
   teamVendorAssignmentInput,
 } from "./projectUtils";
 import {
+  discomStatusLabel,
+  discomStatusOptions,
+  discomStatusTone,
   projectExceptionStatusOptions,
   projectExecutionStatusOptions,
   projectStatusLabel,
@@ -59,6 +62,7 @@ import {
   projectStatusTone,
 } from "./projectWorkflow";
 import type {
+  DiscomStatus,
   ProjectFormValues,
   ProjectStatus,
   ProjectWithRelations,
@@ -69,7 +73,6 @@ import type {
 } from "../site-surveys/types";
 import { customerOptionLabel } from "../site-surveys/surveyUtils";
 import type { QuotationWithRelations } from "../quotations/types";
-import { PaymentDueBadge } from "../payments/PaymentComponents";
 import { fetchPaymentDueItems } from "../payments/paymentApi";
 import type { PaymentDueItem } from "../payments/types";
 
@@ -327,8 +330,8 @@ export function ProjectsPage() {
                   <th className="px-4 py-3">Project</th>
                   <th className="px-4 py-3">Phone</th>
                   <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">DISCOM</th>
                   <th className="px-4 py-3">Priority</th>
-                  {canViewPayments ? <th className="px-4 py-3">Payment</th> : null}
                   <th className="px-4 py-3">Assigned</th>
                   <th className="px-4 py-3">Created</th>
                 </tr>
@@ -336,7 +339,6 @@ export function ProjectsPage() {
               <tbody className="divide-y divide-stone-100">
                 {paginatedProjects.map((project) => {
                   const contact = getProjectContact(project);
-                  const paymentDueItem = paymentDueByProjectId.get(project.id);
                   return (
                     <tr
                       key={project.id}
@@ -364,22 +366,11 @@ export function ProjectsPage() {
                         <ProjectStatusBadge value={project.project_status} />
                       </td>
                       <td className="px-4 py-3">
+                        <DiscomStatusBadge value={project.discom_status} />
+                      </td>
+                      <td className="px-4 py-3">
                         <PriorityBadge value={project.priority} />
                       </td>
-                      {canViewPayments ? (
-                        <td className="px-4 py-3">
-                          {paymentDueItem ? (
-                            <div className="space-y-1">
-                              <PaymentDueBadge value={paymentDueItem.payment_status} />
-                              <p className="text-xs text-slate-500">
-                                {formatDate(paymentDueItem.payment_due_on)}
-                              </p>
-                            </div>
-                          ) : (
-                            "-"
-                          )}
-                        </td>
-                      ) : null}
                       <td className="px-4 py-3">
                         {staffName(staff, project.assigned_project_manager)}
                       </td>
@@ -394,7 +385,6 @@ export function ProjectsPage() {
           <div className="grid gap-3 xl:hidden">
             {paginatedProjects.map((project) => {
               const contact = getProjectContact(project);
-              const paymentDueItem = paymentDueByProjectId.get(project.id);
               return (
                 <article
                   key={project.id}
@@ -432,6 +422,12 @@ export function ProjectsPage() {
                       </dd>
                     </div>
                     <div>
+                      <dt className="text-xs text-slate-500">DISCOM</dt>
+                      <dd>
+                        <DiscomStatusBadge value={project.discom_status} />
+                      </dd>
+                    </div>
+                    <div>
                       <dt className="text-xs text-slate-500">Created</dt>
                       <dd className="font-medium text-slate-900">
                         {formatDate(project.created_at)}
@@ -443,23 +439,6 @@ export function ProjectsPage() {
                         {staffName(staff, project.assigned_project_manager)}
                       </dd>
                     </div>
-                    {canViewPayments ? (
-                      <div>
-                        <dt className="text-xs text-slate-500">Payment</dt>
-                        <dd className="mt-1">
-                          {paymentDueItem ? (
-                            <span className="inline-flex flex-col items-start gap-1">
-                              <PaymentDueBadge value={paymentDueItem.payment_status} />
-                              <span className="text-xs text-slate-600">
-                                {formatDate(paymentDueItem.payment_due_on)}
-                              </span>
-                            </span>
-                          ) : (
-                            "-"
-                          )}
-                        </dd>
-                      </div>
-                    ) : null}
                   </dl>
                 </article>
               );
@@ -871,6 +850,14 @@ export function ProjectStatusBadge({
   return <Badge tone={projectStatusTone(value)}>{projectStatusLabel(value)}</Badge>;
 }
 
+export function DiscomStatusBadge({
+  value,
+}: {
+  value: string | null | undefined;
+}) {
+  return <Badge tone={discomStatusTone(value)}>{discomStatusLabel(value)}</Badge>;
+}
+
 export function PriorityBadge({ value }: { value: string | null | undefined }) {
   return <Badge tone={priorityTone(value)}>{labelize(value)}</Badge>;
 }
@@ -907,6 +894,41 @@ export function ProjectStatusSelect({
             </option>
           ))}
         </optgroup>
+      </select>
+    </label>
+  );
+}
+
+export function DiscomStatusSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: DiscomStatus | null;
+  onChange: (status: DiscomStatus) => void;
+  disabled: boolean;
+}) {
+  return (
+    <label className="inline-flex flex-col items-start gap-1">
+      <span className="text-base font-bold text-slate-950">Select DISCOM Step</span>
+      <select
+        className="min-h-9 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition hover:bg-stone-50 focus:border-orange-600 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={disabled}
+        value={value ?? ""}
+        onChange={(event) => {
+          if (event.target.value) {
+            onChange(event.target.value as DiscomStatus);
+          }
+        }}
+      >
+        <option disabled value="">
+          Select DISCOM step
+        </option>
+        {discomStatusOptions.map((status) => (
+          <option key={status.value} value={status.value}>
+            {status.label}
+          </option>
+        ))}
       </select>
     </label>
   );

@@ -1,6 +1,6 @@
 import type { CompanyOnboardingProgress, OnboardingStep } from "./types";
 
-export type ProductSetupChoice = "add" | "import" | "skip";
+export type ProductSetupChoice = "add" | "bank" | "import" | "skip";
 export type ProductSetupAction = ProductSetupChoice | "back";
 
 export type ProductSetupOption = {
@@ -23,6 +23,15 @@ export const productSetupOptions: readonly ProductSetupOption[] = [
     nextStep: "product_entry",
     route: "/onboarding/products/add",
     recommended: true,
+  },
+  {
+    choice: "bank",
+    title: "Choose from Product Bank",
+    description:
+      "Start with published solar product templates and keep your own prices and stock private.",
+    cta: "Browse Product Bank",
+    nextStep: "product_entry",
+    route: "/onboarding/products/bank",
   },
   {
     choice: "import",

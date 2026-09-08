@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { useAuth } from "./AuthProvider";
@@ -19,63 +20,74 @@ import { OnboardingCompanyPage } from "../modules/onboarding/OnboardingCompanyPa
 import { OnboardingProductsPage } from "../modules/onboarding/OnboardingProductsPage";
 import { OnboardingProductEntryPage } from "../modules/onboarding/OnboardingProductEntryPage";
 import { OnboardingProductImportPage } from "../modules/onboarding/OnboardingProductImportPage";
+import { OnboardingProductBankPage } from "../modules/onboarding/OnboardingProductBankPage";
 import { OnboardingTeamPage } from "../modules/onboarding/OnboardingTeamPage";
 import { OnboardingReadyPage } from "../modules/onboarding/OnboardingReadyPage";
 import { OnboardingPaymentPage } from "../modules/onboarding/OnboardingPaymentPage";
 import { ModulePlaceholderPage } from "../components/ModulePlaceholderPage";
-import { TodayPage } from "../modules/assistant/TodayPage";
-import { CustomersPage } from "../modules/crm/CustomersPage";
-import { CustomerDetailPage } from "../modules/crm/CustomerDetailPage";
-import { LeadsPage } from "../modules/crm/LeadsPage";
-import { LeadDetailPage } from "../modules/crm/LeadDetailPage";
-import { QuotationsPage } from "../modules/quotations/QuotationsPage";
-import { QuotationDetailPage } from "../modules/quotations/QuotationDetailPage";
-import { NewQuotationPage } from "../modules/quotations/NewQuotationPage";
-import { RoleScopedDashboardPage, RoleScopedProjectsPage, RoleScopedSurveysPage } from "./RoleScopedModulePages";
-import { PaymentsPage } from "../modules/payments/PaymentsPage";
-import { PaymentDetailPage } from "../modules/payments/PaymentDetailPage";
-import { B2BSalesPage } from "../modules/b2b-sales/B2BSalesPage";
-import { B2BSaleDetailPage } from "../modules/b2b-sales/B2BSaleDetailPage";
-import { BomTemplatesPage } from "../modules/bom-templates/BomTemplatesPage";
-import { BomTemplateDetailPage } from "../modules/bom-templates/BomTemplateDetailPage";
-import { CategoryMasterPage } from "../modules/product-master/CategoryMasterPage";
-import { ProductMasterPage } from "../modules/product-master/ProductMasterPage";
-import { ProductDetailPage } from "../modules/product-master/ProductDetailPage";
-import { CatalogLibraryPage } from "../modules/catalog-library/CatalogLibraryPage";
-import { InventoryPage } from "../modules/inventory/InventoryPage";
-import { InventoryDetailPage } from "../modules/inventory/InventoryDetailPage";
-import { InventoryOpeningStockPage } from "../modules/inventory/InventoryOpeningStockPage";
-import { VendorsPage } from "../modules/vendors/VendorsPage";
-import { VendorDetailPage } from "../modules/vendors/VendorDetailPage";
-import { SuppliersPage } from "../modules/suppliers/SuppliersPage";
-import { SupplierDetailPage } from "../modules/suppliers/SupplierDetailPage";
-import { ExpensesPage } from "../modules/expenses/ExpensesPage";
-import { PurchasesPage } from "../modules/purchases/PurchasesPage";
-import { PurchaseDetailPage } from "../modules/purchases/PurchaseDetailPage";
-import { InvoicesPage } from "../modules/invoices/InvoicesPage";
-import { InvoiceDetailPage } from "../modules/invoices/InvoiceDetailPage";
-import { ProformaInvoicesPage } from "../modules/proforma-invoices/ProformaInvoicesPage";
-import { ProformaInvoiceDetailPage } from "../modules/proforma-invoices/ProformaInvoiceDetailPage";
-import { CompaniesPage } from "../modules/companies/CompaniesPage";
-import { CompanyDetailPage } from "../modules/companies/CompanyDetailPage";
-import { DemoBookingsPage } from "../modules/demo-bookings/DemoBookingsPage";
-import { DemoBookingDetailPage } from "../modules/demo-bookings/DemoBookingDetailPage";
-import { WhatsAppMessagingPage } from "../modules/whatsapp-messaging/WhatsAppMessagingPage";
-import { TrialOutreachPage } from "../modules/trial-outreach/TrialOutreachPage";
 import { PortalActivityTracker } from "../modules/trial-outreach/PortalActivityTracker";
-import { PlatformStaffPage } from "../modules/platform-staff/PlatformStaffPage";
-import {
-  SettingsPage,
-} from "../modules/settings/SettingsPage";
-import { BillingPlansPage } from "../modules/billing/BillingPlansPage";
 import { SubscriptionRoute } from "../modules/billing/SubscriptionRoute";
-import { NotificationsPage } from "../modules/notifications/NotificationsPage";
+import { PageLoader } from "../components/PageLoader";
+
+const TodayPage = lazy(() => import("../modules/assistant/TodayPage").then((module) => ({ default: module.TodayPage })));
+const CustomersPage = lazy(() => import("../modules/crm/CustomersPage").then((module) => ({ default: module.CustomersPage })));
+const CustomerDetailPage = lazy(() => import("../modules/crm/CustomerDetailPage").then((module) => ({ default: module.CustomerDetailPage })));
+const LeadsPage = lazy(() => import("../modules/crm/LeadsPage").then((module) => ({ default: module.LeadsPage })));
+const LeadDetailPage = lazy(() => import("../modules/crm/LeadDetailPage").then((module) => ({ default: module.LeadDetailPage })));
+const QuotationsPage = lazy(() => import("../modules/quotations/QuotationsPage").then((module) => ({ default: module.QuotationsPage })));
+const QuotationDetailPage = lazy(() => import("../modules/quotations/QuotationDetailPage").then((module) => ({ default: module.QuotationDetailPage })));
+const NewQuotationPage = lazy(() => import("../modules/quotations/NewQuotationPage").then((module) => ({ default: module.NewQuotationPage })));
+const RoleScopedDashboardPage = lazy(() => import("./RoleScopedModulePages").then((module) => ({ default: module.RoleScopedDashboardPage })));
+const RoleScopedProjectsPage = lazy(() => import("./RoleScopedModulePages").then((module) => ({ default: module.RoleScopedProjectsPage })));
+const RoleScopedSurveysPage = lazy(() => import("./RoleScopedModulePages").then((module) => ({ default: module.RoleScopedSurveysPage })));
+const PaymentsPage = lazy(() => import("../modules/payments/PaymentsPage").then((module) => ({ default: module.PaymentsPage })));
+const PaymentDetailPage = lazy(() => import("../modules/payments/PaymentDetailPage").then((module) => ({ default: module.PaymentDetailPage })));
+const B2BSalesPage = lazy(() => import("../modules/b2b-sales/B2BSalesPage").then((module) => ({ default: module.B2BSalesPage })));
+const B2BSaleDetailPage = lazy(() => import("../modules/b2b-sales/B2BSaleDetailPage").then((module) => ({ default: module.B2BSaleDetailPage })));
+const BomTemplatesPage = lazy(() => import("../modules/bom-templates/BomTemplatesPage").then((module) => ({ default: module.BomTemplatesPage })));
+const BomTemplateDetailPage = lazy(() => import("../modules/bom-templates/BomTemplateDetailPage").then((module) => ({ default: module.BomTemplateDetailPage })));
+const CategoryMasterPage = lazy(() => import("../modules/product-master/CategoryMasterPage").then((module) => ({ default: module.CategoryMasterPage })));
+const ProductMasterPage = lazy(() => import("../modules/product-master/ProductMasterPage").then((module) => ({ default: module.ProductMasterPage })));
+const ProductDetailPage = lazy(() => import("../modules/product-master/ProductDetailPage").then((module) => ({ default: module.ProductDetailPage })));
+const CatalogLibraryPage = lazy(() => import("../modules/catalog-library/CatalogLibraryPage").then((module) => ({ default: module.CatalogLibraryPage })));
+const ProductBankPage = lazy(() => import("../modules/product-bank/ProductBankPage").then((module) => ({ default: module.ProductBankPage })));
+const InventoryPage = lazy(() => import("../modules/inventory/InventoryPage").then((module) => ({ default: module.InventoryPage })));
+const InventoryDetailPage = lazy(() => import("../modules/inventory/InventoryDetailPage").then((module) => ({ default: module.InventoryDetailPage })));
+const InventoryOpeningStockPage = lazy(() => import("../modules/inventory/InventoryOpeningStockPage").then((module) => ({ default: module.InventoryOpeningStockPage })));
+const VendorsPage = lazy(() => import("../modules/vendors/VendorsPage").then((module) => ({ default: module.VendorsPage })));
+const VendorDetailPage = lazy(() => import("../modules/vendors/VendorDetailPage").then((module) => ({ default: module.VendorDetailPage })));
+const SuppliersPage = lazy(() => import("../modules/suppliers/SuppliersPage").then((module) => ({ default: module.SuppliersPage })));
+const SupplierDetailPage = lazy(() => import("../modules/suppliers/SupplierDetailPage").then((module) => ({ default: module.SupplierDetailPage })));
+const ExpensesPage = lazy(() => import("../modules/expenses/ExpensesPage").then((module) => ({ default: module.ExpensesPage })));
+const PurchasesPage = lazy(() => import("../modules/purchases/PurchasesPage").then((module) => ({ default: module.PurchasesPage })));
+const PurchaseDetailPage = lazy(() => import("../modules/purchases/PurchaseDetailPage").then((module) => ({ default: module.PurchaseDetailPage })));
+const InvoicesPage = lazy(() => import("../modules/invoices/InvoicesPage").then((module) => ({ default: module.InvoicesPage })));
+const InvoiceDetailPage = lazy(() => import("../modules/invoices/InvoiceDetailPage").then((module) => ({ default: module.InvoiceDetailPage })));
+const ProformaInvoicesPage = lazy(() => import("../modules/proforma-invoices/ProformaInvoicesPage").then((module) => ({ default: module.ProformaInvoicesPage })));
+const ProformaInvoiceDetailPage = lazy(() => import("../modules/proforma-invoices/ProformaInvoiceDetailPage").then((module) => ({ default: module.ProformaInvoiceDetailPage })));
+const CompaniesPage = lazy(() => import("../modules/companies/CompaniesPage").then((module) => ({ default: module.CompaniesPage })));
+const CompanyDetailPage = lazy(() => import("../modules/companies/CompanyDetailPage").then((module) => ({ default: module.CompanyDetailPage })));
+const DemoBookingsPage = lazy(() => import("../modules/demo-bookings/DemoBookingsPage").then((module) => ({ default: module.DemoBookingsPage })));
+const DemoBookingDetailPage = lazy(() => import("../modules/demo-bookings/DemoBookingDetailPage").then((module) => ({ default: module.DemoBookingDetailPage })));
+const WhatsAppMessagingPage = lazy(() => import("../modules/whatsapp-messaging/WhatsAppMessagingPage").then((module) => ({ default: module.WhatsAppMessagingPage })));
+const TrialOutreachPage = lazy(() => import("../modules/trial-outreach/TrialOutreachPage").then((module) => ({ default: module.TrialOutreachPage })));
+const PlatformStaffPage = lazy(() => import("../modules/platform-staff/PlatformStaffPage").then((module) => ({ default: module.PlatformStaffPage })));
+const SettingsPage = lazy(() => import("../modules/settings/SettingsPage").then((module) => ({ default: module.SettingsPage })));
+const BillingPlansPage = lazy(() => import("../modules/billing/BillingPlansPage").then((module) => ({ default: module.BillingPlansPage })));
+const NotificationsPage = lazy(() => import("../modules/notifications/NotificationsPage").then((module) => ({ default: module.NotificationsPage })));
 
 export default function App() {
   return (
     <>
       <PortalActivityTracker />
-      <Routes>
+      <Suspense
+        fallback={
+          <main className="flex min-h-screen items-center justify-center bg-stone-50 px-4 py-10">
+            <PageLoader className="w-full max-w-lg" label="Loading page…" />
+          </main>
+        }
+      >
+        <Routes>
       <Route path="/login" element={<LoginDarkPage />} />
       <Route path="/login-light" element={<LoginPage />} />
       <Route path="/login-dark" element={<LoginDarkPage />} />
@@ -104,6 +116,10 @@ export default function App() {
         <Route
           path="/onboarding/products/import"
           element={<OnboardingProductImportPage />}
+        />
+        <Route
+          path="/onboarding/products/bank"
+          element={<OnboardingProductBankPage />}
         />
         <Route
           path="/onboarding/team"
@@ -183,6 +199,10 @@ export default function App() {
           <Route
             path="/products-materials/categories"
             element={<SubscriptionRoute moduleKey="product_master"><CategoryMasterPage /></SubscriptionRoute>}
+          />
+          <Route
+            path="/products-materials/product-bank"
+            element={<SubscriptionRoute moduleKey="product_master"><ProductBankPage /></SubscriptionRoute>}
           />
           <Route
             path="/products-materials/catalog-library"
@@ -271,7 +291,8 @@ export default function App() {
       </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </>
   );
 }

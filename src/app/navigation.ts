@@ -98,6 +98,7 @@ export const navigationItems: NavigationItem[] = [
     path: "/masters",
     children: [
       navigationRoute("/products-materials/products"),
+      navigationRoute("/products-materials/product-bank"),
       navigationRoute("/products-materials/categories"),
     ],
   },
@@ -108,6 +109,8 @@ export const navigationItems: NavigationItem[] = [
 export const platformNavigationItems = [
   navigationRoute("/dashboard"),
   navigationRoute("/companies"),
+  navigationRoute("/products-materials/product-bank"),
+  navigationRoute("/products-materials/catalog-library"),
   navigationRoute("/demo-bookings"),
   navigationRoute("/platform-staff"),
   navigationRoute("/whatsapp-messaging"),

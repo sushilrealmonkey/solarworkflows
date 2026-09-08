@@ -27,6 +27,7 @@ export type ProductUnit =
 export type ProductCategory = {
   id: string;
   tenant_id: string;
+  company_id: string;
   name: string;
   category_type: ProductCategoryType;
   display_order: number;
@@ -48,6 +49,7 @@ export type ProductCategoryFormValues = {
 export type Product = {
   id: string;
   tenant_id: string;
+  company_id: string;
   serial_number: number;
   product_code: string;
   product_name: string;
@@ -68,6 +70,9 @@ export type Product = {
   minimum_stock_alert: number | null;
   status: ProductStatus | null;
   notes: string | null;
+  product_bank_id?: string | null;
+  product_bank_revision?: number | null;
+  product_bank_imported_at?: string | null;
   created_at: string | null;
   updated_at: string | null;
   archived_at?: string | null;

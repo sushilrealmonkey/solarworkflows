@@ -38,6 +38,7 @@ import {
   fetchProjectSiteSurveys,
   replaceProjectPaymentMilestones,
   updateProject,
+  updateProjectDiscomStatus,
   updateProjectStatus,
 } from "./projectApi";
 import {
@@ -47,11 +48,13 @@ import {
   projectToForm,
 } from "./projectUtils";
 import {
+  DiscomStatusSelect,
   PriorityBadge,
   ProjectFormModal,
   ProjectStatusSelect,
 } from "./ProjectsPage";
 import type {
+  DiscomStatus,
   ProjectFormValues,
   ProjectPaymentMilestone,
   ProjectPaymentMilestoneFormValues,
@@ -153,6 +156,8 @@ export function ProjectDetailPage() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [statusTarget, setStatusTarget] = useState<ProjectStatus | null>(null);
+  const [discomStatusTarget, setDiscomStatusTarget] =
+    useState<DiscomStatus | null>(null);
   const [stockOutAlert, setStockOutAlert] = useState<string | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [paymentSummary, setPaymentSummary] =
@@ -450,6 +455,29 @@ export function ProjectDetailPage() {
 
     setPaymentFormErrors({});
     setPaymentForm(emptyPaymentForm(projectToPaymentOption(project)));
+  }
+
+  async function confirmDiscomStatusUpdate() {
+    if (!project || !discomStatusTarget) {
+      return;
+    }
+
+    try {
+      setUpdatingStatus(true);
+      await updateProjectDiscomStatus(project.id, discomStatusTarget);
+      showToast("DISCOM status updated.", "success");
+      setDiscomStatusTarget(null);
+      await loadProject();
+    } catch (nextError) {
+      showToast(
+        nextError instanceof Error
+          ? nextError.message
+          : "DISCOM status update failed.",
+        "error",
+      );
+    } finally {
+      setUpdatingStatus(false);
+    }
   }
 
   function openPaymentScheduleForm() {
@@ -758,11 +786,18 @@ export function ProjectDetailPage() {
                 />
                 <div className="flex flex-wrap items-center gap-2">
                   {canUpdate && !project.archived_at ? (
-                    <ProjectStatusSelect
-                      disabled={updatingStatus}
-                      value={project.project_status ?? "created"}
-                      onChange={setStatusTarget}
-                    />
+                    <>
+                      <ProjectStatusSelect
+                        disabled={updatingStatus}
+                        value={project.project_status ?? "created"}
+                        onChange={setStatusTarget}
+                      />
+                      <DiscomStatusSelect
+                        disabled={updatingStatus}
+                        value={project.discom_status}
+                        onChange={setDiscomStatusTarget}
+                      />
+                    </>
                   ) : null}
                 </div>
                 {canAssign && !project.archived_at ? (
@@ -1041,6 +1076,18 @@ export function ProjectDetailPage() {
           confirmVariant={statusTarget === "cancelled" ? "danger" : "primary"}
           onCancel={() => setStatusTarget(null)}
           onConfirm={confirmStatusUpdate}
+        />
+      ) : null}
+
+      {discomStatusTarget && project ? (
+        <ConfirmDialog
+          title="Update DISCOM status?"
+          description={`Set ${project.project_code ?? "this project"} to ${labelize(discomStatusTarget)}.`}
+          confirming={updatingStatus}
+          confirmLabel="Update DISCOM Status"
+          confirmingLabel="Updating..."
+          onCancel={() => setDiscomStatusTarget(null)}
+          onConfirm={confirmDiscomStatusUpdate}
         />
       ) : null}
 

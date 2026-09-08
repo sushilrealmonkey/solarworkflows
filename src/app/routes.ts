@@ -151,6 +151,12 @@ export const routes: AppRoute[] = [
     description: "Category master for product grouping, type, display order, and future BOM/reporting workflows.",
   },
   {
+    path: "/products-materials/product-bank",
+    label: "Product Bank",
+    moduleKey: "product_master",
+    description: "Published shared product templates that tenants can add to their own Product Master.",
+  },
+  {
     path: "/products-materials/catalog-library",
     label: "Catalog Library",
     moduleKey: "product_master",

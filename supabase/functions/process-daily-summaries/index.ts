@@ -16,6 +16,25 @@ type DueCompany = {
 
 type Snapshot = DailySummarySnapshot;
 
+type GenerationMode = "ai" | "operational_fallback" | "trial_fallback";
+
+type CompanyResult = {
+  aiFailures?: number;
+  aiGenerated?: number;
+  error?: string;
+  noInsights?: number;
+  operationalFallbacks?: number;
+  queued?: number;
+  queueFailures?: number;
+  skipped?: number;
+  trialFallbacks?: number;
+};
+
+// Keep the scheduled worker within its HTTP execution budget while avoiding a
+// single slow model request from blocking all other companies.
+const COMPANY_CONCURRENCY = 8;
+const OPENAI_TIMEOUT_MS = 10_000;
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return json({ error: "Method not allowed" }, 405);
@@ -38,80 +57,149 @@ Deno.serve(async (request) => {
   );
   if (error) return json({ error: error.message }, 500);
 
-  let queued = 0;
-  let skipped = 0;
-  let noInsights = 0;
-  for (const company of (data ?? []) as DueCompany[]) {
-    const idempotencyKey =
-      `daily-summary:${company.company_id}:${company.local_date}`;
-    const { data: existing } = await service
-      .from("notification_events")
-      .select("id")
-      .eq("company_id", company.company_id)
-      .eq("idempotency_key", idempotencyKey)
-      .maybeSingle();
-    if (existing) {
-      skipped += 1;
-      continue;
-    }
-
-    try {
-      const snapshot = await gatherCompanySnapshot(
-        service,
-        company.organization_id,
-        company.local_date,
-      );
-      const summary = hasDailySummaryInsights(snapshot)
-        ? await generateSummary(snapshot, company.local_date)
-        : await getTrialFallbackSummary(
-          service,
-          company.company_id,
-          company.local_date,
-        );
-
-      if (!summary) {
-        noInsights += 1;
-        continue;
-      }
-
-      const { data: result, error: queueError } = await service.rpc(
-        "queue_notification_event",
-        {
-          p_company_id: company.company_id,
-          p_event_type: "requested_daily_summary",
-          p_source_type: "daily_summary",
-          p_source_record_id: company.local_date,
-          p_idempotency_key: idempotencyKey,
-          p_payload: {
-            summary_date: formatDate(company.local_date),
-            headline: summary.headline,
-            summary: summary.summary,
-          },
-          p_notification_key: "requested_daily_summary",
-          p_scheduled_at: new Date().toISOString(),
-        },
-      );
-      if (queueError) throw new Error(queueError.message);
-      queued += Number(
-        (result as Array<{ delivery_count?: number }> | null)?.[0]
-          ?.delivery_count ?? 0,
-      );
-    } catch (summaryError) {
-      console.error("Daily summary generation failed", {
-        companyId: company.company_id,
-        organizationId: company.organization_id,
-        message: safeMessage(summaryError),
-      });
+  const totals = {
+    aiFailures: 0,
+    aiGenerated: 0,
+    errors: new Set<string>(),
+    noInsights: 0,
+    operationalFallbacks: 0,
+    queued: 0,
+    queueFailures: 0,
+    skipped: 0,
+    trialFallbacks: 0,
+  };
+  const companies = (data ?? []) as DueCompany[];
+  for (let offset = 0; offset < companies.length; offset += COMPANY_CONCURRENCY) {
+    const results = await Promise.all(
+      companies.slice(offset, offset + COMPANY_CONCURRENCY).map((company) =>
+        processCompanySummary(service, company)
+      ),
+    );
+    for (const result of results) {
+      totals.aiFailures += result.aiFailures ?? 0;
+      totals.aiGenerated += result.aiGenerated ?? 0;
+      totals.noInsights += result.noInsights ?? 0;
+      totals.operationalFallbacks += result.operationalFallbacks ?? 0;
+      totals.queued += result.queued ?? 0;
+      totals.queueFailures += result.queueFailures ?? 0;
+      totals.skipped += result.skipped ?? 0;
+      totals.trialFallbacks += result.trialFallbacks ?? 0;
+      if (result.error) totals.errors.add(result.error);
     }
   }
 
   return json({
-    processed: data?.length ?? 0,
-    queued,
-    skipped,
-    no_insights: noInsights,
+    processed: companies.length,
+    queued: totals.queued,
+    skipped: totals.skipped,
+    no_insights: totals.noInsights,
+    ai_generated: totals.aiGenerated,
+    ai_failures: totals.aiFailures,
+    operational_fallbacks: totals.operationalFallbacks,
+    trial_fallbacks: totals.trialFallbacks,
+    queue_failures: totals.queueFailures,
+    error_samples: [...totals.errors].slice(0, 5),
   });
 });
+
+async function processCompanySummary(
+  service: ReturnType<typeof createClient>,
+  company: DueCompany,
+): Promise<CompanyResult> {
+  const idempotencyKey =
+    `daily-summary:${company.company_id}:${company.local_date}`;
+  const { data: existing, error: existingError } = await service
+    .from("notification_events")
+    .select("id")
+    .eq("company_id", company.company_id)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (existingError) {
+    return { error: `event_lookup:${safeMessage(existingError)}` };
+  }
+  if (existing) return { skipped: 1 };
+
+  try {
+    const snapshot = await gatherCompanySnapshot(
+      service,
+      company.organization_id,
+      company.local_date,
+    );
+    let summary: DailySummaryMessage;
+    let generationMode: GenerationMode;
+    let aiFailure: string | null = null;
+
+    if (hasDailySummaryInsights(snapshot)) {
+      try {
+        summary = await generateSummary(snapshot, company.local_date);
+        generationMode = "ai";
+      } catch (error) {
+        aiFailure = safeMessage(error);
+        summary = buildOperationalFallback(snapshot);
+        generationMode = "operational_fallback";
+        console.error("Daily summary AI generation failed; using fallback", {
+          companyId: company.company_id,
+          organizationId: company.organization_id,
+          message: aiFailure,
+        });
+      }
+    } else {
+      summary = await getTrialFallbackSummary(
+        service,
+        company.company_id,
+        company.local_date,
+      );
+      if (!summary) return { noInsights: 1 };
+      generationMode = "trial_fallback";
+    }
+
+    const { data: result, error: queueError } = await service.rpc(
+      "queue_notification_event",
+      {
+        p_company_id: company.company_id,
+        p_event_type: "requested_daily_summary",
+        p_source_type: "daily_summary",
+        p_source_record_id: company.local_date,
+        p_idempotency_key: idempotencyKey,
+        p_payload: {
+          summary_date: formatDate(company.local_date),
+          headline: summary.headline,
+          summary: summary.summary,
+        },
+        p_notification_key: "requested_daily_summary",
+        p_scheduled_at: new Date().toISOString(),
+      },
+    );
+    if (queueError) {
+      return {
+        error: `queue:${safeMessage(queueError)}`,
+        queueFailures: 1,
+        ...(aiFailure ? { aiFailures: 1 } : {}),
+      };
+    }
+
+    const queued = Number(
+      (result as Array<{ delivery_count?: number }> | null)?.[0]
+        ?.delivery_count ?? 0,
+    );
+    return {
+      queued,
+      ...(generationMode === "ai" ? { aiGenerated: 1 } : {}),
+      ...(generationMode === "operational_fallback"
+        ? { aiFailures: 1, operationalFallbacks: 1, error: `ai:${aiFailure}` }
+        : {}),
+      ...(generationMode === "trial_fallback" ? { trialFallbacks: 1 } : {}),
+    };
+  } catch (error) {
+    const message = safeMessage(error);
+    console.error("Daily summary processing failed", {
+      companyId: company.company_id,
+      organizationId: company.organization_id,
+      message,
+    });
+    return { error: `processing:${message}` };
+  }
+}
 
 async function getTrialFallbackSummary(
   service: ReturnType<typeof createClient>,
@@ -196,8 +284,9 @@ async function generateSummary(snapshot: Snapshot, localDate: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: Deno.env.get("ASSISTANT_MODEL") || "gpt-5.6",
-      max_completion_tokens: 600,
+      model: Deno.env.get("DAILY_SUMMARY_MODEL") ||
+        Deno.env.get("ASSISTANT_MODEL") || "gpt-4o-mini",
+      max_completion_tokens: 220,
       messages: [
         {
           role: "system",
@@ -226,12 +315,13 @@ async function generateSummary(snapshot: Snapshot, localDate: string) {
         },
       },
     }),
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(OPENAI_TIMEOUT_MS),
   });
+  const body = await response.text();
   if (!response.ok) {
-    throw new Error(`OpenAI returned ${response.status}`);
+    throw new Error(`OpenAI ${response.status}: ${errorDetail(body)}`);
   }
-  const payload = await response.json() as {
+  const payload = JSON.parse(body) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   const raw = payload.choices?.[0]?.message?.content;
@@ -244,6 +334,44 @@ async function generateSummary(snapshot: Snapshot, localDate: string) {
     headline: parsed.headline.trim().slice(0, 200),
     summary: parsed.summary.trim().slice(0, 700),
   };
+}
+
+function buildOperationalFallback(snapshot: Snapshot): DailySummaryMessage {
+  const actions: string[] = [];
+  if (snapshot.overdue_followups > 0) {
+    actions.push(`${snapshot.overdue_followups} follow-up${plural(snapshot.overdue_followups)} need attention`);
+  }
+  if (snapshot.overdue_invoices > 0) {
+    actions.push(`${snapshot.overdue_invoices} overdue invoice${plural(snapshot.overdue_invoices)} need review`);
+  }
+  if (snapshot.low_stock_items > 0) {
+    actions.push(`${snapshot.low_stock_items} low-stock item${plural(snapshot.low_stock_items)} need replenishment`);
+  }
+  if (snapshot.new_enquiries_today > 0) {
+    actions.push(`${snapshot.new_enquiries_today} new ${snapshot.new_enquiries_today === 1 ? "enquiry" : "enquiries"} arrived today`);
+  }
+  return {
+    headline: "Your daily operations update",
+    summary: `${actions.join(". ")}.`,
+  };
+}
+
+function plural(count: number) {
+  return count === 1 ? "" : "s";
+}
+
+function errorDetail(body: string) {
+  try {
+    const parsed = JSON.parse(body) as {
+      error?: { code?: string; message?: string; type?: string };
+    };
+    return [parsed.error?.code, parsed.error?.type, parsed.error?.message]
+      .filter(Boolean)
+      .join(" | ")
+      .slice(0, 300) || "request failed";
+  } catch {
+    return body.replace(/\s+/g, " ").slice(0, 300) || "request failed";
+  }
 }
 
 function formatDate(value: string) {

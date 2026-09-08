@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import mascotUrl from "../../assets/mascots/bizlee-solar-mascot.png";
 
 export type MascotState =
   | "normal"
@@ -36,7 +35,22 @@ export function BizleeMascotLauncher({
   const location = useLocation();
   const navigate = useNavigate();
   const [isDismissed, setIsDismissed] = useState(false);
+  const [mascotUrl, setMascotUrl] = useState<string | null>(null);
   const isSidebarPlacement = placement === "sidebar";
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = globalThis.setTimeout(() => {
+      void import("../../assets/mascots/bizlee-solar-mascot.png").then(({ default: url }) => {
+        if (!cancelled) setMascotUrl(url);
+      });
+    }, 1_500);
+
+    return () => {
+      cancelled = true;
+      globalThis.clearTimeout(timer);
+    };
+  }, []);
 
   if (isDismissed || location.pathname === "/bizlee-ai") return null;
 
@@ -71,17 +85,20 @@ export function BizleeMascotLauncher({
         >
           <span className="absolute inset-1 rounded-full bg-gradient-to-br from-orange-100 via-white to-blue-100 shadow-[0_12px_28px_rgba(15,36,91,0.2)] ring-1 ring-orange-200/80" />
           <span className={`bizlee-mascot-aura bizlee-mascot-aura--${state}`} />
-          <img
-            alt=""
-            aria-hidden="true"
-            className={`bizlee-mascot-image bizlee-mascot-image--${state} relative z-10 max-w-none object-contain ${
-              isSidebarPlacement
-                ? "h-[5rem] w-[5rem]"
-                : "h-[5.6rem] w-[5.6rem] sm:h-[6.5rem] sm:w-[6.5rem]"
-            }`}
-            draggable={false}
-            src={mascotUrl}
-          />
+          {mascotUrl ? (
+            <img
+              alt=""
+              aria-hidden="true"
+              className={`bizlee-mascot-image bizlee-mascot-image--${state} relative z-10 max-w-none object-contain ${
+                isSidebarPlacement
+                  ? "h-[5rem] w-[5rem]"
+                  : "h-[5.6rem] w-[5.6rem] sm:h-[6.5rem] sm:w-[6.5rem]"
+              }`}
+              draggable={false}
+              fetchPriority="low"
+              src={mascotUrl}
+            />
+          ) : null}
           <MascotStateIndicator state={state} />
         </span>
 

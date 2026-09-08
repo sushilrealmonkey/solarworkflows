@@ -20,6 +20,8 @@ export function isPlatformPath(pathname: string) {
     pathname === "/whatsapp-messaging" ||
     pathname === "/trial-outreach" ||
     pathname === "/platform-staff" ||
+    pathname === "/products-materials/product-bank" ||
+    pathname === "/products-materials/catalog-library" ||
     pathname === "/settings" ||
     pathname === "/billing/plans"
   );

@@ -66,5 +66,8 @@ function isAllowedPathForProgress(
   return (
     progress.current_step === "products" &&
     pathname === "/onboarding/products/import"
+  ) || (
+    progress.current_step === "product_entry" &&
+    pathname === "/onboarding/products/bank"
   );
 }

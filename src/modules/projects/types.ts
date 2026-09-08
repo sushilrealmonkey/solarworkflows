@@ -17,6 +17,16 @@ export type ProjectStatus =
   | "cancelled"
   | "on_hold";
 
+export type DiscomStatus =
+  | "application_submitted"
+  | "feasibility_approved"
+  | "inspection_scheduled"
+  | "inspection_completed"
+  | "net_meter_installed"
+  | "completed"
+  | "on_hold"
+  | "rejected";
+
 export type ProjectPriority = "low" | "medium" | "high" | "urgent";
 
 export type Project = {
@@ -36,6 +46,7 @@ export type Project = {
   state: string | null;
   pincode: string | null;
   project_status: ProjectStatus | null;
+  discom_status: DiscomStatus | null;
   priority: ProjectPriority | null;
   start_date: string | null;
   expected_completion_date: string | null;

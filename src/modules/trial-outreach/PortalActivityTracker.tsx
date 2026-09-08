@@ -10,18 +10,31 @@ export function PortalActivityTracker() {
   const { profile, status } = useAuth();
   const location = useLocation();
   const sessionIdRef = useRef<string | null>(null);
+  const startedForProfileRef = useRef<string | null>(null);
+  const recordedPageRef = useRef<string | null>(null);
+  const currentPathRef = useRef(location.pathname);
+
+  useEffect(() => {
+    currentPathRef.current = location.pathname;
+  }, [location.pathname]);
 
   useEffect(() => {
     if (status !== "ready" || !profile?.company_id) return;
+    if (startedForProfileRef.current === profile.id) return;
+
     const sessionId = resolveSessionId(profile.id);
     sessionIdRef.current = sessionId;
-    recordActivity("portal_session_started", profile.id, sessionId, location.pathname);
-  }, [location.pathname, profile?.company_id, profile?.id, status]);
+    startedForProfileRef.current = profile.id;
+    recordActivity("portal_session_started", profile.id, sessionId, currentPathRef.current);
+  }, [profile?.company_id, profile?.id, status]);
 
   useEffect(() => {
     if (status !== "ready" || !profile?.company_id) return;
     const sessionId = sessionIdRef.current ?? resolveSessionId(profile.id);
     const pageIdentity = `${sessionId}:page:${location.key || location.pathname}`;
+    if (recordedPageRef.current === pageIdentity) return;
+
+    recordedPageRef.current = pageIdentity;
     recordActivity("portal_page_viewed", profile.id, pageIdentity, location.pathname);
   }, [location.key, location.pathname, profile?.company_id, profile?.id, status]);
 

@@ -250,6 +250,12 @@ export function ProductMasterPage() {
         />
         {canCreate ? (
           <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              onClick={() => navigate("/products-materials/product-bank")}
+              variant="secondary"
+            >
+              Add from Product Bank
+            </Button>
             {canImport ? (
               <Button
                 onClick={() => setProductImportOpen(true)}
@@ -338,7 +344,15 @@ export function ProductMasterPage() {
           description="Add items to build the shared catalog, or adjust the filters to see existing records."
           action={
             canCreate ? (
-              <Button onClick={openCreateForm}>Add Product or Material</Button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  onClick={() => navigate("/products-materials/product-bank")}
+                  variant="secondary"
+                >
+                  Browse Product Bank
+                </Button>
+                <Button onClick={openCreateForm}>Add Product or Material</Button>
+              </div>
             ) : null
           }
         />

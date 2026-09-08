@@ -17,13 +17,13 @@ export function NotificationBell({ profileId }: { profileId: string }) {
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (includeItems = false) => {
     try {
       const [nextItems, nextUnread] = await Promise.all([
-        fetchNotifications({ limit: 6 }),
+        includeItems ? fetchNotifications({ limit: 6 }) : Promise.resolve(null),
         fetchUnreadCount(),
       ]);
-      setItems(nextItems);
+      if (nextItems) setItems(nextItems);
       setUnread(nextUnread);
     } catch {
       // The shell stays usable if notification loading is unavailable.
@@ -32,7 +32,7 @@ export function NotificationBell({ profileId }: { profileId: string }) {
 
   useEffect(() => {
     void refresh();
-    return subscribeToNotifications(profileId, refresh);
+    return subscribeToNotifications(profileId, () => void refresh());
   }, [profileId, refresh]);
 
   async function openNotification(item: InAppNotification) {
@@ -48,7 +48,7 @@ export function NotificationBell({ profileId }: { profileId: string }) {
     setLoading(true);
     try {
       await markAllNotificationsRead();
-      await refresh();
+      await refresh(true);
     } finally {
       setLoading(false);
     }
@@ -61,7 +61,12 @@ export function NotificationBell({ profileId }: { profileId: string }) {
         aria-haspopup="dialog"
         aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
         className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-orange-200 bg-white text-orange-700 shadow-sm transition hover:bg-orange-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setOpen((value) => {
+            if (!value) void refresh(true);
+            return !value;
+          });
+        }}
         type="button"
       >
         <BellIcon />

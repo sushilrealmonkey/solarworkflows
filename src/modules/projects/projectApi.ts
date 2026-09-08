@@ -9,6 +9,7 @@ import type {
 import type { QuotationWithRelations } from "../quotations/types";
 import type {
   Project,
+  DiscomStatus,
   ProjectFormValues,
   ProjectPaymentMilestone,
   ProjectPaymentMilestoneFormValues,
@@ -233,6 +234,25 @@ export async function updateProjectStatus(
     target_project_id: projectId,
     new_status: status,
   });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as Project;
+}
+
+export async function updateProjectDiscomStatus(
+  projectId: string,
+  status: DiscomStatus,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("projects")
+    .update({ discom_status: status })
+    .eq("id", projectId)
+    .select("*")
+    .single();
 
   if (error) {
     throw new Error(error.message);
