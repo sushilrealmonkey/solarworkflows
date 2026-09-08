@@ -123,26 +123,13 @@ export async function fetchProductBankPage(
  * This keeps dropdown options complete when the table shows only one page.
  */
 export async function fetchProductBankFilterOptions(): Promise<ProductBankFilterOptions> {
-  const client = requireSupabase();
-  const pageSize = 1_000;
-  const rows: ProductBankFilterRow[] = [];
+  const { data, error } = await requireSupabase().rpc(
+    "product_bank_filter_options",
+  );
 
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await client
-      .from("catalog_library_products")
-      .select("category_id, brand")
-      .eq("publication_status", "published")
-      .order("category_id", { ascending: true })
-      .order("brand", { ascending: true })
-      .range(offset, offset + pageSize - 1);
+  if (error) throw new Error(error.message);
 
-    if (error) throw new Error(error.message);
-
-    const nextPage = (data ?? []) as ProductBankFilterRow[];
-    rows.push(...nextPage);
-
-    if (nextPage.length < pageSize) break;
-  }
+  const rows = (data ?? []) as ProductBankFilterRow[];
 
   const categoryIds = new Set<string>();
   const brandSetsByCategory = new Map<string, Set<string>>();

@@ -40,6 +40,7 @@ const readOnlyRpcNames = new Set([
   "preview_record_lifecycle",
   "product_bank_public_page",
   "product_bank_public_rows",
+  "product_bank_filter_options",
   "product_catalog_public_rows",
   "product_category_public_rows",
   "project_status_report",
